@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" TIO_GUI_VERSION LIMIT_COUNT 1)
+
 project(
   tio-gui
-  VERSION 0.1.0
+  VERSION "${TIO_GUI_VERSION}"
   DESCRIPTION "A lightweight, reliable GUI for tio"
   LANGUAGES C
 )
@@ -23,6 +25,7 @@ add_executable(tio-gui
 )
 target_link_libraries(tio-gui PRIVATE PkgConfig::GTK4 PkgConfig::VTE)
 target_compile_definitions(tio-gui PRIVATE
+  TIO_GUI_VERSION="${PROJECT_VERSION}"
   TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
   TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale"
 )

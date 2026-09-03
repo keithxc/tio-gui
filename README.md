@@ -44,6 +44,9 @@ nix build
 ./result/bin/tio-gui
 ```
 
+The project version is maintained in `VERSION`. Check an installed build with
+`tio-gui --version`.
+
 The initial packaging order is Nix/NixOS first, AppImage second, and Arch Linux (PKGBUILD/AUR) third. Ubuntu/Debian and RPM-native packages are intentionally out of scope for the first public versions.
 
 ## Build on other Linux distributions

@@ -7,6 +7,7 @@
 #include <libintl.h>
 #include <locale.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <glib/gstdio.h>
@@ -987,6 +988,11 @@ static void activate(GtkApplication *application, gpointer user_data)
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && g_str_equal(argv[1], "--version")) {
+        printf("tio-gui %s\n", TIO_GUI_VERSION);
+        return 0;
+    }
+
     const char *development_language = g_getenv("TIO_GUI_LANGUAGE");
     TioSettings startup_settings;
     tio_settings_init(&startup_settings);

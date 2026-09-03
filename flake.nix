@@ -7,10 +7,11 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
+      version = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
     in {
       packages.${system}.default = pkgs.stdenv.mkDerivation {
         pname = "tio-gui";
-        version = "0.1.0";
+        inherit version;
         src = self;
 
         nativeBuildInputs = with pkgs; [
