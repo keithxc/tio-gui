@@ -12,7 +12,7 @@ Early development. The first release targets x86-64 Linux.
 
 - Show common `/dev/ttyACM*` and `/dev/ttyUSB*` devices by default, with ACM devices first
 - Optionally reveal every `/dev/tty*` device from the advanced settings
-- Select common baud rates
+- Select common baud rates, including 1,500,000 baud, or enter a custom rate
 - Configure data bits, stop bits, parity, flow control, and local echo under a compact advanced section
 - Switch the interface immediately between the system default, Simplified Chinese, Traditional Chinese, English, Japanese, and German
 - Start and stop a `tio` session inside an embedded terminal

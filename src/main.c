@@ -22,6 +22,7 @@ typedef struct {
     GtkWidget *window;
     GtkDropDown *device_dropdown;
     GtkDropDown *baud_dropdown;
+    GtkEntry *custom_baud_entry;
     GtkDropDown *data_bits_dropdown;
     GtkDropDown *stop_bits_dropdown;
     GtkDropDown *parity_dropdown;
@@ -80,8 +81,11 @@ static const char *const all_device_patterns[] = {
 };
 
 static const char *const baud_rates[] = {
-    "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600", NULL,
+    "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600",
+    "1500000", NULL,
 };
+
+#define TIO_GUI_CUSTOM_BAUD_INDEX (G_N_ELEMENTS(baud_rates) - 1)
 
 static const char *const data_bits_values[] = {"5", "6", "7", "8", NULL};
 static const char *const stop_bits_values[] = {"1", "2", NULL};
@@ -120,6 +124,15 @@ static void retranslate_ui(TioGui *gui)
 {
     gtk_label_set_text(gui->device_label, _("Device"));
     gtk_label_set_text(gui->baud_label, _("Baud"));
+    GListModel *baud_model = gtk_drop_down_get_model(gui->baud_dropdown);
+    if (GTK_IS_STRING_LIST(baud_model)) {
+        const char *custom_label[] = {_("Custom…"), NULL};
+        gtk_string_list_splice(GTK_STRING_LIST(baud_model),
+                               TIO_GUI_CUSTOM_BAUD_INDEX,
+                               1,
+                               custom_label);
+    }
+    gtk_entry_set_placeholder_text(gui->custom_baud_entry, _("Custom baud"));
     gtk_widget_set_tooltip_text(gui->refresh_button, _("Refresh serial devices"));
     gtk_button_set_label(gui->connect_button,
                          gui->child_pid > 0 ? _("Disconnect") : _("Connect"));
@@ -264,6 +277,41 @@ static const char *selected_string(GtkDropDown *dropdown)
     return item == NULL ? NULL : gtk_string_object_get_string(item);
 }
 
+static gboolean baud_is_valid(const char *baud)
+{
+    if (baud == NULL || baud[0] == '\0') {
+        return FALSE;
+    }
+    for (const char *character = baud; *character != '\0'; ++character) {
+        if (!g_ascii_isdigit(*character)) {
+            return FALSE;
+        }
+    }
+
+    errno = 0;
+    guint64 value = g_ascii_strtoull(baud, NULL, 10);
+    return errno == 0 && value > 0 && value <= G_MAXUINT32;
+}
+
+static const char *selected_baud(TioGui *gui)
+{
+    if (gtk_drop_down_get_selected(gui->baud_dropdown) == TIO_GUI_CUSTOM_BAUD_INDEX) {
+        return gtk_editable_get_text(GTK_EDITABLE(gui->custom_baud_entry));
+    }
+    return selected_string(gui->baud_dropdown);
+}
+
+static void on_baud_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec;
+    TioGui *gui = user_data;
+    gboolean custom = gtk_drop_down_get_selected(dropdown) == TIO_GUI_CUSTOM_BAUD_INDEX;
+    gtk_widget_set_visible(GTK_WIDGET(gui->custom_baud_entry), custom);
+    if (custom) {
+        gtk_widget_grab_focus(GTK_WIDGET(gui->custom_baud_entry));
+    }
+}
+
 static void select_string(GtkDropDown *dropdown, const char *wanted)
 {
     GListModel *model = gtk_drop_down_get_model(dropdown);
@@ -390,10 +438,15 @@ static void disconnect_tio(TioGui *gui)
 static void connect_tio(TioGui *gui)
 {
     const char *device = selected_string(gui->device_dropdown);
-    const char *baud = selected_string(gui->baud_dropdown);
+    const char *baud = selected_baud(gui);
 
     if (device == NULL || baud == NULL) {
         set_status(gui, _("Select a serial device and baud rate first"));
+        return;
+    }
+    if (!baud_is_valid(baud)) {
+        set_status(gui, _("Enter a valid baud rate from 1 to 4294967295"));
+        gtk_widget_grab_focus(GTK_WIDGET(gui->custom_baud_entry));
         return;
     }
 
@@ -668,9 +721,9 @@ static void on_log_toggled(GtkCheckButton *button, gpointer user_data)
     }
 }
 
-static void on_window_destroy(GtkWidget *widget, gpointer user_data)
+static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
 {
-    (void)widget;
+    (void)window;
     TioGui *gui = user_data;
 
     if (gui->child_pid > 0) {
@@ -678,7 +731,7 @@ static void on_window_destroy(GtkWidget *widget, gpointer user_data)
     }
 
     const char *device = selected_string(gui->device_dropdown);
-    const char *baud = selected_string(gui->baud_dropdown);
+    const char *baud = selected_baud(gui);
     const char *data_bits = selected_string(gui->data_bits_dropdown);
     const char *stop_bits = selected_string(gui->stop_bits_dropdown);
     const char *parity = selected_string(gui->parity_dropdown);
@@ -686,8 +739,10 @@ static void on_window_destroy(GtkWidget *widget, gpointer user_data)
 
     g_free(gui->settings.device);
     gui->settings.device = g_strdup(device);
-    g_free(gui->settings.baud);
-    gui->settings.baud = g_strdup(baud);
+    if (baud_is_valid(baud)) {
+        g_free(gui->settings.baud);
+        gui->settings.baud = g_strdup(baud);
+    }
     g_free(gui->settings.data_bits);
     gui->settings.data_bits = g_strdup(data_bits);
     g_free(gui->settings.stop_bits);
@@ -711,6 +766,7 @@ static void on_window_destroy(GtkWidget *widget, gpointer user_data)
         g_warning("Could not save settings: %s", error->message);
     }
     g_clear_pointer(&gui->spawn_argv, g_strfreev);
+    return FALSE;
 }
 
 static GtkWidget *make_label(const char *text)
@@ -724,7 +780,6 @@ static GtkDropDown *make_string_dropdown(const char *const *values, guint select
 {
     GtkStringList *model = gtk_string_list_new(values);
     GtkDropDown *dropdown = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(model), NULL));
-    g_object_unref(model);
     gtk_drop_down_set_selected(dropdown, selected);
     return dropdown;
 }
@@ -804,10 +859,28 @@ static void activate(GtkApplication *application, gpointer user_data)
     gui->baud_label = GTK_LABEL(make_label(_("Baud")));
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->baud_label));
     GtkStringList *baud_model = gtk_string_list_new(baud_rates);
+    gtk_string_list_append(baud_model, _("Custom…"));
     gui->baud_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(baud_model), NULL));
-    g_object_unref(baud_model);
-    select_string(gui->baud_dropdown, gui->settings.baud);
+    gboolean preset_baud = FALSE;
+    for (guint index = 0; baud_rates[index] != NULL; ++index) {
+        if (g_strcmp0(baud_rates[index], gui->settings.baud) == 0) {
+            gtk_drop_down_set_selected(gui->baud_dropdown, index);
+            preset_baud = TRUE;
+            break;
+        }
+    }
+    if (!preset_baud) {
+        gtk_drop_down_set_selected(gui->baud_dropdown, TIO_GUI_CUSTOM_BAUD_INDEX);
+    }
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->baud_dropdown));
+    gui->custom_baud_entry = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_placeholder_text(gui->custom_baud_entry, _("Custom baud"));
+    gtk_entry_set_input_purpose(gui->custom_baud_entry, GTK_INPUT_PURPOSE_DIGITS);
+    gtk_entry_set_max_length(gui->custom_baud_entry, 10);
+    gtk_editable_set_width_chars(GTK_EDITABLE(gui->custom_baud_entry), 10);
+    gtk_editable_set_text(GTK_EDITABLE(gui->custom_baud_entry), gui->settings.baud);
+    gtk_widget_set_visible(GTK_WIDGET(gui->custom_baud_entry), !preset_baud);
+    gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->custom_baud_entry));
 
     gui->connect_button = GTK_BUTTON(gtk_button_new_with_label(_("Connect")));
     gtk_widget_add_css_class(GTK_WIDGET(gui->connect_button), "suggested-action");
@@ -959,6 +1032,10 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_box_append(GTK_BOX(root), quick_bar);
 
     g_signal_connect(gui->refresh_button, "clicked", G_CALLBACK(on_refresh_clicked), gui);
+    g_signal_connect(gui->baud_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_baud_changed),
+                     gui);
     g_signal_connect(gui->clear_terminal_button,
                      "clicked",
                      G_CALLBACK(on_clear_terminal_clicked),
@@ -980,7 +1057,10 @@ static void activate(GtkApplication *application, gpointer user_data)
                      "clicked",
                      G_CALLBACK(on_customize_quick_buttons),
                      gui);
-    g_signal_connect(gui->window, "destroy", G_CALLBACK(on_window_destroy), gui);
+    g_signal_connect(gui->window,
+                     "close-request",
+                     G_CALLBACK(on_window_close_request),
+                     gui);
 
     refresh_devices(gui);
     gtk_window_present(GTK_WINDOW(gui->window));

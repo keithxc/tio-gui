@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.1.0\n"
+"Project-Id-Version: tio-gui 0.1.1\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -58,6 +58,15 @@ msgstr "刷新串口设备"
 
 msgid "Baud"
 msgstr "波特率"
+
+msgid "Custom…"
+msgstr "自定义…"
+
+msgid "Custom baud"
+msgstr "自定义波特率"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "请输入 1 到 4294967295 之间的有效波特率"
 
 msgid "Timestamps"
 msgstr "时间戳"

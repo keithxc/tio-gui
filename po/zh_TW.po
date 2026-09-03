@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.1.0\n"
+"Project-Id-Version: tio-gui 0.1.1\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -58,6 +58,15 @@ msgstr "重新整理序列埠裝置"
 
 msgid "Baud"
 msgstr "傳輸速率"
+
+msgid "Custom…"
+msgstr "自訂…"
+
+msgid "Custom baud"
+msgstr "自訂傳輸速率"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "請輸入 1 到 4294967295 之間的有效傳輸速率"
 
 msgid "Timestamps"
 msgstr "時間戳記"
