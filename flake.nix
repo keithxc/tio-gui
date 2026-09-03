@@ -24,6 +24,7 @@
 
         buildInputs = with pkgs; [
           gtk4
+          pcre2
           vte-gtk4
         ];
 
@@ -45,6 +46,7 @@
           clang-tools
           glibcLocales
           gtk4
+          pcre2
           vte-gtk4
           tio
         ];

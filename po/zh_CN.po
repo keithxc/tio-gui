@@ -1,24 +1,53 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.1.1\n"
+"Project-Id-Version: tio-gui 0.2.0\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid "Found %u serial device"
-msgid_plural "Found %u serial devices"
-msgstr[0] "发现 %u 个串口设备"
+msgid "%s copy"
+msgstr "%s 副本"
 
-msgid "No serial devices found"
-msgstr "未发现串口设备"
+msgid "A profile name cannot contain [ or ]"
+msgstr "配置名称不能包含 [ 或 ]"
+
+msgid "Append"
+msgstr "追加"
+
+msgid "Automatic name"
+msgstr "自动命名"
+
+msgid "Back to bottom ↓"
+msgstr "回到底部 ↓"
+
+msgid "Baud"
+msgstr "波特率"
+
+msgid "Button"
+msgstr "按钮"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Character delay (ms)"
+msgstr "字符延迟（毫秒）"
+
+msgid "Choose a log directory first"
+msgstr "请先选择日志目录"
+
+msgid "Clear"
+msgstr "清空"
+
+msgid "Clear history"
+msgstr "清空历史"
+
+msgid "Clear the terminal and its scrollback history"
+msgstr "清空终端及其回滚历史"
 
 msgid "Connect"
 msgstr "连接"
-
-msgid "Disconnect"
-msgstr "断开"
 
 msgid "Connected"
 msgstr "已连接"
@@ -26,11 +55,11 @@ msgstr "已连接"
 msgid "Connecting…"
 msgstr "正在连接…"
 
-msgid "Disconnecting…"
-msgstr "正在断开…"
+msgid "Connection profiles"
+msgstr "连接配置"
 
-msgid "Disconnected (tio exit status: %d)"
-msgstr "已断开（tio 退出状态：%d）"
+msgid "Could not create log directory: %s"
+msgstr "无法创建日志目录：%s"
 
 msgid "Could not start tio: %s"
 msgstr "无法启动 tio：%s"
@@ -38,128 +67,240 @@ msgstr "无法启动 tio：%s"
 msgid "Could not stop tio: %s"
 msgstr "无法停止 tio：%s"
 
-msgid "Select a serial device and baud rate first"
-msgstr "请先选择串口设备和波特率"
-
-msgid "tio was not found in PATH"
-msgstr "PATH 中未找到 tio"
-
-msgid "Choose a log directory first"
-msgstr "请先选择日志目录"
-
-msgid "Could not create log directory: %s"
-msgstr "无法创建日志目录：%s"
-
-msgid "Device"
-msgstr "设备"
-
-msgid "Refresh serial devices"
-msgstr "刷新串口设备"
-
-msgid "Baud"
-msgstr "波特率"
-
-msgid "Custom…"
-msgstr "自定义…"
-
 msgid "Custom baud"
 msgstr "自定义波特率"
-
-msgid "Enter a valid baud rate from 1 to 4294967295"
-msgstr "请输入 1 到 4294967295 之间的有效波特率"
-
-msgid "Timestamps"
-msgstr "时间戳"
-
-msgid "Log session"
-msgstr "记录日志"
-
-msgid "Log directory"
-msgstr "日志目录"
-
-msgid "More settings"
-msgstr "更多设置"
-
-msgid "Data bits"
-msgstr "数据位"
-
-msgid "Stop bits"
-msgstr "停止位"
-
-msgid "Parity"
-msgstr "校验位"
-
-msgid "Flow control"
-msgstr "流控"
-
-msgid "Local echo"
-msgstr "本地回显"
-
-msgid "Show all TTY devices"
-msgstr "显示所有 TTY 设备"
-
-msgid "Language"
-msgstr "语言"
-
-msgid "System default"
-msgstr "跟随系统"
-
-msgid "Simplified Chinese"
-msgstr "简体中文"
-
-msgid "Traditional Chinese"
-msgstr "繁体中文"
-
-msgid "English"
-msgstr "英文"
-
-msgid "Japanese"
-msgstr "日文"
-
-msgid "German"
-msgstr "德文"
-
-msgid "Language change will take effect after restart"
-msgstr "语言更改将在重启后生效"
-
-msgid "Ready"
-msgstr "就绪"
-
-msgid "Clear"
-msgstr "清空"
-
-msgid "Clear the terminal and its scrollback history"
-msgstr "清空终端及其回滚历史"
-
-msgid "Send text…"
-msgstr "输入要发送的内容…"
-
-msgid "Send"
-msgstr "发送"
-
-msgid "Customize…"
-msgstr "自定义…"
 
 msgid "Customize quick buttons"
 msgstr "自定义快捷按钮"
 
-msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
-msgstr "发送内容支持 \\r、\\n、\\t、\\e 和 \\xNN 转义。"
+msgid "Customize…"
+msgstr "自定义…"
 
-msgid "Button"
-msgstr "按钮"
+msgid "Custom…"
+msgstr "自定义…"
+
+msgid "Data bits"
+msgstr "数据位"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete profile"
+msgstr "删除配置"
+
+msgid "Delete profile “%s”?"
+msgstr "删除配置“%s”？"
+
+msgid "Deleted profile “%s”"
+msgstr "已删除配置“%s”"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Disconnect"
+msgstr "断开"
+
+msgid "Disconnected (tio exit status: %d)"
+msgstr "已断开（tio 退出状态：%d）"
+
+msgid "Disconnecting…"
+msgstr "正在断开…"
+
+msgid "Display incoming bytes as 16-byte hex rows"
+msgstr "将接收数据按每行 16 字节显示为十六进制"
+
+msgid "Duplicate profile"
+msgstr "复制配置"
+
+msgid "Duplicate…"
+msgstr "复制…"
+
+msgid "Enter a profile name"
+msgstr "请输入配置名称"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "请输入 1 到 4294967295 之间的有效波特率"
+
+msgid "Find next"
+msgstr "查找下一个"
+
+msgid "Find previous"
+msgstr "查找上一个"
+
+msgid "Flow control"
+msgstr "流控"
+
+msgid "Found %u serial device"
+msgid_plural "Found %u serial devices"
+msgstr[0] "发现 %u 个串口设备"
+
+msgid "Invalid search pattern: %s"
+msgstr "搜索表达式无效：%s"
 
 msgid "Label"
 msgstr "名称"
 
+msgid "Language"
+msgstr "语言"
+
+msgid "Line delay (ms)"
+msgstr "行延迟（毫秒）"
+
+msgid "Line ending"
+msgstr "行尾"
+
+msgid "Loaded profile “%s”"
+msgstr "已载入配置“%s”"
+
+msgid "Local echo"
+msgstr "本地回显"
+
+msgid "Log directory"
+msgstr "日志目录"
+
+msgid "Log file"
+msgstr "日志文件"
+
+msgid "Log session"
+msgstr "记录日志"
+
+msgid "Match case"
+msgstr "区分大小写"
+
+msgid "More settings"
+msgstr "更多设置"
+
+msgid "New output ↓"
+msgstr "有新数据 ↓"
+
+msgid "No history yet"
+msgstr "暂无历史"
+
+msgid "No line ending"
+msgstr "无行尾"
+
+msgid "No matches"
+msgstr "没有匹配项"
+
+msgid "No saved profiles"
+msgstr "尚无保存的配置"
+
+msgid "No serial devices found"
+msgstr "未发现串口设备"
+
+msgid "Open folder"
+msgstr "打开目录"
+
+msgid "Parity"
+msgstr "校验位"
+
 msgid "Payload"
 msgstr "发送内容"
 
-msgid "Cancel"
-msgstr "取消"
+msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
+msgstr "发送内容支持 \\r、\\n、\\t、\\e 和 \\xNN 转义。"
+
+msgid "Press Up and Down to browse the send history"
+msgstr "按 Up / Down 浏览发送历史"
+
+msgid "Profile"
+msgstr "配置"
+
+msgid "Profile name"
+msgstr "配置名称"
+
+msgid "Ready"
+msgstr "就绪"
+
+msgid "Refresh serial devices"
+msgstr "刷新串口设备"
+
+msgid "Regular expression"
+msgstr "正则表达式"
 
 msgid "Save"
 msgstr "保存"
 
-msgid "Display incoming bytes as 16-byte hex rows"
-msgstr "将接收数据按每行 16 字节显示为十六进制"
+msgid "Save as new profile…"
+msgstr "另存为新配置…"
+
+msgid "Save profile"
+msgstr "保存配置"
+
+msgid "Saved profile “%s”"
+msgstr "已保存配置“%s”"
+
+msgid "Search terminal…"
+msgstr "搜索终端内容…"
+
+msgid "Select a serial device and baud rate first"
+msgstr "请先选择串口设备和波特率"
+
+msgid "Send"
+msgstr "发送"
+
+msgid "Send history"
+msgstr "发送历史"
+
+msgid "Send history cleared"
+msgstr "发送历史已清空"
+
+msgid "Send text…"
+msgstr "输入要发送的内容…"
+
+msgid "Show all TTY devices"
+msgstr "显示所有 TTY 设备"
+
+msgid "Stop bits"
+msgstr "停止位"
+
+msgid "Strip control characters"
+msgstr "去除控制字符"
+
+msgid "System default"
+msgstr "跟随系统"
+
+msgid "That profile name is already in use"
+msgstr "该配置名称已被使用"
+
+msgid "The profile stores the device, serial settings, logging options and quick buttons shown right now."
+msgstr "配置会保存当前显示的设备、串口参数、日志选项和快捷按钮。"
+
+msgid "The session log has reached %s: %s"
+msgstr "会话日志已达到 %s：%s"
+
+msgid "Timestamps"
+msgstr "时间戳"
+
+msgid "Update this profile"
+msgstr "更新当前配置"
+
+msgid "Updated profile “%s”"
+msgstr "已更新配置“%s”"
+
+msgid "Warn above (MB)"
+msgstr "超过提醒（MB）"
+
+msgid "Warn once the current log file passes this size; 0 disables it"
+msgstr "当前日志文件超过该大小时提醒一次；0 表示关闭"
+
+msgid "log"
+msgstr "日志"
+
+msgid "log pending"
+msgstr "日志待写入"
+
+msgid "log ready"
+msgstr "日志已就绪"
+
+msgid "no device"
+msgstr "未选择设备"
+
+msgid "tio --output-delay: pause between sent characters"
+msgstr "tio --output-delay：发送字符之间的间隔"
+
+msgid "tio --output-line-delay: pause between sent lines"
+msgstr "tio --output-line-delay：发送行之间的间隔"
+
+msgid "tio was not found in PATH"
+msgstr "PATH 中未找到 tio"

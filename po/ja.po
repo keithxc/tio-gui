@@ -1,115 +1,306 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.1.1\n"
+"Project-Id-Version: tio-gui 0.2.0\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+msgid "%s copy"
+msgstr "%s のコピー"
+
+msgid "A profile name cannot contain [ or ]"
+msgstr "プロファイル名に [ や ] は使えません"
+
+msgid "Append"
+msgstr "追記"
+
+msgid "Automatic name"
+msgstr "自動命名"
+
+msgid "Back to bottom ↓"
+msgstr "最下部へ ↓"
+
+msgid "Baud"
+msgstr "ボーレート"
+
+msgid "Button"
+msgstr "ボタン"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Character delay (ms)"
+msgstr "文字間ディレイ (ms)"
+
+msgid "Choose a log directory first"
+msgstr "先にログディレクトリを選択してください"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Clear history"
+msgstr "履歴を消去"
+
+msgid "Clear the terminal and its scrollback history"
+msgstr "端末とスクロールバック履歴を消去"
+
+msgid "Connect"
+msgstr "接続"
+
+msgid "Connected"
+msgstr "接続済み"
+
+msgid "Connecting…"
+msgstr "接続中…"
+
+msgid "Connection profiles"
+msgstr "接続プロファイル"
+
+msgid "Could not create log directory: %s"
+msgstr "ログディレクトリを作成できませんでした: %s"
+
+msgid "Could not start tio: %s"
+msgstr "tio を起動できませんでした: %s"
+
+msgid "Could not stop tio: %s"
+msgstr "tio を停止できませんでした: %s"
+
+msgid "Custom baud"
+msgstr "カスタムボーレート"
+
+msgid "Customize quick buttons"
+msgstr "クイックボタンをカスタマイズ"
+
+msgid "Customize…"
+msgstr "カスタマイズ…"
+
+msgid "Custom…"
+msgstr "カスタム…"
+
+msgid "Data bits"
+msgstr "データビット"
+
+msgid "Delete"
+msgstr "削除"
+
+msgid "Delete profile"
+msgstr "プロファイルを削除"
+
+msgid "Delete profile “%s”?"
+msgstr "プロファイル「%s」を削除しますか?"
+
+msgid "Deleted profile “%s”"
+msgstr "プロファイル「%s」を削除しました"
+
+msgid "Device"
+msgstr "デバイス"
+
+msgid "Disconnect"
+msgstr "切断"
+
+msgid "Disconnected (tio exit status: %d)"
+msgstr "切断されました（tio 終了ステータス: %d）"
+
+msgid "Disconnecting…"
+msgstr "切断中…"
+
+msgid "Display incoming bytes as 16-byte hex rows"
+msgstr "受信バイトを1行16バイトの16進数で表示"
+
+msgid "Duplicate profile"
+msgstr "プロファイルを複製"
+
+msgid "Duplicate…"
+msgstr "複製…"
+
+msgid "Enter a profile name"
+msgstr "プロファイル名を入力してください"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "1 から 4294967295 までの有効なボーレートを入力してください"
+
+msgid "Find next"
+msgstr "次を検索"
+
+msgid "Find previous"
+msgstr "前を検索"
+
+msgid "Flow control"
+msgstr "フロー制御"
+
 msgid "Found %u serial device"
 msgid_plural "Found %u serial devices"
 msgstr[0] "%u 個のシリアルデバイスが見つかりました"
 
-msgid "No serial devices found"
-msgstr "シリアルデバイスが見つかりません"
-msgid "Connect"
-msgstr "接続"
-msgid "Disconnect"
-msgstr "切断"
-msgid "Connected"
-msgstr "接続済み"
-msgid "Connecting…"
-msgstr "接続中…"
-msgid "Disconnecting…"
-msgstr "切断中…"
-msgid "Disconnected (tio exit status: %d)"
-msgstr "切断されました（tio 終了ステータス: %d）"
-msgid "Could not start tio: %s"
-msgstr "tio を起動できませんでした: %s"
-msgid "Could not stop tio: %s"
-msgstr "tio を停止できませんでした: %s"
-msgid "Select a serial device and baud rate first"
-msgstr "先にシリアルデバイスとボーレートを選択してください"
-msgid "tio was not found in PATH"
-msgstr "PATH に tio が見つかりません"
-msgid "Choose a log directory first"
-msgstr "先にログディレクトリを選択してください"
-msgid "Could not create log directory: %s"
-msgstr "ログディレクトリを作成できませんでした: %s"
-msgid "Device"
-msgstr "デバイス"
-msgid "Refresh serial devices"
-msgstr "シリアルデバイスを更新"
-msgid "Baud"
-msgstr "ボーレート"
-msgid "Custom…"
-msgstr "カスタム…"
-msgid "Custom baud"
-msgstr "カスタムボーレート"
-msgid "Enter a valid baud rate from 1 to 4294967295"
-msgstr "1 から 4294967295 までの有効なボーレートを入力してください"
-msgid "Timestamps"
-msgstr "タイムスタンプ"
-msgid "Log session"
-msgstr "セッションを記録"
-msgid "Log directory"
-msgstr "ログディレクトリ"
-msgid "More settings"
-msgstr "詳細設定"
-msgid "Data bits"
-msgstr "データビット"
-msgid "Stop bits"
-msgstr "ストップビット"
-msgid "Parity"
-msgstr "パリティ"
-msgid "Flow control"
-msgstr "フロー制御"
-msgid "Local echo"
-msgstr "ローカルエコー"
-msgid "Show all TTY devices"
-msgstr "すべての TTY デバイスを表示"
-msgid "Language"
-msgstr "言語"
-msgid "System default"
-msgstr "システム既定"
-msgid "Simplified Chinese"
-msgstr "簡体字中国語"
-msgid "Traditional Chinese"
-msgstr "繁体字中国語"
-msgid "English"
-msgstr "英語"
-msgid "Japanese"
-msgstr "日本語"
-msgid "German"
-msgstr "ドイツ語"
-msgid "Language change will take effect after restart"
-msgstr "言語の変更は再起動後に反映されます"
-msgid "Ready"
-msgstr "準備完了"
-msgid "Clear"
-msgstr "クリア"
-msgid "Clear the terminal and its scrollback history"
-msgstr "端末とスクロールバック履歴を消去"
-msgid "Send text…"
-msgstr "送信するテキスト…"
-msgid "Send"
-msgstr "送信"
-msgid "Customize…"
-msgstr "カスタマイズ…"
-msgid "Customize quick buttons"
-msgstr "クイックボタンをカスタマイズ"
-msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
-msgstr "ペイロードでは \\r、\\n、\\t、\\e、\\xNN のエスケープが使用できます。"
-msgid "Button"
-msgstr "ボタン"
+msgid "Invalid search pattern: %s"
+msgstr "検索パターンが無効です: %s"
+
 msgid "Label"
 msgstr "ラベル"
+
+msgid "Language"
+msgstr "言語"
+
+msgid "Line delay (ms)"
+msgstr "行間ディレイ (ms)"
+
+msgid "Line ending"
+msgstr "改行コード"
+
+msgid "Loaded profile “%s”"
+msgstr "プロファイル「%s」を読み込みました"
+
+msgid "Local echo"
+msgstr "ローカルエコー"
+
+msgid "Log directory"
+msgstr "ログディレクトリ"
+
+msgid "Log file"
+msgstr "ログファイル"
+
+msgid "Log session"
+msgstr "セッションを記録"
+
+msgid "Match case"
+msgstr "大文字と小文字を区別"
+
+msgid "More settings"
+msgstr "詳細設定"
+
+msgid "New output ↓"
+msgstr "新しい出力 ↓"
+
+msgid "No history yet"
+msgstr "履歴はまだありません"
+
+msgid "No line ending"
+msgstr "改行なし"
+
+msgid "No matches"
+msgstr "一致するものがありません"
+
+msgid "No saved profiles"
+msgstr "保存されたプロファイルはありません"
+
+msgid "No serial devices found"
+msgstr "シリアルデバイスが見つかりません"
+
+msgid "Open folder"
+msgstr "フォルダーを開く"
+
+msgid "Parity"
+msgstr "パリティ"
+
 msgid "Payload"
 msgstr "ペイロード"
-msgid "Cancel"
-msgstr "キャンセル"
+
+msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
+msgstr "ペイロードでは \\r、\\n、\\t、\\e、\\xNN のエスケープが使用できます。"
+
+msgid "Press Up and Down to browse the send history"
+msgstr "Up と Down で送信履歴をたどれます"
+
+msgid "Profile"
+msgstr "プロファイル"
+
+msgid "Profile name"
+msgstr "プロファイル名"
+
+msgid "Ready"
+msgstr "準備完了"
+
+msgid "Refresh serial devices"
+msgstr "シリアルデバイスを更新"
+
+msgid "Regular expression"
+msgstr "正規表現"
+
 msgid "Save"
 msgstr "保存"
-msgid "Display incoming bytes as 16-byte hex rows"
-msgstr "受信バイトを1行16バイトの16進数で表示"
+
+msgid "Save as new profile…"
+msgstr "新しいプロファイルとして保存…"
+
+msgid "Save profile"
+msgstr "プロファイルを保存"
+
+msgid "Saved profile “%s”"
+msgstr "プロファイル「%s」を保存しました"
+
+msgid "Search terminal…"
+msgstr "端末を検索…"
+
+msgid "Select a serial device and baud rate first"
+msgstr "先にシリアルデバイスとボーレートを選択してください"
+
+msgid "Send"
+msgstr "送信"
+
+msgid "Send history"
+msgstr "送信履歴"
+
+msgid "Send history cleared"
+msgstr "送信履歴を消去しました"
+
+msgid "Send text…"
+msgstr "送信するテキスト…"
+
+msgid "Show all TTY devices"
+msgstr "すべての TTY デバイスを表示"
+
+msgid "Stop bits"
+msgstr "ストップビット"
+
+msgid "Strip control characters"
+msgstr "制御文字を除去"
+
+msgid "System default"
+msgstr "システム既定"
+
+msgid "That profile name is already in use"
+msgstr "そのプロファイル名は既に使われています"
+
+msgid "The profile stores the device, serial settings, logging options and quick buttons shown right now."
+msgstr "プロファイルには現在表示されているデバイス、シリアル設定、ログ設定、クイックボタンが保存されます。"
+
+msgid "The session log has reached %s: %s"
+msgstr "セッションログが %s に達しました: %s"
+
+msgid "Timestamps"
+msgstr "タイムスタンプ"
+
+msgid "Update this profile"
+msgstr "このプロファイルを更新"
+
+msgid "Updated profile “%s”"
+msgstr "プロファイル「%s」を更新しました"
+
+msgid "Warn above (MB)"
+msgstr "警告するサイズ (MB)"
+
+msgid "Warn once the current log file passes this size; 0 disables it"
+msgstr "現在のログファイルがこのサイズを超えたら一度だけ警告します。0 で無効"
+
+msgid "log"
+msgstr "ログ"
+
+msgid "log pending"
+msgstr "ログ待機中"
+
+msgid "log ready"
+msgstr "ログ準備完了"
+
+msgid "no device"
+msgstr "デバイス未選択"
+
+msgid "tio --output-delay: pause between sent characters"
+msgstr "tio --output-delay: 送信文字間の待ち時間"
+
+msgid "tio --output-line-delay: pause between sent lines"
+msgstr "tio --output-line-delay: 送信行間の待ち時間"
+
+msgid "tio was not found in PATH"
+msgstr "PATH に tio が見つかりません"

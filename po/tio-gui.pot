@@ -1,0 +1,331 @@
+# Translation template for tio-gui.
+# Copyright (C) tio-gui contributors
+# This file is distributed under the same license as the tio-gui package.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: tio-gui 0.2.0\n"
+"Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+msgid "Device"
+msgstr ""
+
+msgid "Baud"
+msgstr ""
+
+msgid "Custom…"
+msgstr ""
+
+msgid "System default"
+msgstr ""
+
+msgid "Custom baud"
+msgstr ""
+
+msgid "Refresh serial devices"
+msgstr ""
+
+msgid "Disconnect"
+msgstr ""
+
+msgid "Connect"
+msgstr ""
+
+msgid "Timestamps"
+msgstr ""
+
+msgid "Log session"
+msgstr ""
+
+msgid "Log directory"
+msgstr ""
+
+msgid "More settings"
+msgstr ""
+
+msgid "Data bits"
+msgstr ""
+
+msgid "Stop bits"
+msgstr ""
+
+msgid "Parity"
+msgstr ""
+
+msgid "Flow control"
+msgstr ""
+
+msgid "Local echo"
+msgstr ""
+
+msgid "Show all TTY devices"
+msgstr ""
+
+msgid "Language"
+msgstr ""
+
+msgid "Character delay (ms)"
+msgstr ""
+
+msgid "Line delay (ms)"
+msgstr ""
+
+msgid "tio --output-delay: pause between sent characters"
+msgstr ""
+
+msgid "tio --output-line-delay: pause between sent lines"
+msgstr ""
+
+msgid "Warn above (MB)"
+msgstr ""
+
+msgid "Warn once the current log file passes this size; 0 disables it"
+msgstr ""
+
+msgid "Log file"
+msgstr ""
+
+msgid "Automatic name"
+msgstr ""
+
+msgid "Append"
+msgstr ""
+
+msgid "Strip control characters"
+msgstr ""
+
+msgid "Open folder"
+msgstr ""
+
+msgid "Clear"
+msgstr ""
+
+msgid "Clear the terminal and its scrollback history"
+msgstr ""
+
+msgid "Send text…"
+msgstr ""
+
+msgid "Press Up and Down to browse the send history"
+msgstr ""
+
+msgid "Send"
+msgstr ""
+
+msgid "Send history"
+msgstr ""
+
+msgid "Line ending"
+msgstr ""
+
+msgid "Clear history"
+msgstr ""
+
+msgid "No history yet"
+msgstr ""
+
+msgid "Customize…"
+msgstr ""
+
+msgid "Display incoming bytes as 16-byte hex rows"
+msgstr ""
+
+msgid "Connection profiles"
+msgstr ""
+
+msgid "Save as new profile…"
+msgstr ""
+
+msgid "Update this profile"
+msgstr ""
+
+msgid "Duplicate…"
+msgstr ""
+
+msgid "Delete profile"
+msgstr ""
+
+msgid "No saved profiles"
+msgstr ""
+
+msgid "Search terminal…"
+msgstr ""
+
+msgid "Find previous"
+msgstr ""
+
+msgid "Find next"
+msgstr ""
+
+msgid "Match case"
+msgstr ""
+
+msgid "Regular expression"
+msgstr ""
+
+msgid "New output ↓"
+msgstr ""
+
+msgid "Back to bottom ↓"
+msgstr ""
+
+msgid "Connected"
+msgstr ""
+
+msgid "Ready"
+msgstr ""
+
+#, c-format
+msgid "Found %u serial device"
+msgid_plural "Found %u serial devices"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "No serial devices found"
+msgstr ""
+
+#, c-format
+msgid "Loaded profile “%s”"
+msgstr ""
+
+msgid "Profile"
+msgstr ""
+
+msgid "Enter a profile name"
+msgstr ""
+
+msgid "A profile name cannot contain [ or ]"
+msgstr ""
+
+msgid "That profile name is already in use"
+msgstr ""
+
+#, c-format
+msgid "Saved profile “%s”"
+msgstr ""
+
+msgid "Duplicate profile"
+msgstr ""
+
+msgid "Save profile"
+msgstr ""
+
+msgid ""
+"The profile stores the device, serial settings, logging options and quick "
+"buttons shown right now."
+msgstr ""
+
+msgid "Profile name"
+msgstr ""
+
+#, c-format
+msgid "%s copy"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+#, c-format
+msgid "Updated profile “%s”"
+msgstr ""
+
+#, c-format
+msgid "Deleted profile “%s”"
+msgstr ""
+
+#, c-format
+msgid "Delete profile “%s”?"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "no device"
+msgstr ""
+
+msgid "log"
+msgstr ""
+
+msgid "log pending"
+msgstr ""
+
+msgid "log ready"
+msgstr ""
+
+#, c-format
+msgid "The session log has reached %s: %s"
+msgstr ""
+
+#, c-format
+msgid "Disconnected (tio exit status: %d)"
+msgstr ""
+
+#, c-format
+msgid "Could not start tio: %s"
+msgstr ""
+
+#, c-format
+msgid "Could not stop tio: %s"
+msgstr ""
+
+msgid "Disconnecting…"
+msgstr ""
+
+msgid "Select a serial device and baud rate first"
+msgstr ""
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr ""
+
+msgid "tio was not found in PATH"
+msgstr ""
+
+msgid "Choose a log directory first"
+msgstr ""
+
+#, c-format
+msgid "Could not create log directory: %s"
+msgstr ""
+
+msgid "Connecting…"
+msgstr ""
+
+msgid "Send history cleared"
+msgstr ""
+
+#, c-format
+msgid "Invalid search pattern: %s"
+msgstr ""
+
+msgid "No matches"
+msgstr ""
+
+msgid "Customize quick buttons"
+msgstr ""
+
+msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
+msgstr ""
+
+msgid "Button"
+msgstr ""
+
+msgid "Label"
+msgstr ""
+
+msgid "Payload"
+msgstr ""
+
+msgid "No line ending"
+msgstr ""

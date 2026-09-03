@@ -18,12 +18,15 @@ find_package(PkgConfig REQUIRED)
 find_package(Gettext REQUIRED)
 pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4>=4.12)
 pkg_check_modules(VTE REQUIRED IMPORTED_TARGET vte-2.91-gtk4>=0.74)
+# VteRegex compile flags are PCRE2 compile flags; take them from the header
+# rather than hard-coding the numeric values.
+pkg_check_modules(PCRE2 REQUIRED IMPORTED_TARGET libpcre2-8)
 
 add_executable(tio-gui
   src/main.c
   src/settings.c
 )
-target_link_libraries(tio-gui PRIVATE PkgConfig::GTK4 PkgConfig::VTE)
+target_link_libraries(tio-gui PRIVATE PkgConfig::GTK4 PkgConfig::VTE PkgConfig::PCRE2)
 target_compile_definitions(tio-gui PRIVATE
   TIO_GUI_VERSION="${PROJECT_VERSION}"
   TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
@@ -66,3 +69,22 @@ foreach(TIO_GUI_LANGUAGE IN LISTS TIO_GUI_TRANSLATIONS)
           DESTINATION "${CMAKE_INSTALL_LOCALEDIR}/${TIO_GUI_LANGUAGE}/LC_MESSAGES")
 endforeach()
 add_custom_target(translations ALL DEPENDS ${TIO_GUI_MO_FILES})
+
+# Not part of ALL: run `cmake --build build --target update-pot` after adding or
+# changing translatable strings, then merge po/tio-gui.pot into each catalogue.
+find_program(TIO_GUI_XGETTEXT xgettext)
+if(TIO_GUI_XGETTEXT)
+  add_custom_target(update-pot
+    COMMAND ${TIO_GUI_XGETTEXT}
+            --from-code=UTF-8 --language=C --keyword=_ --keyword=ngettext:1,2
+            --package-name=tio-gui --package-version=${PROJECT_VERSION}
+            --copyright-holder="tio-gui contributors"
+            --msgid-bugs-address=https://github.com/keithxc/tio-gui/issues
+            --no-location
+            -o "${CMAKE_CURRENT_SOURCE_DIR}/po/tio-gui.pot"
+            src/main.c src/settings.c
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Regenerating po/tio-gui.pot"
+    VERBATIM
+  )
+endif()
