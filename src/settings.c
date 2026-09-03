@@ -55,6 +55,7 @@ void tio_settings_init(TioSettings *settings)
         .stop_bits = g_strdup("1"),
         .parity = g_strdup("none"),
         .flow = g_strdup("none"),
+        .language = g_strdup("system"),
         .log_directory = g_build_filename(documents, "tio-gui", NULL),
     };
 
@@ -86,6 +87,7 @@ void tio_settings_load(TioSettings *settings)
     replace_string_from_key(key_file, "serial", "stop-bits", &settings->stop_bits);
     replace_string_from_key(key_file, "serial", "parity", &settings->parity);
     replace_string_from_key(key_file, "serial", "flow", &settings->flow);
+    replace_string_from_key(key_file, "display", "language", &settings->language);
     replace_boolean_from_key(key_file, "serial", "local-echo", &settings->local_echo);
     replace_boolean_from_key(key_file, "serial", "show-all-ttys", &settings->show_all_ttys);
     replace_boolean_from_key(key_file, "display", "timestamps", &settings->timestamps);
@@ -119,6 +121,7 @@ gboolean tio_settings_save(const TioSettings *settings, GError **error)
     g_key_file_set_string(key_file, "serial", "stop-bits", settings->stop_bits);
     g_key_file_set_string(key_file, "serial", "parity", settings->parity);
     g_key_file_set_string(key_file, "serial", "flow", settings->flow);
+    g_key_file_set_string(key_file, "display", "language", settings->language);
     g_key_file_set_boolean(key_file, "serial", "local-echo", settings->local_echo);
     g_key_file_set_boolean(key_file, "serial", "show-all-ttys", settings->show_all_ttys);
     g_key_file_set_boolean(key_file, "display", "timestamps", settings->timestamps);
@@ -181,6 +184,7 @@ void tio_settings_clear(TioSettings *settings)
     g_clear_pointer(&settings->stop_bits, g_free);
     g_clear_pointer(&settings->parity, g_free);
     g_clear_pointer(&settings->flow, g_free);
+    g_clear_pointer(&settings->language, g_free);
     g_clear_pointer(&settings->log_directory, g_free);
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         g_clear_pointer(&settings->quick_labels[index], g_free);

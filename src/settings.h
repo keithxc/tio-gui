@@ -13,6 +13,7 @@ typedef struct {
     gchar *stop_bits;
     gchar *parity;
     gchar *flow;
+    gchar *language;
     gchar *log_directory;
     gboolean local_echo;
     gboolean show_all_ttys;

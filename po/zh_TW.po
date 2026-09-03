@@ -89,6 +89,30 @@ msgstr "本機回顯"
 msgid "Show all TTY devices"
 msgstr "顯示所有 TTY 裝置"
 
+msgid "Language"
+msgstr "語言"
+
+msgid "System default"
+msgstr "跟隨系統"
+
+msgid "Simplified Chinese"
+msgstr "簡體中文"
+
+msgid "Traditional Chinese"
+msgstr "繁體中文"
+
+msgid "English"
+msgstr "英文"
+
+msgid "Japanese"
+msgstr "日文"
+
+msgid "German"
+msgstr "德文"
+
+msgid "Language change will take effect after restart"
+msgstr "語言變更將在重新啟動後生效"
+
 msgid "Ready"
 msgstr "就緒"
 

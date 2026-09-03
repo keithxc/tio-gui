@@ -25,6 +25,17 @@ typedef struct {
     GtkDropDown *stop_bits_dropdown;
     GtkDropDown *parity_dropdown;
     GtkDropDown *flow_dropdown;
+    GtkDropDown *language_dropdown;
+    GtkLabel *device_label;
+    GtkLabel *baud_label;
+    GtkLabel *data_bits_label;
+    GtkLabel *stop_bits_label;
+    GtkLabel *parity_label;
+    GtkLabel *flow_label;
+    GtkLabel *language_label;
+    GtkLabel *more_settings_label;
+    GtkWidget *refresh_button;
+    GtkExpander *advanced_expander;
     GtkCheckButton *local_echo_check;
     GtkCheckButton *show_all_ttys_check;
     GtkCheckButton *timestamp_check;
@@ -35,6 +46,8 @@ typedef struct {
     VteTerminal *terminal;
     GtkEntry *send_entry;
     GtkButton *send_button;
+    GtkButton *clear_terminal_button;
+    GtkButton *customize_quick_buttons;
     GtkButton *quick_buttons[TIO_GUI_QUICK_BUTTON_COUNT];
     GtkToggleButton *hex_toggle;
     GPid child_pid;
@@ -51,6 +64,8 @@ typedef struct {
 
 static void update_quick_buttons(TioGui *gui);
 static GtkWidget *make_label(const char *text);
+static void set_status(TioGui *gui, const char *message);
+static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data);
 
 static const char *const common_device_patterns[] = {
     "/dev/ttyUSB*",
@@ -71,6 +86,90 @@ static const char *const data_bits_values[] = {"5", "6", "7", "8", NULL};
 static const char *const stop_bits_values[] = {"1", "2", NULL};
 static const char *const parity_values[] = {"none", "even", "odd", "mark", "space", NULL};
 static const char *const flow_values[] = {"none", "hard", "soft", NULL};
+static const char *const language_values[] = {"system", "zh_CN", "zh_TW", "en", "ja", "de", NULL};
+
+static guint language_index(const char *language)
+{
+    for (guint index = 0; language_values[index] != NULL; ++index) {
+        if (g_strcmp0(language_values[index], language) == 0) {
+            return index;
+        }
+    }
+    return 0;
+}
+
+static gboolean apply_language(const char *language)
+{
+    g_unsetenv("LANGUAGE");
+    if (g_strcmp0(language, "system") == 0) {
+        return setlocale(LC_MESSAGES, "") != NULL;
+    }
+
+    /* GNU gettext uses LANGUAGE for catalogue selection, but ignores it in
+       the C locale. Toggling through C also invalidates its public locale
+       state so an already-open window can be translated again safely. */
+    if (setlocale(LC_MESSAGES, "C") == NULL) {
+        return FALSE;
+    }
+    g_setenv("LANGUAGE", language, TRUE);
+    return setlocale(LC_MESSAGES, "en_US.UTF-8") != NULL;
+}
+
+static void retranslate_ui(TioGui *gui)
+{
+    gtk_label_set_text(gui->device_label, _("Device"));
+    gtk_label_set_text(gui->baud_label, _("Baud"));
+    gtk_widget_set_tooltip_text(gui->refresh_button, _("Refresh serial devices"));
+    gtk_button_set_label(gui->connect_button,
+                         gui->child_pid > 0 ? _("Disconnect") : _("Connect"));
+    gtk_check_button_set_label(gui->timestamp_check, _("Timestamps"));
+    gtk_check_button_set_label(gui->log_check, _("Log session"));
+    gtk_entry_set_placeholder_text(gui->log_directory_entry, _("Log directory"));
+    gtk_label_set_text(gui->more_settings_label, _("More settings"));
+    gtk_label_set_text(gui->data_bits_label, _("Data bits"));
+    gtk_label_set_text(gui->stop_bits_label, _("Stop bits"));
+    gtk_label_set_text(gui->parity_label, _("Parity"));
+    gtk_label_set_text(gui->flow_label, _("Flow control"));
+    gtk_check_button_set_label(gui->local_echo_check, _("Local echo"));
+    gtk_check_button_set_label(gui->show_all_ttys_check, _("Show all TTY devices"));
+    gtk_label_set_text(gui->language_label, _("Language"));
+
+    set_status(gui, gui->child_pid > 0 ? _("Connected") : _("Ready"));
+    gtk_button_set_label(gui->clear_terminal_button, _("Clear"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->clear_terminal_button),
+                                _("Clear the terminal and its scrollback history"));
+    gtk_entry_set_placeholder_text(gui->send_entry, _("Send text…"));
+    gtk_button_set_label(gui->send_button, _("Send"));
+    gtk_button_set_label(gui->customize_quick_buttons, _("Customize…"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->hex_toggle),
+                                _("Display incoming bytes as 16-byte hex rows"));
+}
+
+static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec;
+    TioGui *gui = user_data;
+    guint selected = gtk_drop_down_get_selected(dropdown);
+    if (selected >= G_N_ELEMENTS(language_values) - 1 ||
+        g_strcmp0(gui->settings.language, language_values[selected]) == 0) {
+        return;
+    }
+
+    g_free(gui->settings.language);
+    gui->settings.language = g_strdup(language_values[selected]);
+    g_autoptr(GError) error = NULL;
+    if (!tio_settings_save(&gui->settings, &error)) {
+        g_warning("Could not save language setting: %s", error->message);
+        return;
+    }
+
+    g_unsetenv("TIO_GUI_LANGUAGE");
+    if (!apply_language(language_values[selected])) {
+        g_warning("Locale is unavailable for language: %s", language_values[selected]);
+        return;
+    }
+    retranslate_ui(gui);
+}
 
 static void set_status(TioGui *gui, const char *message)
 {
@@ -665,6 +764,11 @@ static void activate(GtkApplication *application, gpointer user_data)
     gui->child_pid = -1;
     tio_settings_init(&gui->settings);
     tio_settings_load(&gui->settings);
+    const char *development_language = g_getenv("TIO_GUI_LANGUAGE");
+    if (development_language != NULL && development_language[0] != '\0') {
+        g_free(gui->settings.language);
+        gui->settings.language = g_strdup(development_language);
+    }
 
     install_css();
 
@@ -686,16 +790,18 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_widget_add_css_class(toolbar, "compact-controls");
     gtk_box_append(GTK_BOX(root), toolbar);
 
-    gtk_box_append(GTK_BOX(toolbar), make_label(_("Device")));
+    gui->device_label = GTK_LABEL(make_label(_("Device")));
+    gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->device_label));
     gui->device_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(NULL, NULL));
     gtk_widget_set_hexpand(GTK_WIDGET(gui->device_dropdown), TRUE);
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->device_dropdown));
 
-    GtkWidget *refresh_button = gtk_button_new_from_icon_name("view-refresh-symbolic");
-    gtk_widget_set_tooltip_text(refresh_button, _("Refresh serial devices"));
-    gtk_box_append(GTK_BOX(toolbar), refresh_button);
+    gui->refresh_button = gtk_button_new_from_icon_name("view-refresh-symbolic");
+    gtk_widget_set_tooltip_text(gui->refresh_button, _("Refresh serial devices"));
+    gtk_box_append(GTK_BOX(toolbar), gui->refresh_button);
 
-    gtk_box_append(GTK_BOX(toolbar), make_label(_("Baud")));
+    gui->baud_label = GTK_LABEL(make_label(_("Baud")));
+    gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->baud_label));
     GtkStringList *baud_model = gtk_string_list_new(baud_rates);
     gui->baud_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(baud_model), NULL));
     g_object_unref(baud_model);
@@ -708,7 +814,9 @@ static void activate(GtkApplication *application, gpointer user_data)
 
     GtkWidget *options = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_widget_add_css_class(options, "compact-controls");
-    gtk_box_append(GTK_BOX(root), options);
+
+    gui->more_settings_label = GTK_LABEL(make_label(_("More settings")));
+    gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->more_settings_label));
 
     gui->timestamp_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Timestamps")));
     gtk_check_button_set_active(gui->timestamp_check, gui->settings.timestamps);
@@ -726,7 +834,9 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_widget_set_visible(GTK_WIDGET(gui->log_directory_entry), gui->settings.logging);
     gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->log_directory_entry));
 
-    GtkWidget *advanced_expander = gtk_expander_new(_("More settings"));
+    gui->advanced_expander = GTK_EXPANDER(gtk_expander_new(NULL));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->advanced_expander), TRUE);
+    gtk_expander_set_label_widget(gui->advanced_expander, options);
     GtkWidget *advanced_grid = gtk_grid_new();
     gtk_widget_add_css_class(advanced_grid, "compact-controls");
     gtk_grid_set_column_spacing(GTK_GRID(advanced_grid), 8);
@@ -738,6 +848,10 @@ static void activate(GtkApplication *application, gpointer user_data)
     gui->stop_bits_dropdown = make_string_dropdown(stop_bits_values, 0);
     gui->parity_dropdown = make_string_dropdown(parity_values, 0);
     gui->flow_dropdown = make_string_dropdown(flow_values, 0);
+    const char *language_names[] = {
+        _("System default"), "简体中文", "繁體中文", "English", "日本語", "Deutsch", NULL,
+    };
+    gui->language_dropdown = make_string_dropdown(language_names, 0);
     gui->local_echo_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Local echo")));
     gui->show_all_ttys_check =
         GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Show all TTY devices")));
@@ -745,22 +859,31 @@ static void activate(GtkApplication *application, gpointer user_data)
     select_string(gui->stop_bits_dropdown, gui->settings.stop_bits);
     select_string(gui->parity_dropdown, gui->settings.parity);
     select_string(gui->flow_dropdown, gui->settings.flow);
+    gtk_drop_down_set_selected(gui->language_dropdown, language_index(gui->settings.language));
     gtk_check_button_set_active(gui->local_echo_check, gui->settings.local_echo);
     gtk_check_button_set_active(gui->show_all_ttys_check, gui->settings.show_all_ttys);
 
-    gtk_grid_attach(GTK_GRID(advanced_grid), make_label(_("Data bits")), 0, 0, 1, 1);
+    gui->data_bits_label = GTK_LABEL(make_label(_("Data bits")));
+    gui->stop_bits_label = GTK_LABEL(make_label(_("Stop bits")));
+    gui->parity_label = GTK_LABEL(make_label(_("Parity")));
+    gui->flow_label = GTK_LABEL(make_label(_("Flow control")));
+    gui->language_label = GTK_LABEL(make_label(_("Language")));
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->data_bits_label), 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->data_bits_dropdown), 1, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(advanced_grid), make_label(_("Stop bits")), 2, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->stop_bits_label), 2, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->stop_bits_dropdown), 3, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(advanced_grid), make_label(_("Parity")), 4, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->parity_label), 4, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->parity_dropdown), 5, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(advanced_grid), make_label(_("Flow control")), 6, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->flow_label), 6, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->flow_dropdown), 7, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->local_echo_check), 8, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->show_all_ttys_check), 0, 1, 4, 1);
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->language_label), 4, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(advanced_grid), GTK_WIDGET(gui->language_dropdown), 5, 1, 4, 1);
 
-    gtk_expander_set_child(GTK_EXPANDER(advanced_expander), advanced_grid);
-    gtk_box_append(GTK_BOX(root), advanced_expander);
+    gtk_expander_set_child(gui->advanced_expander, advanced_grid);
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->advanced_expander));
+    gtk_box_reorder_child_after(GTK_BOX(root), GTK_WIDGET(gui->advanced_expander), toolbar);
 
     GtkWidget *status_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_widget_add_css_class(status_bar, "compact-controls");
@@ -770,10 +893,10 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_widget_add_css_class(GTK_WIDGET(gui->status_label), "dim-label");
     gtk_widget_add_css_class(GTK_WIDGET(gui->status_label), "session-status");
     gtk_box_append(GTK_BOX(status_bar), GTK_WIDGET(gui->status_label));
-    GtkWidget *clear_terminal_button = gtk_button_new_with_label(_("Clear"));
-    gtk_widget_set_tooltip_text(clear_terminal_button,
+    gui->clear_terminal_button = GTK_BUTTON(gtk_button_new_with_label(_("Clear")));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->clear_terminal_button),
                                 _("Clear the terminal and its scrollback history"));
-    gtk_box_append(GTK_BOX(status_bar), clear_terminal_button);
+    gtk_box_append(GTK_BOX(status_bar), GTK_WIDGET(gui->clear_terminal_button));
     gtk_box_append(GTK_BOX(root), status_bar);
 
     gui->terminal = VTE_TERMINAL(vte_terminal_new());
@@ -822,11 +945,11 @@ static void activate(GtkApplication *application, gpointer user_data)
                          G_CALLBACK(on_quick_button_clicked),
                          gui);
     }
-    GtkWidget *customize_quick_buttons =
-        gtk_button_new_with_label(_("Customize…"));
-    gtk_widget_set_hexpand(customize_quick_buttons, TRUE);
-    gtk_widget_set_halign(customize_quick_buttons, GTK_ALIGN_END);
-    gtk_box_append(GTK_BOX(quick_bar), customize_quick_buttons);
+    gui->customize_quick_buttons =
+        GTK_BUTTON(gtk_button_new_with_label(_("Customize…")));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->customize_quick_buttons), TRUE);
+    gtk_widget_set_halign(GTK_WIDGET(gui->customize_quick_buttons), GTK_ALIGN_END);
+    gtk_box_append(GTK_BOX(quick_bar), GTK_WIDGET(gui->customize_quick_buttons));
     gui->hex_toggle = GTK_TOGGLE_BUTTON(gtk_toggle_button_new_with_label("HEX"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(gui->hex_toggle),
                                 _("Display incoming bytes as 16-byte hex rows"));
@@ -834,8 +957,8 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_box_append(GTK_BOX(quick_bar), GTK_WIDGET(gui->hex_toggle));
     gtk_box_append(GTK_BOX(root), quick_bar);
 
-    g_signal_connect(refresh_button, "clicked", G_CALLBACK(on_refresh_clicked), gui);
-    g_signal_connect(clear_terminal_button,
+    g_signal_connect(gui->refresh_button, "clicked", G_CALLBACK(on_refresh_clicked), gui);
+    g_signal_connect(gui->clear_terminal_button,
                      "clicked",
                      G_CALLBACK(on_clear_terminal_clicked),
                      gui);
@@ -845,10 +968,14 @@ static void activate(GtkApplication *application, gpointer user_data)
                      "toggled",
                      G_CALLBACK(on_show_all_ttys_toggled),
                      gui);
+    g_signal_connect(gui->language_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_language_changed),
+                     gui);
     g_signal_connect(gui->terminal, "child-exited", G_CALLBACK(on_child_exited), gui);
     g_signal_connect(gui->send_button, "clicked", G_CALLBACK(on_send_clicked), gui);
     g_signal_connect(gui->send_entry, "activate", G_CALLBACK(on_send_activate), gui);
-    g_signal_connect(customize_quick_buttons,
+    g_signal_connect(gui->customize_quick_buttons,
                      "clicked",
                      G_CALLBACK(on_customize_quick_buttons),
                      gui);
@@ -861,10 +988,14 @@ static void activate(GtkApplication *application, gpointer user_data)
 int main(int argc, char **argv)
 {
     const char *development_language = g_getenv("TIO_GUI_LANGUAGE");
-    if (development_language != NULL && development_language[0] != '\0') {
-        g_setenv("LANGUAGE", development_language, TRUE);
-    }
+    TioSettings startup_settings;
+    tio_settings_init(&startup_settings);
+    tio_settings_load(&startup_settings);
+    g_autofree gchar *startup_language = g_strdup(
+        development_language != NULL && development_language[0] != '\0'
+            ? development_language : startup_settings.language);
     setlocale(LC_ALL, "");
+    tio_settings_clear(&startup_settings);
     const char *locale_directory = g_getenv("TIO_GUI_LOCALE_DIR");
     if (locale_directory == NULL || locale_directory[0] == '\0') {
         locale_directory = g_file_test(TIO_GUI_BUILD_LOCALE_DIR, G_FILE_TEST_IS_DIR)
@@ -874,6 +1005,9 @@ int main(int argc, char **argv)
     bindtextdomain("tio-gui", locale_directory);
     bind_textdomain_codeset("tio-gui", "UTF-8");
     textdomain("tio-gui");
+    if (!apply_language(startup_language)) {
+        g_warning("Locale is unavailable for language: %s", startup_language);
+    }
 
     GApplicationFlags application_flags = G_APPLICATION_DEFAULT_FLAGS;
     if (g_getenv("TIO_GUI_NON_UNIQUE") != NULL) {

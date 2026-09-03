@@ -28,6 +28,7 @@
 
         postFixup = ''
           wrapProgram "$out/bin/tio-gui" \
+            --set LOCALE_ARCHIVE ${pkgs.glibcLocalesUtf8}/lib/locale/locale-archive \
             --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio ]}
         '';
       };
@@ -52,7 +53,6 @@
           export LANG=zh_TW.UTF-8
           export LC_ALL=zh_TW.UTF-8
           export LANGUAGE=zh_TW
-          export TIO_GUI_LANGUAGE=zh_TW
         '';
       };
     };

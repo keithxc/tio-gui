@@ -14,6 +14,7 @@ Early development. The first release targets x86-64 Linux.
 - Optionally reveal every `/dev/tty*` device from the advanced settings
 - Select common baud rates
 - Configure data bits, stop bits, parity, flow control, and local echo under a compact advanced section
+- Switch the interface immediately between the system default, Simplified Chinese, Traditional Chinese, English, Japanese, and German
 - Start and stop a `tio` session inside an embedded terminal
 - Clear both the visible terminal and its scrollback history without sending data to the device
 - Send commands from a dedicated bottom input bar or interact directly with the terminal
@@ -43,6 +44,8 @@ nix build
 ./result/bin/tio-gui
 ```
 
+The initial packaging order is Nix/NixOS first, AppImage second, and Arch Linux (PKGBUILD/AUR) third. Ubuntu/Debian and RPM-native packages are intentionally out of scope for the first public versions.
+
 ## Build on other Linux distributions
 
 Install a C17 compiler, CMake, pkg-config, GTK4, VTE for GTK4, and `tio`, then run:
@@ -67,7 +70,16 @@ Enabling session logging also enables ISO 8601 line timestamps with millisecond 
 
 ## Planned highlighting
 
-An optional line-oriented highlight view is planned for common patterns such as `ERROR`, `FAIL`, `FATAL`, `WARN`, `PASS`, `OK`, numbers, and hexadecimal addresses. It will consume a display copy of the session instead of modifying the raw terminal stream or `tio` log output.
+An optional line-oriented highlight view is planned with these conservative defaults:
+
+- red: `ERROR`, `FAIL`, `FAILED`, `FATAL`, `PANIC`, `CRITICAL`, `ASSERT`
+- yellow: `WARN`, `WARNING`, `TIMEOUT`, `RETRY`
+- green: `PASS`, `PASSED`, `OK`, `SUCCESS`, `READY`
+- blue: `INFO`, `NOTICE`
+- grey: `DEBUG`, `TRACE`
+- accent colour: decimal numbers and hexadecimal values or addresses
+
+Matching will be case-insensitive and word-boundary aware to avoid false positives such as highlighting `OK` inside another word. The renderer will consume a display copy of the session instead of modifying the raw terminal stream or `tio` log output. User-defined regular-expression rules can be layered on after the safe defaults.
 
 ### Process isolation
 
