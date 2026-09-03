@@ -15,6 +15,7 @@
 
         nativeBuildInputs = with pkgs; [
           cmake
+          gettext
           ninja
           pkg-config
           wrapGAppsHook4
@@ -34,15 +35,25 @@
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           cmake
+          gettext
           ninja
           pkg-config
           gcc
           gdb
           clang-tools
+          glibcLocales
           gtk4
           vte-gtk4
           tio
         ];
+
+        shellHook = ''
+          export LOCALE_ARCHIVE=${pkgs.glibcLocales}/lib/locale/locale-archive
+          export LANG=zh_TW.UTF-8
+          export LC_ALL=zh_TW.UTF-8
+          export LANGUAGE=zh_TW
+          export TIO_GUI_LANGUAGE=zh_TW
+        '';
       };
     };
 }
