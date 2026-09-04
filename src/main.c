@@ -15,6 +15,8 @@
 
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
+#include <json-glib/json-glib.h>
+#include <libsoup/soup.h>
 #include <vte/vte.h>
 
 #include "settings.h"
@@ -25,6 +27,32 @@
 
 typedef struct {
     GtkWidget *window;
+
+    /* Application menu. */
+    GtkMenuButton *settings_button;
+    GtkPopover *settings_popover;
+    GtkDropDown *theme_dropdown;
+    GtkLabel *settings_title_label;
+    GtkLabel *appearance_section_label;
+    GtkLabel *session_section_label;
+    GtkLabel *connection_section_label;
+    GtkBox *connection_settings_box;
+    GtkLabel *backup_section_label;
+    GtkLabel *about_section_label;
+    GtkLabel *theme_label;
+    GtkLabel *timestamp_format_label;
+    GtkLabel *timestamp_format_hint;
+    GtkLabel *timestamp_preview_label;
+    GtkDropDown *log_filename_dropdown;
+    GtkLabel *log_filename_format_label;
+    GtkLabel *log_filename_preview_label;
+    GtkLabel *about_description_label;
+    GtkLabel *update_available_label;
+    GtkButton *download_update_button;
+    GtkLabel *version_label;
+    GtkButton *github_button;
+    GtkButton *export_settings_button;
+    GtkButton *import_settings_button;
 
     /* Connection toolbar. */
     GtkMenuButton *profile_button;
@@ -44,7 +72,6 @@ typedef struct {
     GtkLabel *baud_label;
 
     /* Advanced settings. */
-    GtkExpander *advanced_expander;
     GtkDropDown *data_bits_dropdown;
     GtkDropDown *stop_bits_dropdown;
     GtkDropDown *parity_dropdown;
@@ -55,21 +82,21 @@ typedef struct {
     GtkLabel *parity_label;
     GtkLabel *flow_label;
     GtkLabel *language_label;
-    GtkLabel *more_settings_label;
     GtkLabel *output_delay_label;
     GtkLabel *output_line_delay_label;
     GtkLabel *log_warning_label;
-    GtkLabel *log_file_label;
     GtkSpinButton *output_delay_spin;
     GtkSpinButton *output_line_delay_spin;
     GtkSpinButton *log_warning_spin;
     GtkCheckButton *local_echo_check;
     GtkCheckButton *show_all_ttys_check;
     GtkCheckButton *timestamp_check;
+    GtkDropDown *timestamp_format_dropdown;
     GtkCheckButton *log_check;
     GtkCheckButton *log_append_check;
     GtkCheckButton *log_strip_check;
     GtkEntry *log_directory_entry;
+    GtkButton *choose_log_directory_button;
     GtkEntry *log_file_entry;
     GtkButton *open_log_directory_button;
 
@@ -107,6 +134,9 @@ typedef struct {
     gchar *history_draft;
     gboolean history_updating;
     gboolean retranslating;
+    gboolean update_check_started;
+    gchar *update_url;
+    gchar *latest_version;
 
     /* Quick buttons. */
     GtkButton *customize_quick_buttons;
@@ -120,9 +150,16 @@ typedef struct {
     gboolean log_warning_shown;
     gint64 connected_at;
     guint session_timer;
+    guint settings_preview_timer;
+    gint64 preview_started_at;
     gchar *pending_profile_delete;
     TioSettings settings;
 } TioGui;
+
+typedef struct {
+    GtkWidget *window;
+    SoupMessage *message;
+} UpdateCheck;
 
 typedef struct {
     TioGui *gui;
@@ -154,6 +191,8 @@ static void apply_session_config(TioGui *gui, const TioSessionConfig *config);
 static void refresh_devices(TioGui *gui);
 static void update_search_regex(TioGui *gui);
 static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data);
+static void capture_all_settings(TioGui *gui);
+static gboolean update_settings_previews(gpointer user_data);
 
 static const char *const common_device_patterns[] = {
     "/dev/ttyUSB*",
@@ -178,6 +217,17 @@ static const char *const stop_bits_values[] = {"1", "2", NULL};
 static const char *const parity_values[] = {"none", "even", "odd", "mark", "space", NULL};
 static const char *const flow_values[] = {"none", "hard", "soft", NULL};
 static const char *const language_values[] = {"system", "zh_CN", "zh_TW", "en", "ja", "de", NULL};
+static const char *const theme_values[] = {"system", "light", "dark", NULL};
+static const char *const timestamp_format_values[] = {
+    "24hour", "24hour-start", "24hour-delta", "iso8601", "epoch", NULL,
+};
+static const char *const log_filename_templates[] = {
+    "tio-gui-{device}-{date}-{time}.log",
+    "{date}-{time}-{device}.log",
+    "{device}-{date}-{time}.log",
+    NULL,
+};
+#define TIO_GUI_CUSTOM_LOG_FILENAME_INDEX 3
 static const char *const line_ending_values[] = {"none", "lf", "cr", "crlf", NULL};
 
 static const char *line_ending_bytes(const char *line_ending)
@@ -242,6 +292,43 @@ static void retranslate_ui(TioGui *gui)
     /* Re-splicing translated dropdown rows re-emits notify::selected. */
     gui->retranslating = TRUE;
     gtk_label_set_text(gui->device_label, _("Device"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->settings_button), _("Application settings"));
+    gtk_label_set_text(gui->settings_title_label, _("Settings"));
+    gtk_label_set_text(gui->appearance_section_label, _("Appearance"));
+    gtk_label_set_text(gui->session_section_label, _("Session"));
+    gtk_label_set_text(gui->connection_section_label, _("Connection and logging"));
+    gtk_label_set_text(gui->backup_section_label, _("Backup"));
+    gtk_label_set_text(gui->about_section_label, _("About"));
+    gtk_label_set_text(gui->theme_label, _("Theme"));
+    replace_dropdown_row(gui->theme_dropdown, 0, _("Follow system"));
+    replace_dropdown_row(gui->theme_dropdown, 1, _("Light"));
+    replace_dropdown_row(gui->theme_dropdown, 2, _("Dark"));
+    gtk_label_set_text(gui->timestamp_format_label, _("Timestamp format"));
+    gtk_label_set_text(gui->timestamp_format_hint,
+                       _("Applied when line timestamps are enabled"));
+    gtk_label_set_text(gui->log_filename_format_label, _("Log filename"));
+    replace_dropdown_row(gui->log_filename_dropdown, 0, _("tio-gui default"));
+    replace_dropdown_row(gui->log_filename_dropdown, 1, _("Date first"));
+    replace_dropdown_row(gui->log_filename_dropdown, 2, _("Device first"));
+    replace_dropdown_row(gui->log_filename_dropdown, 3, _("Custom…"));
+    replace_dropdown_row(gui->timestamp_format_dropdown, 0, _("24-hour"));
+    replace_dropdown_row(gui->timestamp_format_dropdown, 1, _("Since start"));
+    replace_dropdown_row(gui->timestamp_format_dropdown, 2, _("Since previous"));
+    replace_dropdown_row(gui->timestamp_format_dropdown, 3, _("ISO 8601"));
+    replace_dropdown_row(gui->timestamp_format_dropdown, 4, _("Unix epoch"));
+    gtk_button_set_label(gui->github_button, _("GitHub project"));
+    gtk_button_set_label(gui->export_settings_button, _("Export settings…"));
+    gtk_button_set_label(gui->import_settings_button, _("Import settings…"));
+    gtk_label_set_text(gui->about_description_label,
+                       _("A lightweight, reliable GUI for tio"));
+    if (gui->latest_version != NULL) {
+        g_autofree gchar *update =
+            g_strdup_printf(_("Version %s is available"), gui->latest_version);
+        gtk_label_set_text(gui->update_available_label, update);
+    }
+    gtk_button_set_label(gui->download_update_button, _("Download update"));
+    g_autofree gchar *version = g_strdup_printf(_("Version %s"), TIO_GUI_VERSION);
+    gtk_label_set_text(gui->version_label, version);
     gtk_label_set_text(gui->baud_label, _("Baud"));
     replace_dropdown_row(gui->baud_dropdown, TIO_GUI_CUSTOM_BAUD_INDEX, _("Custom…"));
     replace_dropdown_row(gui->language_dropdown, 0, _("System default"));
@@ -252,7 +339,8 @@ static void retranslate_ui(TioGui *gui)
     gtk_check_button_set_label(gui->timestamp_check, _("Timestamps"));
     gtk_check_button_set_label(gui->log_check, _("Log session"));
     gtk_entry_set_placeholder_text(gui->log_directory_entry, _("Log directory"));
-    gtk_label_set_text(gui->more_settings_label, _("More settings"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->choose_log_directory_button),
+                                _("Choose log directory"));
     gtk_label_set_text(gui->data_bits_label, _("Data bits"));
     gtk_label_set_text(gui->stop_bits_label, _("Stop bits"));
     gtk_label_set_text(gui->parity_label, _("Parity"));
@@ -270,8 +358,8 @@ static void retranslate_ui(TioGui *gui)
     gtk_label_set_text(gui->log_warning_label, _("Warn above (MB)"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(gui->log_warning_spin),
                                 _("Warn once the current log file passes this size; 0 disables it"));
-    gtk_label_set_text(gui->log_file_label, _("Log file"));
-    gtk_entry_set_placeholder_text(gui->log_file_entry, _("Automatic name"));
+    gtk_entry_set_placeholder_text(gui->log_file_entry,
+                                   _("Example: {device}-{date}-{time}.log"));
     gtk_check_button_set_label(gui->log_append_check, _("Append"));
     gtk_check_button_set_label(gui->log_strip_check, _("Strip control characters"));
     gtk_button_set_label(gui->open_log_directory_button, _("Open folder"));
@@ -292,6 +380,7 @@ static void retranslate_ui(TioGui *gui)
                                 _("Display incoming bytes as 16-byte hex rows"));
 
     gtk_widget_set_tooltip_text(GTK_WIDGET(gui->profile_button), _("Connection profiles"));
+    gtk_menu_button_set_label(gui->profile_button, _("Profiles"));
     gtk_button_set_label(gui->profile_save_button, _("Save as new profile…"));
     gtk_button_set_label(gui->profile_update_button, _("Update this profile"));
     gtk_button_set_label(gui->profile_duplicate_button, _("Duplicate…"));
@@ -310,6 +399,7 @@ static void retranslate_ui(TioGui *gui)
     refresh_profile_ui(gui);
     refresh_history_ui(gui);
     update_session_label(gui);
+    update_settings_previews(gui);
     gui->retranslating = FALSE;
 }
 
@@ -337,6 +427,40 @@ static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpoint
         return;
     }
     retranslate_ui(gui);
+}
+
+static void apply_theme(const char *theme)
+{
+    GtkSettings *settings = gtk_settings_get_default();
+    if (settings == NULL) {
+        return;
+    }
+    if (g_strcmp0(theme, "system") == 0) {
+        gtk_settings_reset_property(settings, "gtk-application-prefer-dark-theme");
+    } else {
+        g_object_set(settings,
+                     "gtk-application-prefer-dark-theme",
+                     g_strcmp0(theme, "dark") == 0,
+                     NULL);
+    }
+}
+
+static void on_theme_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec;
+    TioGui *gui = user_data;
+    guint selected = gtk_drop_down_get_selected(dropdown);
+    if (gui->retranslating || selected >= G_N_ELEMENTS(theme_values) - 1) {
+        return;
+    }
+    g_free(gui->settings.theme);
+    gui->settings.theme = g_strdup(theme_values[selected]);
+    apply_theme(gui->settings.theme);
+
+    g_autoptr(GError) error = NULL;
+    if (!tio_settings_save(&gui->settings, &error)) {
+        g_warning("Could not save theme setting: %s", error->message);
+    }
 }
 
 static void set_status(TioGui *gui, const char *message)
@@ -572,6 +696,9 @@ static void capture_session_config(TioGui *gui, TioSessionConfig *config)
     config->local_echo = gtk_check_button_get_active(gui->local_echo_check);
     config->hex_output = gtk_toggle_button_get_active(gui->hex_toggle);
     config->timestamps = gtk_check_button_get_active(gui->timestamp_check);
+    g_free(config->timestamp_format);
+    config->timestamp_format = g_strdup(
+        timestamp_format_values[gtk_drop_down_get_selected(gui->timestamp_format_dropdown)]);
     config->logging = gtk_check_button_get_active(gui->log_check);
     config->log_append = gtk_check_button_get_active(gui->log_append_check);
     config->log_strip = gtk_check_button_get_active(gui->log_strip_check);
@@ -598,11 +725,25 @@ static void apply_session_config(TioGui *gui, const TioSessionConfig *config)
     gtk_check_button_set_active(gui->local_echo_check, config->local_echo);
     gtk_toggle_button_set_active(gui->hex_toggle, config->hex_output);
     gtk_check_button_set_active(gui->timestamp_check, config->timestamps);
+    gtk_drop_down_set_selected(
+        gui->timestamp_format_dropdown,
+        value_index(timestamp_format_values, config->timestamp_format, 3));
     gtk_check_button_set_active(gui->log_check, config->logging);
     gtk_check_button_set_active(gui->log_append_check, config->log_append);
     gtk_check_button_set_active(gui->log_strip_check, config->log_strip);
     gtk_editable_set_text(GTK_EDITABLE(gui->log_directory_entry), config->log_directory);
-    gtk_editable_set_text(GTK_EDITABLE(gui->log_file_entry), config->log_file);
+    guint filename_index = config->log_file[0] == '\0'
+                               ? 0
+                               : value_index(log_filename_templates,
+                                             config->log_file,
+                                             TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gtk_drop_down_set_selected(gui->log_filename_dropdown, filename_index);
+    gtk_editable_set_text(GTK_EDITABLE(gui->log_file_entry),
+                          filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX
+                              ? config->log_file
+                              : log_filename_templates[filename_index]);
+    gtk_widget_set_visible(GTK_WIDGET(gui->log_file_entry),
+                           filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
     gtk_spin_button_set_value(gui->output_delay_spin, config->output_delay);
     gtk_spin_button_set_value(gui->output_line_delay_spin, config->output_line_delay);
     update_session_label(gui);
@@ -1017,10 +1158,29 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
 static gchar *build_log_path(const TioSessionConfig *config)
 {
     if (config->log_file != NULL && config->log_file[0] != '\0') {
-        if (g_path_is_absolute(config->log_file)) {
-            return g_strdup(config->log_file);
+        g_autoptr(GDateTime) now = g_date_time_new_now_local();
+        g_autofree gchar *date = g_date_time_format(now, "%Y%m%d");
+        g_autofree gchar *time = g_date_time_format(now, "%H%M%S");
+        g_autofree gchar *device = config->device != NULL
+                                       ? g_path_get_basename(config->device)
+                                       : g_strdup("serial");
+        g_autofree gchar *expanded = g_strdup(config->log_file);
+        const struct {
+            const char *token;
+            const char *value;
+        } replacements[] = {
+            {"{device}", device}, {"{date}", date}, {"{time}", time},
+        };
+        for (gsize index = 0; index < G_N_ELEMENTS(replacements); ++index) {
+            gchar **parts = g_strsplit(expanded, replacements[index].token, -1);
+            g_free(expanded);
+            expanded = g_strjoinv(replacements[index].value, parts);
+            g_strfreev(parts);
         }
-        return g_build_filename(config->log_directory, config->log_file, NULL);
+        if (g_path_is_absolute(expanded)) {
+            return g_steal_pointer(&expanded);
+        }
+        return g_build_filename(config->log_directory, expanded, NULL);
     }
 
     g_autofree gchar *device = config->device != NULL
@@ -1067,7 +1227,7 @@ static gchar **build_tio_argv(const TioSessionConfig *config, const char *log_pa
     if (config->timestamps) {
         g_ptr_array_add(arguments, g_strdup("--timestamp"));
         g_ptr_array_add(arguments, g_strdup("--timestamp-format"));
-        g_ptr_array_add(arguments, g_strdup("iso8601"));
+        g_ptr_array_add(arguments, g_strdup(config->timestamp_format));
     }
     if (config->logging && log_path != NULL) {
         g_ptr_array_add(arguments, g_strdup("--log"));
@@ -1350,7 +1510,8 @@ static void refresh_history_ui(TioGui *gui)
         GtkWidget *label = gtk_label_new(text);
         gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
-        gtk_label_set_max_width_chars(GTK_LABEL(label), 48);
+        gtk_label_set_width_chars(GTK_LABEL(label), 32);
+        gtk_label_set_max_width_chars(GTK_LABEL(label), 32);
         gtk_widget_set_margin_top(label, 3);
         gtk_widget_set_margin_bottom(label, 3);
         gtk_widget_set_margin_start(label, 6);
@@ -1731,7 +1892,8 @@ static void on_log_toggled(GtkCheckButton *button, gpointer user_data)
 {
     TioGui *gui = user_data;
     gboolean enabled = gtk_check_button_get_active(button);
-    gtk_widget_set_visible(GTK_WIDGET(gui->log_directory_entry), enabled);
+    gtk_widget_set_sensitive(GTK_WIDGET(gui->log_directory_entry), enabled);
+    gtk_widget_set_sensitive(GTK_WIDGET(gui->choose_log_directory_button), enabled);
     if (enabled) {
         gtk_check_button_set_active(gui->timestamp_check, TRUE);
     }
@@ -1864,10 +2026,7 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
     }
     stop_session_timer(gui);
 
-    capture_session_config(gui, &gui->settings.session);
-    gui->settings.show_all_ttys = gtk_check_button_get_active(gui->show_all_ttys_check);
-    gui->settings.advanced_expanded = gtk_expander_get_expanded(gui->advanced_expander);
-    gui->settings.log_warning_mb = (guint)gtk_spin_button_get_value_as_int(gui->log_warning_spin);
+    capture_all_settings(gui);
 
     g_autoptr(GError) error = NULL;
     if (!tio_settings_save(&gui->settings, &error)) {
@@ -1888,11 +2047,17 @@ static void tio_gui_free(gpointer data)
     TioGui *gui = data;
 
     stop_session_timer(gui);
+    if (gui->settings_preview_timer != 0) {
+        g_source_remove(gui->settings_preview_timer);
+        gui->settings_preview_timer = 0;
+    }
     g_clear_pointer(&gui->spawn_argv, g_strfreev);
     g_clear_pointer(&gui->log_path, g_free);
     g_clear_pointer(&gui->history_draft, g_free);
     g_clear_pointer(&gui->pending_profile_delete, g_free);
     g_clear_pointer(&gui->search_pattern, g_free);
+    g_clear_pointer(&gui->update_url, g_free);
+    g_clear_pointer(&gui->latest_version, g_free);
     tio_settings_clear(&gui->settings);
     g_free(gui);
 }
@@ -1959,6 +2124,24 @@ static void install_css(void)
         "  background-color: black;"
         "}"
         ".session-status { font-size: 0.9em; }"
+        ".settings-title {"
+        "  font-size: 1.15em;"
+        "  font-weight: 700;"
+        "}"
+        ".settings-section-title {"
+        "  font-size: 0.78em;"
+        "  font-weight: 700;"
+        "  opacity: 0.65;"
+        "  margin-top: 4px;"
+        "}"
+        ".settings-card {"
+        "  background-color: alpha(@theme_fg_color, 0.055);"
+        "  border: 1px solid alpha(@theme_fg_color, 0.12);"
+        "  border-radius: 8px;"
+        "  padding: 9px;"
+        "}"
+        ".settings-hint { font-size: 0.82em; opacity: 0.62; }"
+        ".settings-version { font-weight: 700; }"
         ".scroll-bottom {"
         "  margin: 10px;"
         "  opacity: 0.92;"
@@ -1967,6 +2150,581 @@ static void install_css(void)
                                                 GTK_STYLE_PROVIDER(provider),
                                                 GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_object_unref(provider);
+}
+
+static void capture_all_settings(TioGui *gui)
+{
+    capture_session_config(gui, &gui->settings.session);
+    gui->settings.show_all_ttys = gtk_check_button_get_active(gui->show_all_ttys_check);
+    gui->settings.advanced_expanded = FALSE;
+    gui->settings.log_warning_mb =
+        (guint)gtk_spin_button_get_value_as_int(gui->log_warning_spin);
+}
+
+static void on_github_clicked(GtkButton *button, gpointer user_data)
+{
+    (void)button;
+    TioGui *gui = user_data;
+    GtkUriLauncher *launcher =
+        gtk_uri_launcher_new("https://github.com/keithxc/tio-gui");
+    gtk_uri_launcher_launch(launcher, GTK_WINDOW(gui->window), NULL, NULL, NULL);
+    g_object_unref(launcher);
+}
+
+static gint compare_versions(const char *left, const char *right)
+{
+    while (*left == 'v' || *left == 'V') {
+        ++left;
+    }
+    while (*right == 'v' || *right == 'V') {
+        ++right;
+    }
+    g_auto(GStrv) left_parts = g_strsplit(left, ".", 4);
+    g_auto(GStrv) right_parts = g_strsplit(right, ".", 4);
+    for (guint index = 0; index < 3; ++index) {
+        guint64 left_value = left_parts[index] != NULL
+                                 ? g_ascii_strtoull(left_parts[index], NULL, 10)
+                                 : 0;
+        guint64 right_value = right_parts[index] != NULL
+                                  ? g_ascii_strtoull(right_parts[index], NULL, 10)
+                                  : 0;
+        if (left_value != right_value) {
+            return left_value > right_value ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+static void update_check_free(UpdateCheck *check)
+{
+    g_object_unref(check->message);
+    g_object_unref(check->window);
+    g_free(check);
+}
+
+static void on_update_check_finished(GObject *source,
+                                     GAsyncResult *result,
+                                     gpointer user_data)
+{
+    UpdateCheck *check = user_data;
+    TioGui *gui = g_object_get_data(G_OBJECT(check->window), "tio-gui");
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GBytes) body =
+        soup_session_send_and_read_finish(SOUP_SESSION(source), result, &error);
+    if (gui == NULL || body == NULL ||
+        soup_message_get_status(check->message) != SOUP_STATUS_OK) {
+        update_check_free(check);
+        return;
+    }
+
+    gsize length = 0;
+    const gchar *data = g_bytes_get_data(body, &length);
+    g_autoptr(JsonParser) parser = json_parser_new();
+    if (!json_parser_load_from_data(parser, data, (gssize)length, NULL)) {
+        update_check_free(check);
+        return;
+    }
+    JsonNode *root = json_parser_get_root(parser);
+    if (!JSON_NODE_HOLDS_OBJECT(root)) {
+        update_check_free(check);
+        return;
+    }
+
+    JsonObject *object = json_node_get_object(root);
+    const char *tag = json_object_get_string_member_with_default(object, "tag_name", NULL);
+    const char *url = json_object_get_string_member_with_default(object, "html_url", NULL);
+    if (tag != NULL && url != NULL && compare_versions(tag, TIO_GUI_VERSION) > 0) {
+        g_free(gui->latest_version);
+        gui->latest_version = g_strdup(tag);
+        g_free(gui->update_url);
+        gui->update_url = g_strdup(url);
+        g_autofree gchar *message = g_strdup_printf(_("Version %s is available"), tag);
+        gtk_label_set_text(gui->update_available_label, message);
+        gtk_widget_set_visible(GTK_WIDGET(gui->update_available_label), TRUE);
+        gtk_widget_set_visible(GTK_WIDGET(gui->download_update_button), TRUE);
+    }
+    update_check_free(check);
+}
+
+static void on_settings_popover_visible(GObject *object,
+                                        GParamSpec *pspec,
+                                        gpointer user_data)
+{
+    (void)pspec;
+    TioGui *gui = user_data;
+    if (!gtk_widget_get_visible(GTK_WIDGET(object)) || gui->update_check_started) {
+        return;
+    }
+    gui->update_check_started = TRUE;
+    SoupSession *session = soup_session_new();
+    SoupMessage *message = soup_message_new(
+        "GET", "https://api.github.com/repos/keithxc/tio-gui/releases/latest");
+    SoupMessageHeaders *headers = soup_message_get_request_headers(message);
+    soup_message_headers_append(headers, "Accept", "application/vnd.github+json");
+    soup_message_headers_append(headers, "User-Agent", "tio-gui");
+    soup_message_headers_append(headers, "X-GitHub-Api-Version", "2022-11-28");
+    UpdateCheck *check = g_new0(UpdateCheck, 1);
+    check->window = g_object_ref(gui->window);
+    check->message = g_object_ref(message);
+    soup_session_send_and_read_async(session,
+                                     message,
+                                     G_PRIORITY_DEFAULT,
+                                     NULL,
+                                     on_update_check_finished,
+                                     check);
+    g_object_unref(message);
+    g_object_unref(session);
+}
+
+static void on_download_update_clicked(GtkButton *button, gpointer user_data)
+{
+    (void)button;
+    TioGui *gui = user_data;
+    if (gui->update_url == NULL) {
+        return;
+    }
+    GtkUriLauncher *launcher = gtk_uri_launcher_new(gui->update_url);
+    gtk_uri_launcher_launch(launcher, GTK_WINDOW(gui->window), NULL, NULL, NULL);
+    g_object_unref(launcher);
+}
+static void on_export_finished(GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    TioGui *gui = user_data;
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (file == NULL) {
+        if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
+            set_status(gui, error->message);
+        }
+        return;
+    }
+
+    g_autofree gchar *path = g_file_get_path(file);
+    if (path == NULL) {
+        set_status(gui, _("Choose a local file for settings export"));
+        return;
+    }
+    capture_all_settings(gui);
+    if (!tio_settings_save_to_file(&gui->settings, path, &error)) {
+        set_status(gui, error->message);
+        return;
+    }
+    set_status(gui, _("Settings exported"));
+}
+
+static void on_export_settings_clicked(GtkButton *button, gpointer user_data)
+{
+    (void)button;
+    TioGui *gui = user_data;
+    GtkFileDialog *dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, _("Export settings"));
+    gtk_file_dialog_set_initial_name(dialog, "tio-gui-settings.ini");
+    gtk_file_dialog_save(dialog,
+                         GTK_WINDOW(gui->window),
+                         NULL,
+                         on_export_finished,
+                         gui);
+    g_object_unref(dialog);
+}
+
+static void apply_imported_settings(TioGui *gui)
+{
+    apply_theme(gui->settings.theme);
+    gtk_drop_down_set_selected(gui->theme_dropdown,
+                               value_index(theme_values, gui->settings.theme, 0));
+    gtk_drop_down_set_selected(gui->language_dropdown,
+                               value_index(language_values, gui->settings.language, 0));
+    gtk_check_button_set_active(gui->show_all_ttys_check, gui->settings.show_all_ttys);
+    gtk_spin_button_set_value(gui->log_warning_spin, gui->settings.log_warning_mb);
+    apply_session_config(gui, &gui->settings.session);
+    update_quick_buttons(gui);
+    refresh_profile_ui(gui);
+    refresh_history_ui(gui);
+    refresh_devices(gui);
+    g_unsetenv("TIO_GUI_LANGUAGE");
+    if (apply_language(gui->settings.language)) {
+        retranslate_ui(gui);
+    }
+}
+
+static void on_import_finished(GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    TioGui *gui = user_data;
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (file == NULL) {
+        if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
+            set_status(gui, error->message);
+        }
+        return;
+    }
+
+    g_autofree gchar *path = g_file_get_path(file);
+    if (path == NULL) {
+        set_status(gui, _("Choose a local settings file"));
+        return;
+    }
+
+    TioSettings imported;
+    tio_settings_init(&imported);
+    if (!tio_settings_load_from_file(&imported, path, &error)) {
+        tio_settings_clear(&imported);
+        set_status(gui, error->message);
+        return;
+    }
+    tio_settings_clear(&gui->settings);
+    gui->settings = imported;
+    apply_imported_settings(gui);
+    if (!tio_settings_save(&gui->settings, &error)) {
+        set_status(gui, error->message);
+        return;
+    }
+    set_status(gui, _("Settings imported"));
+}
+
+static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
+{
+    (void)button;
+    TioGui *gui = user_data;
+    if (gui->child_pid > 0) {
+        set_status(gui, _("Disconnect before importing settings"));
+        return;
+    }
+    GtkFileDialog *dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, _("Import settings"));
+    gtk_file_dialog_open(dialog,
+                         GTK_WINDOW(gui->window),
+                         NULL,
+                         on_import_finished,
+                         gui);
+    g_object_unref(dialog);
+}
+
+static void on_log_directory_finished(GObject *source,
+                                      GAsyncResult *result,
+                                      gpointer user_data)
+{
+    TioGui *gui = user_data;
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) folder =
+        gtk_file_dialog_select_folder_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (folder == NULL) {
+        if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
+            set_status(gui, error->message);
+        }
+        return;
+    }
+    g_autofree gchar *path = g_file_get_path(folder);
+    if (path == NULL) {
+        set_status(gui, _("Choose a local log directory"));
+        return;
+    }
+    gtk_editable_set_text(GTK_EDITABLE(gui->log_directory_entry), path);
+    set_status(gui, _("Log directory selected"));
+}
+
+static void on_choose_log_directory(GtkButton *button, gpointer user_data)
+{
+    (void)button;
+    TioGui *gui = user_data;
+    GtkFileDialog *dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, _("Choose log directory"));
+    const char *current = gtk_editable_get_text(GTK_EDITABLE(gui->log_directory_entry));
+    g_autoptr(GFile) initial = NULL;
+    if (current[0] != '\0') {
+        initial = g_file_new_for_path(current);
+        gtk_file_dialog_set_initial_folder(dialog, initial);
+    }
+    gtk_file_dialog_select_folder(dialog,
+                                  GTK_WINDOW(gui->window),
+                                  NULL,
+                                  on_log_directory_finished,
+                                  gui);
+    g_object_unref(dialog);
+}
+
+static gchar *timestamp_preview(TioGui *gui)
+{
+    guint selected = gtk_drop_down_get_selected(gui->timestamp_format_dropdown);
+    g_autoptr(GDateTime) now = g_date_time_new_now_local();
+    if (selected == 0) {
+        g_autofree gchar *base = g_date_time_format(now, "%H:%M:%S");
+        return g_strdup_printf("[%s.%03d]", base, g_date_time_get_microsecond(now) / 1000);
+    }
+    if (selected == 1) {
+        gint64 elapsed = g_get_monotonic_time() - gui->preview_started_at;
+        return g_strdup_printf("[%02lld:%02lld:%02lld.%03lld]",
+                               (long long)(elapsed / G_USEC_PER_SEC / 3600),
+                               (long long)(elapsed / G_USEC_PER_SEC / 60 % 60),
+                               (long long)(elapsed / G_USEC_PER_SEC % 60),
+                               (long long)(elapsed / 1000 % 1000));
+    }
+    if (selected == 2) {
+        return g_strdup("[00:00:00.250]");
+    }
+    if (selected == 3) {
+        g_autofree gchar *base = g_date_time_format(now, "%Y-%m-%dT%H:%M:%S");
+        return g_strdup_printf("[%s.%03d]", base, g_date_time_get_microsecond(now) / 1000);
+    }
+    return g_strdup_printf("[%lld.%03d]",
+                           (long long)g_date_time_to_unix(now),
+                           g_date_time_get_microsecond(now) / 1000);
+}
+
+static gboolean update_settings_previews(gpointer user_data)
+{
+    TioGui *gui = user_data;
+    g_autofree gchar *timestamp = timestamp_preview(gui);
+    g_autofree gchar *timestamp_text = g_strdup_printf(_("Preview: %s"), timestamp);
+    gtk_label_set_text(gui->timestamp_preview_label, timestamp_text);
+
+    TioSessionConfig preview;
+    tio_session_config_init(&preview);
+    g_free(preview.device);
+    preview.device = g_strdup(selected_string(gui->device_dropdown));
+    g_free(preview.log_directory);
+    preview.log_directory = g_strdup("/");
+    g_free(preview.log_file);
+    preview.log_file = g_strdup(gtk_editable_get_text(GTK_EDITABLE(gui->log_file_entry)));
+    g_autofree gchar *path = build_log_path(&preview);
+    g_autofree gchar *basename = g_path_get_basename(path);
+    g_autofree gchar *filename_text = g_strdup_printf(_("Preview: %s"), basename);
+    gtk_label_set_text(gui->log_filename_preview_label, filename_text);
+    tio_session_config_clear(&preview);
+    return G_SOURCE_CONTINUE;
+}
+
+static void on_log_filename_format_changed(GtkDropDown *dropdown,
+                                           GParamSpec *pspec,
+                                           gpointer user_data)
+{
+    (void)pspec;
+    TioGui *gui = user_data;
+    guint selected = gtk_drop_down_get_selected(dropdown);
+    gboolean custom = selected == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX;
+    gtk_widget_set_visible(GTK_WIDGET(gui->log_file_entry), custom);
+    if (!custom && selected < G_N_ELEMENTS(log_filename_templates) - 1) {
+        gtk_editable_set_text(GTK_EDITABLE(gui->log_file_entry),
+                              log_filename_templates[selected]);
+    }
+    update_settings_previews(gui);
+}
+
+static void on_timestamp_format_changed(GtkDropDown *dropdown,
+                                        GParamSpec *pspec,
+                                        gpointer user_data)
+{
+    (void)dropdown;
+    (void)pspec;
+    update_settings_previews(user_data);
+}
+
+static GtkWidget *build_settings_popover(TioGui *gui)
+{
+    GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
+    gtk_widget_set_size_request(root, 360, -1);
+    gtk_widget_set_margin_top(root, 12);
+    gtk_widget_set_margin_bottom(root, 12);
+    gtk_widget_set_margin_start(root, 12);
+    gtk_widget_set_margin_end(root, 12);
+
+    gui->settings_title_label = GTK_LABEL(make_label(_("Settings")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->settings_title_label), "settings-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->settings_title_label));
+
+    gui->appearance_section_label = GTK_LABEL(make_label(_("Appearance")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->appearance_section_label),
+                             "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->appearance_section_label));
+
+    GtkWidget *appearance_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
+    gtk_widget_add_css_class(appearance_card, "settings-card");
+
+    GtkWidget *theme_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gui->theme_label = GTK_LABEL(make_label(_("Theme")));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->theme_label), TRUE);
+    const char *theme_names[] = {_("Follow system"), _("Light"), _("Dark"), NULL};
+    gui->theme_dropdown = make_string_dropdown(theme_names,
+                                                value_index(theme_values,
+                                                            gui->settings.theme,
+                                                            0));
+    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(gui->theme_label));
+    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(gui->theme_dropdown));
+    gtk_box_append(GTK_BOX(appearance_card), theme_row);
+
+    GtkWidget *language_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gui->language_label = GTK_LABEL(make_label(_("Language")));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->language_label), TRUE);
+    const char *language_names[] = {
+        _("System default"), "简体中文", "繁體中文", "English", "日本語", "Deutsch", NULL,
+    };
+    gui->language_dropdown = make_string_dropdown(
+        language_names, value_index(language_values, gui->settings.language, 0));
+    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(gui->language_label));
+    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(gui->language_dropdown));
+    gtk_box_append(GTK_BOX(appearance_card), language_row);
+    gtk_box_append(GTK_BOX(root), appearance_card);
+
+    gui->session_section_label = GTK_LABEL(make_label(_("Session")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->session_section_label), "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->session_section_label));
+
+    GtkWidget *session_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
+    gtk_widget_add_css_class(session_card, "settings-card");
+
+    GtkWidget *timestamp_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gui->timestamp_format_label = GTK_LABEL(make_label(_("Timestamp format")));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->timestamp_format_label), TRUE);
+    const char *timestamp_names[] = {
+        _("24-hour"), _("Since start"), _("Since previous"), _("ISO 8601"),
+        _("Unix epoch"), NULL,
+    };
+    gui->timestamp_format_dropdown = make_string_dropdown(
+        timestamp_names,
+        value_index(timestamp_format_values, gui->settings.session.timestamp_format, 3));
+    gtk_box_append(GTK_BOX(timestamp_row), GTK_WIDGET(gui->timestamp_format_label));
+    gtk_box_append(GTK_BOX(timestamp_row), GTK_WIDGET(gui->timestamp_format_dropdown));
+    gtk_box_append(GTK_BOX(session_card), timestamp_row);
+    gui->timestamp_format_hint =
+        GTK_LABEL(make_label(_("Applied when line timestamps are enabled")));
+    gtk_label_set_wrap(gui->timestamp_format_hint, TRUE);
+    gtk_widget_add_css_class(GTK_WIDGET(gui->timestamp_format_hint), "settings-hint");
+    gtk_box_append(GTK_BOX(session_card), GTK_WIDGET(gui->timestamp_format_hint));
+
+    gui->timestamp_preview_label = GTK_LABEL(make_label(""));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->timestamp_preview_label), "settings-hint");
+    gtk_box_append(GTK_BOX(session_card), GTK_WIDGET(gui->timestamp_preview_label));
+
+    gtk_box_append(GTK_BOX(session_card), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+    GtkWidget *filename_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gui->log_filename_format_label = GTK_LABEL(make_label(_("Log filename")));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->log_filename_format_label), TRUE);
+    const char *filename_names[] = {
+        _("tio-gui default"), _("Date first"), _("Device first"), _("Custom…"), NULL,
+    };
+    guint filename_index = gui->settings.session.log_file[0] == '\0'
+                               ? 0
+                               : value_index(log_filename_templates,
+                                             gui->settings.session.log_file,
+                                             TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gui->log_filename_dropdown = make_string_dropdown(filename_names, filename_index);
+    gtk_box_append(GTK_BOX(filename_row), GTK_WIDGET(gui->log_filename_format_label));
+    gtk_box_append(GTK_BOX(filename_row), GTK_WIDGET(gui->log_filename_dropdown));
+    gtk_box_append(GTK_BOX(session_card), filename_row);
+    gui->log_file_entry = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_placeholder_text(gui->log_file_entry,
+                                   _("Example: {device}-{date}-{time}.log"));
+    gtk_editable_set_text(GTK_EDITABLE(gui->log_file_entry),
+                          filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX
+                              ? gui->settings.session.log_file
+                              : log_filename_templates[filename_index]);
+    gtk_widget_set_visible(GTK_WIDGET(gui->log_file_entry),
+                           filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gtk_box_append(GTK_BOX(session_card), GTK_WIDGET(gui->log_file_entry));
+    gui->log_filename_preview_label = GTK_LABEL(make_label(""));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->log_filename_preview_label), "settings-hint");
+    gtk_box_append(GTK_BOX(session_card), GTK_WIDGET(gui->log_filename_preview_label));
+    gtk_box_append(GTK_BOX(root), session_card);
+
+    gui->connection_section_label = GTK_LABEL(make_label(_("Connection and logging")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->connection_section_label),
+                             "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->connection_section_label));
+    gui->connection_settings_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->connection_settings_box), "settings-card");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->connection_settings_box));
+
+    gui->backup_section_label = GTK_LABEL(make_label(_("Backup")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->backup_section_label), "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->backup_section_label));
+
+    gui->export_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Export settings…")));
+    gui->import_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Import settings…")));
+    GtkWidget *backup_card = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_add_css_class(backup_card, "settings-card");
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->export_settings_button), TRUE);
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->import_settings_button), TRUE);
+    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(gui->export_settings_button));
+    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(gui->import_settings_button));
+    gtk_box_append(GTK_BOX(root), backup_card);
+
+    gui->about_section_label = GTK_LABEL(make_label(_("About")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->about_section_label), "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->about_section_label));
+
+    GtkWidget *about_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(about_card, "settings-card");
+    GtkWidget *about_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+
+    g_autofree gchar *version = g_strdup_printf(_("Version %s"), TIO_GUI_VERSION);
+    gui->version_label = GTK_LABEL(gtk_label_new(version));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->version_label), "settings-version");
+    gtk_label_set_xalign(gui->version_label, 0.0F);
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->version_label), TRUE);
+    gui->github_button = GTK_BUTTON(gtk_button_new_with_label(_("GitHub project")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->github_button), "flat");
+    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(gui->version_label));
+    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(gui->github_button));
+    gtk_box_append(GTK_BOX(about_card), about_header);
+    gui->about_description_label =
+        GTK_LABEL(make_label(_("A lightweight, reliable GUI for tio")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->about_description_label), "settings-hint");
+    gtk_box_append(GTK_BOX(about_card), GTK_WIDGET(gui->about_description_label));
+    GtkWidget *update_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gui->update_available_label = GTK_LABEL(make_label(""));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->update_available_label), "settings-hint");
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->update_available_label), TRUE);
+    gui->download_update_button =
+        GTK_BUTTON(gtk_button_new_with_label(_("Download update")));
+    gtk_widget_add_css_class(GTK_WIDGET(gui->download_update_button), "suggested-action");
+    gtk_widget_set_visible(GTK_WIDGET(gui->update_available_label), FALSE);
+    gtk_widget_set_visible(GTK_WIDGET(gui->download_update_button), FALSE);
+    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(gui->update_available_label));
+    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(gui->download_update_button));
+    gtk_box_append(GTK_BOX(about_card), update_row);
+    gtk_box_append(GTK_BOX(root), about_card);
+
+    g_signal_connect(gui->theme_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_theme_changed),
+                     gui);
+    g_signal_connect(gui->timestamp_format_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_timestamp_format_changed),
+                     gui);
+    g_signal_connect(gui->log_filename_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_log_filename_format_changed),
+                     gui);
+    g_signal_connect_swapped(gui->log_file_entry,
+                             "changed",
+                             G_CALLBACK(update_settings_previews),
+                             gui);
+    g_signal_connect(gui->language_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_language_changed),
+                     gui);
+    g_signal_connect(gui->github_button, "clicked", G_CALLBACK(on_github_clicked), gui);
+    g_signal_connect(gui->download_update_button,
+                     "clicked",
+                     G_CALLBACK(on_download_update_clicked),
+                     gui);
+    g_signal_connect(gui->export_settings_button,
+                     "clicked",
+                     G_CALLBACK(on_export_settings_clicked),
+                     gui);
+    g_signal_connect(gui->import_settings_button,
+                     "clicked",
+                     G_CALLBACK(on_import_settings_clicked),
+                     gui);
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                   GTK_POLICY_NEVER,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(scroll), 560);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroll), TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), root);
+    return scroll;
 }
 
 static GtkWidget *build_profile_popover(TioGui *gui)
@@ -2022,6 +2780,10 @@ static GtkWidget *build_history_popover(TioGui *gui)
 {
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
     gtk_widget_set_size_request(root, 280, -1);
+    gtk_widget_set_margin_top(root, 8);
+    gtk_widget_set_margin_bottom(root, 8);
+    gtk_widget_set_margin_start(root, 8);
+    gtk_widget_set_margin_end(root, 8);
 
     gui->history_empty_label = GTK_LABEL(make_label(_("No history yet")));
     gtk_widget_add_css_class(GTK_WIDGET(gui->history_empty_label), "dim-label");
@@ -2123,6 +2885,7 @@ static void activate(GtkApplication *application, gpointer user_data)
         g_free(gui->settings.language);
         gui->settings.language = g_strdup(development_language);
     }
+    apply_theme(gui->settings.theme);
 
     install_css();
 
@@ -2147,13 +2910,32 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_widget_add_css_class(toolbar, "compact-controls");
     gtk_box_append(GTK_BOX(root), toolbar);
 
+    gui->settings_button = GTK_MENU_BUTTON(gtk_menu_button_new());
+    gtk_menu_button_set_icon_name(gui->settings_button, "emblem-system-symbolic");
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->settings_button), _("Application settings"));
+    gui->settings_popover = GTK_POPOVER(gtk_popover_new());
+    gtk_popover_set_position(gui->settings_popover, GTK_POS_BOTTOM);
+    gtk_widget_set_halign(GTK_WIDGET(gui->settings_popover), GTK_ALIGN_START);
+    gtk_popover_set_offset(gui->settings_popover, 12, 0);
+    gtk_popover_set_child(gui->settings_popover, build_settings_popover(gui));
+    g_signal_connect(gui->settings_popover,
+                     "notify::visible",
+                     G_CALLBACK(on_settings_popover_visible),
+                     gui);
+    gtk_menu_button_set_popover(gui->settings_button, GTK_WIDGET(gui->settings_popover));
+    gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->settings_button));
+
     gui->profile_button = GTK_MENU_BUTTON(gtk_menu_button_new());
-    gtk_menu_button_set_label(gui->profile_button, _("Profile"));
+    gtk_menu_button_set_label(gui->profile_button, _("Profiles"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(gui->profile_button), _("Connection profiles"));
     gui->profile_popover = GTK_POPOVER(gtk_popover_new());
+    gtk_popover_set_position(gui->profile_popover, GTK_POS_BOTTOM);
+    gtk_widget_set_halign(GTK_WIDGET(gui->profile_popover), GTK_ALIGN_START);
+    gtk_popover_set_offset(gui->profile_popover, 8, 0);
     gtk_popover_set_child(gui->profile_popover, build_profile_popover(gui));
     gtk_menu_button_set_popover(gui->profile_button, GTK_WIDGET(gui->profile_popover));
-    gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->profile_button));
+    gtk_widget_set_hexpand(GTK_WIDGET(gui->profile_button), TRUE);
+    gtk_box_append(gui->connection_settings_box, GTK_WIDGET(gui->profile_button));
 
     gui->device_label = GTK_LABEL(make_label(_("Device")));
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->device_label));
@@ -2182,77 +2964,59 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_widget_add_css_class(GTK_WIDGET(gui->connect_button), "suggested-action");
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(gui->connect_button));
 
-    /* Advanced settings. */
+    /* Keep only frequently used switches on the main workspace. */
     GtkWidget *options = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_widget_add_css_class(options, "compact-controls");
-
-    gui->more_settings_label = GTK_LABEL(make_label(_("More settings")));
-    gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->more_settings_label));
 
     gui->timestamp_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Timestamps")));
     gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->timestamp_check));
 
     gui->log_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Log session")));
     gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->log_check));
+    gtk_box_append(GTK_BOX(root), options);
 
     gui->log_directory_entry = GTK_ENTRY(gtk_entry_new());
     gtk_entry_set_placeholder_text(gui->log_directory_entry, _("Log directory"));
     gtk_widget_set_hexpand(GTK_WIDGET(gui->log_directory_entry), TRUE);
-    gtk_box_append(GTK_BOX(options), GTK_WIDGET(gui->log_directory_entry));
-
-    gui->advanced_expander = GTK_EXPANDER(gtk_expander_new(NULL));
-    gtk_widget_set_hexpand(GTK_WIDGET(gui->advanced_expander), TRUE);
-    gtk_expander_set_label_widget(gui->advanced_expander, options);
-    /* A vertical stack of short rows instead of one wide grid: grid columns
-       are shared by every row, so the log filename entry used to stretch the
-       serial dropdowns and force the whole window wider on expand. */
-    GtkWidget *advanced_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gui->choose_log_directory_button =
+        GTK_BUTTON(gtk_button_new_from_icon_name("folder-open-symbolic"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(gui->choose_log_directory_button),
+                                _("Choose log directory"));
+    GtkWidget *advanced_box = GTK_WIDGET(gui->connection_settings_box);
     gtk_widget_add_css_class(advanced_box, "compact-controls");
-    gtk_widget_set_margin_top(advanced_box, 4);
-    gtk_widget_set_margin_start(advanced_box, 18);
 
     gui->data_bits_dropdown = make_string_dropdown(data_bits_values, 3);
     gui->stop_bits_dropdown = make_string_dropdown(stop_bits_values, 0);
     gui->parity_dropdown = make_string_dropdown(parity_values, 0);
     gui->flow_dropdown = make_string_dropdown(flow_values, 0);
-    const char *language_names[] = {
-        _("System default"), "简体中文", "繁體中文", "English", "日本語", "Deutsch", NULL,
-    };
-    gui->language_dropdown = make_string_dropdown(language_names, 0);
     gui->local_echo_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Local echo")));
     gui->show_all_ttys_check =
         GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Show all TTY devices")));
     gui->output_delay_spin = make_spin_button(0, 10000.0, 1.0);
     gui->output_line_delay_spin = make_spin_button(0, 10000.0, 1.0);
     gui->log_warning_spin = make_spin_button(gui->settings.log_warning_mb, 65536.0, 16.0);
-    gui->log_file_entry = GTK_ENTRY(gtk_entry_new());
-    gtk_entry_set_placeholder_text(gui->log_file_entry, _("Automatic name"));
-    gtk_editable_set_width_chars(GTK_EDITABLE(gui->log_file_entry), 12);
-    gtk_widget_set_hexpand(GTK_WIDGET(gui->log_file_entry), TRUE);
     gui->log_append_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Append")));
     gui->log_strip_check =
         GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Strip control characters")));
     gui->open_log_directory_button = GTK_BUTTON(gtk_button_new_with_label(_("Open folder")));
 
-    gtk_drop_down_set_selected(gui->language_dropdown,
-                               value_index(language_values, gui->settings.language, 0));
     gtk_check_button_set_active(gui->show_all_ttys_check, gui->settings.show_all_ttys);
 
     gui->data_bits_label = GTK_LABEL(make_label(_("Data bits")));
     gui->stop_bits_label = GTK_LABEL(make_label(_("Stop bits")));
     gui->parity_label = GTK_LABEL(make_label(_("Parity")));
     gui->flow_label = GTK_LABEL(make_label(_("Flow control")));
-    gui->language_label = GTK_LABEL(make_label(_("Language")));
     gui->output_delay_label = GTK_LABEL(make_label(_("Character delay (ms)")));
     gui->output_line_delay_label = GTK_LABEL(make_label(_("Line delay (ms)")));
     gui->log_warning_label = GTK_LABEL(make_label(_("Warn above (MB)")));
-    gui->log_file_label = GTK_LABEL(make_label(_("Log file")));
 
-    GtkWidget *serial_row = make_settings_row(advanced_box);
-    append_labelled(serial_row, gui->data_bits_label, GTK_WIDGET(gui->data_bits_dropdown));
-    append_labelled(serial_row, gui->stop_bits_label, GTK_WIDGET(gui->stop_bits_dropdown));
-    append_labelled(serial_row, gui->parity_label, GTK_WIDGET(gui->parity_dropdown));
-    append_labelled(serial_row, gui->flow_label, GTK_WIDGET(gui->flow_dropdown));
+    GtkWidget *framing_row = make_settings_row(advanced_box);
+    append_labelled(framing_row, gui->data_bits_label, GTK_WIDGET(gui->data_bits_dropdown));
+    append_labelled(framing_row, gui->stop_bits_label, GTK_WIDGET(gui->stop_bits_dropdown));
+
+    GtkWidget *protocol_row = make_settings_row(advanced_box);
+    append_labelled(protocol_row, gui->parity_label, GTK_WIDGET(gui->parity_dropdown));
+    append_labelled(protocol_row, gui->flow_label, GTK_WIDGET(gui->flow_dropdown));
 
     GtkWidget *behaviour_row = make_settings_row(advanced_box);
     gtk_box_append(GTK_BOX(behaviour_row), GTK_WIDGET(gui->local_echo_check));
@@ -2264,21 +3028,17 @@ static void activate(GtkApplication *application, gpointer user_data)
                     gui->output_line_delay_label,
                     GTK_WIDGET(gui->output_line_delay_spin));
 
-    GtkWidget *log_file_row = make_settings_row(advanced_box);
-    append_labelled(log_file_row, gui->log_file_label, GTK_WIDGET(gui->log_file_entry));
+    GtkWidget *log_directory_row = make_settings_row(advanced_box);
+    gtk_box_append(GTK_BOX(log_directory_row), GTK_WIDGET(gui->log_directory_entry));
+    gtk_box_append(GTK_BOX(log_directory_row), GTK_WIDGET(gui->choose_log_directory_button));
 
     GtkWidget *log_option_row = make_settings_row(advanced_box);
     gtk_box_append(GTK_BOX(log_option_row), GTK_WIDGET(gui->log_append_check));
     gtk_box_append(GTK_BOX(log_option_row), GTK_WIDGET(gui->log_strip_check));
-    append_labelled(log_option_row, gui->log_warning_label, GTK_WIDGET(gui->log_warning_spin));
-    gtk_box_append(GTK_BOX(log_option_row), GTK_WIDGET(gui->open_log_directory_button));
 
-    GtkWidget *language_row = make_settings_row(advanced_box);
-    append_labelled(language_row, gui->language_label, GTK_WIDGET(gui->language_dropdown));
-
-    gtk_expander_set_child(gui->advanced_expander, advanced_box);
-    gtk_expander_set_expanded(gui->advanced_expander, gui->settings.advanced_expanded);
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(gui->advanced_expander));
+    GtkWidget *log_limit_row = make_settings_row(advanced_box);
+    append_labelled(log_limit_row, gui->log_warning_label, GTK_WIDGET(gui->log_warning_spin));
+    gtk_box_append(GTK_BOX(log_limit_row), GTK_WIDGET(gui->open_log_directory_button));
 
     /* Status bar. */
     GtkWidget *status_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -2347,6 +3107,9 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_menu_button_set_icon_name(gui->history_button, "document-open-recent-symbolic");
     gtk_widget_set_tooltip_text(GTK_WIDGET(gui->history_button), _("Send history"));
     gui->history_popover = GTK_POPOVER(gtk_popover_new());
+    gtk_popover_set_position(gui->history_popover, GTK_POS_TOP);
+    gtk_widget_set_halign(GTK_WIDGET(gui->history_popover), GTK_ALIGN_START);
+    gtk_popover_set_offset(gui->history_popover, 8, 0);
     gtk_popover_set_child(gui->history_popover, build_history_popover(gui));
     gtk_menu_button_set_popover(gui->history_button, GTK_WIDGET(gui->history_popover));
     gtk_box_append(GTK_BOX(send_bar), GTK_WIDGET(gui->history_button));
@@ -2434,13 +3197,13 @@ static void activate(GtkApplication *application, gpointer user_data)
                      "clicked",
                      G_CALLBACK(on_open_log_directory),
                      gui);
+    g_signal_connect(gui->choose_log_directory_button,
+                     "clicked",
+                     G_CALLBACK(on_choose_log_directory),
+                     gui);
     g_signal_connect(gui->show_all_ttys_check,
                      "toggled",
                      G_CALLBACK(on_show_all_ttys_toggled),
-                     gui);
-    g_signal_connect(gui->language_dropdown,
-                     "notify::selected",
-                     G_CALLBACK(on_language_changed),
                      gui);
     g_signal_connect(gui->terminal, "child-exited", G_CALLBACK(on_child_exited), gui);
     g_signal_connect(gui->send_button, "clicked", G_CALLBACK(on_send_clicked), gui);
@@ -2475,10 +3238,16 @@ static void activate(GtkApplication *application, gpointer user_data)
 
     apply_session_config(gui, &gui->settings.session);
     update_quick_buttons(gui);
-    gtk_widget_set_visible(GTK_WIDGET(gui->log_directory_entry), gui->settings.session.logging);
+    gtk_widget_set_sensitive(GTK_WIDGET(gui->log_directory_entry),
+                             gui->settings.session.logging);
+    gtk_widget_set_sensitive(GTK_WIDGET(gui->choose_log_directory_button),
+                             gui->settings.session.logging);
     refresh_profile_ui(gui);
     refresh_history_ui(gui);
     refresh_devices(gui);
+    gui->preview_started_at = g_get_monotonic_time();
+    update_settings_previews(gui);
+    gui->settings_preview_timer = g_timeout_add(250, update_settings_previews, gui);
     gtk_window_present(GTK_WINDOW(gui->window));
 }
 

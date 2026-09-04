@@ -48,12 +48,25 @@ Early development. The first release targets x86-64 Linux.
 
 - Enable timestamps and session logging to a user-selected directory
 - Name the log file explicitly or let tio-gui generate a dated name per session
+- Choose a device-first or date-first filename rule, or build a custom filename with
+  `{device}`, `{date}`, and `{time}` placeholders and inspect the result before connecting
 - Append to an existing log or start a new one, and optionally strip control characters
 - Open the log directory from the settings panel and see the current log file and its size
 - Get a one-time warning when the current log passes a configurable size
 
 ### Interface
 
+- Keep the main workspace focused on frequent switches and open grouped appearance,
+  session, connection, logging, backup, and project details from the top-left settings button
+- Follow the desktop theme by default, or explicitly select the light or dark appearance
+- Export the complete INI configuration for backup and import it on another machine
+- Select any timestamp format supported by `tio`: 24-hour clock, time since start,
+  delta since the previous line, ISO 8601, or Unix epoch, with a live preview
+- Open the GitHub project and inspect the application version directly from the settings menu
+- Check the latest GitHub Release asynchronously the first time settings are opened; when a newer
+  semantic version exists, show a compact notice linking to its release download page
+- Check the latest published GitHub Release asynchronously when settings is first opened and show
+  a quiet download prompt only when a newer semantic version is available
 - Switch the interface immediately between the system default, Simplified Chinese, Traditional Chinese, English, Japanese, and German
 - Keyboard shortcuts: `Ctrl+Shift+L` clear, `Ctrl+Shift+C`/`Ctrl+Shift+V` copy and paste,
   `Ctrl+Shift+F` search, `F5` connect, `F6` disconnect. Plain control characters such as
@@ -103,7 +116,7 @@ cmake --build build
 The GUI launches `tio` as a separate child process attached to a VTE pseudo-terminal. Version 1 deliberately does not implement an alternative serial backend: it manages and controls `tio` through its public command-line behavior.
 
 User preferences are stored in `~/.config/tio-gui/config.ini`. The file holds the last session under
-`[session]`, general options under `[general]`, the send history under `[send]`, and one
+`[session]`, general options (including the theme) under `[general]`, the send history under `[send]`, and one
 `[profile:<name>]` group per saved profile. Files written by 0.1.x are migrated automatically on first
 start. Session logs default to the user's `Documents/tio-gui` directory.
 

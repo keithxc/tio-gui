@@ -96,6 +96,7 @@ void tio_session_config_init(TioSessionConfig *config)
         .stop_bits = g_strdup("1"),
         .parity = g_strdup("none"),
         .flow = g_strdup("none"),
+        .timestamp_format = g_strdup("iso8601"),
         .line_ending = g_strdup("cr"),
         .log_directory = g_build_filename(documents, "tio-gui", NULL),
         .log_file = g_strdup(""),
@@ -131,6 +132,7 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
     replace_string(&destination->parity, source->parity);
     replace_string(&destination->flow, source->flow);
     replace_string(&destination->line_ending, source->line_ending);
+    replace_string(&destination->timestamp_format, source->timestamp_format);
     replace_string(&destination->log_directory, source->log_directory);
     replace_string(&destination->log_file, source->log_file);
     destination->local_echo = source->local_echo;
@@ -161,6 +163,7 @@ void tio_session_config_clear(TioSessionConfig *config)
     g_clear_pointer(&config->parity, g_free);
     g_clear_pointer(&config->flow, g_free);
     g_clear_pointer(&config->line_ending, g_free);
+    g_clear_pointer(&config->timestamp_format, g_free);
     g_clear_pointer(&config->log_directory, g_free);
     g_clear_pointer(&config->log_file, g_free);
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
@@ -195,6 +198,7 @@ static void session_config_read(GKeyFile *key_file,
     replace_boolean_from_key(key_file, group, "local-echo", &config->local_echo);
     replace_boolean_from_key(key_file, group, "hex-output", &config->hex_output);
     replace_boolean_from_key(key_file, group, "timestamps", &config->timestamps);
+    replace_string_from_key(key_file, group, "timestamp-format", &config->timestamp_format);
     replace_uint_from_key(key_file, group, "output-delay", &config->output_delay, 10000);
     replace_uint_from_key(key_file,
                           group,
@@ -239,6 +243,7 @@ static void session_config_write(GKeyFile *key_file,
     g_key_file_set_boolean(key_file, group, "local-echo", config->local_echo);
     g_key_file_set_boolean(key_file, group, "hex-output", config->hex_output);
     g_key_file_set_boolean(key_file, group, "timestamps", config->timestamps);
+    g_key_file_set_string(key_file, group, "timestamp-format", config->timestamp_format);
     g_key_file_set_integer(key_file, group, "output-delay", (gint)config->output_delay);
     g_key_file_set_integer(key_file,
                            group,
@@ -292,6 +297,7 @@ void tio_settings_init(TioSettings *settings)
 
     *settings = (TioSettings){
         .language = g_strdup("system"),
+        .theme = g_strdup("system"),
         .log_warning_mb = 256,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
@@ -299,14 +305,14 @@ void tio_settings_init(TioSettings *settings)
     tio_session_config_init(&settings->session);
 }
 
-void tio_settings_load(TioSettings *settings)
+gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error)
 {
-    g_return_if_fail(settings != NULL);
+    g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
 
-    g_autofree gchar *path = settings_path();
     g_autoptr(GKeyFile) key_file = g_key_file_new();
-    if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, NULL)) {
-        return;
+    if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, error)) {
+        return FALSE;
     }
 
     if (g_key_file_has_group(key_file, TIO_GUI_SESSION_GROUP)) {
@@ -316,6 +322,7 @@ void tio_settings_load(TioSettings *settings)
     }
 
     replace_string_from_key(key_file, "general", "language", &settings->language);
+    replace_string_from_key(key_file, "general", "theme", &settings->theme);
     replace_string_from_key(key_file, "general", "active-profile", &settings->active_profile);
     replace_boolean_from_key(key_file, "general", "show-all-ttys", &settings->show_all_ttys);
     replace_boolean_from_key(key_file,
@@ -352,14 +359,25 @@ void tio_settings_load(TioSettings *settings)
         session_config_read(key_file, groups[index], &profile->session);
         g_ptr_array_add(settings->profiles, profile);
     }
+    return TRUE;
 }
 
-gboolean tio_settings_save(const TioSettings *settings, GError **error)
+void tio_settings_load(TioSettings *settings)
+{
+    g_return_if_fail(settings != NULL);
+
+    g_autofree gchar *path = settings_path();
+    (void)tio_settings_load_from_file(settings, path, NULL);
+}
+
+gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path, GError **error)
 {
     g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
 
     g_autoptr(GKeyFile) key_file = g_key_file_new();
     g_key_file_set_string(key_file, "general", "language", settings->language);
+    g_key_file_set_string(key_file, "general", "theme", settings->theme);
     g_key_file_set_string(key_file,
                           "general",
                           "active-profile",
@@ -393,7 +411,6 @@ gboolean tio_settings_save(const TioSettings *settings, GError **error)
         return FALSE;
     }
 
-    g_autofree gchar *path = settings_path();
     g_autofree gchar *directory = g_path_get_dirname(path);
     if (g_mkdir_with_parents(directory, 0700) == -1) {
         g_set_error(error,
@@ -418,6 +435,12 @@ gboolean tio_settings_save(const TioSettings *settings, GError **error)
     return TRUE;
 }
 
+gboolean tio_settings_save(const TioSettings *settings, GError **error)
+{
+    g_autofree gchar *path = settings_path();
+    return tio_settings_save_to_file(settings, path, error);
+}
+
 void tio_settings_clear(TioSettings *settings)
 {
     if (settings == NULL) {
@@ -426,6 +449,7 @@ void tio_settings_clear(TioSettings *settings)
 
     tio_session_config_clear(&settings->session);
     g_clear_pointer(&settings->language, g_free);
+    g_clear_pointer(&settings->theme, g_free);
     g_clear_pointer(&settings->active_profile, g_free);
     g_clear_pointer(&settings->profiles, g_ptr_array_unref);
     g_clear_pointer(&settings->history, g_ptr_array_unref);

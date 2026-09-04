@@ -24,6 +24,8 @@
 
         buildInputs = with pkgs; [
           gtk4
+          json-glib
+          libsoup_3
           pcre2
           vte-gtk4
         ];
@@ -46,6 +48,8 @@
           clang-tools
           glibcLocales
           gtk4
+          json-glib
+          libsoup_3
           pcre2
           vte-gtk4
           tio

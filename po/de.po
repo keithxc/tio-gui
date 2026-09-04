@@ -1,241 +1,216 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
+"Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
+"POT-Creation-Date: 2026-09-04 10:42+0800\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "%s copy"
-msgstr "%s Kopie"
+msgid "Device"
+msgstr "Gerät"
 
-msgid "A profile name cannot contain [ or ]"
-msgstr "Ein Profilname darf kein [ oder ] enthalten"
+#, fuzzy
+msgid "Application settings"
+msgstr "Weitere Einstellungen"
 
-msgid "Append"
+#, fuzzy
+msgid "Settings"
+msgstr "Weitere Einstellungen"
+
+#, fuzzy
+msgid "Appearance"
 msgstr "Anhängen"
 
-msgid "Automatic name"
-msgstr "Automatischer Name"
+#, fuzzy
+msgid "Session"
+msgstr "Sitzung protokollieren"
 
-msgid "Back to bottom ↓"
-msgstr "Zum Ende ↓"
-
-msgid "Baud"
-msgstr "Baudrate"
-
-msgid "Button"
-msgstr "Taste"
-
-msgid "Cancel"
-msgstr "Abbrechen"
-
-msgid "Character delay (ms)"
-msgstr "Zeichenverzögerung (ms)"
-
-msgid "Choose a log directory first"
-msgstr "Zuerst ein Protokollverzeichnis auswählen"
-
-msgid "Clear"
-msgstr "Leeren"
-
-msgid "Clear history"
-msgstr "Verlauf löschen"
-
-msgid "Clear the terminal and its scrollback history"
-msgstr "Terminal und Rücklaufpuffer leeren"
-
-msgid "Connect"
-msgstr "Verbinden"
-
-msgid "Connected"
-msgstr "Verbunden"
-
-msgid "Connecting…"
-msgstr "Verbindung wird hergestellt…"
-
-msgid "Connection profiles"
+#, fuzzy
+msgid "Connection and logging"
 msgstr "Verbindungsprofile"
 
-msgid "Could not create log directory: %s"
-msgstr "Protokollverzeichnis konnte nicht erstellt werden: %s"
+msgid "Backup"
+msgstr ""
 
-msgid "Could not start tio: %s"
-msgstr "tio konnte nicht gestartet werden: %s"
+msgid "About"
+msgstr ""
 
-msgid "Could not stop tio: %s"
-msgstr "tio konnte nicht beendet werden: %s"
+msgid "Theme"
+msgstr ""
 
-msgid "Custom baud"
-msgstr "Benutzerdefinierte Baudrate"
+msgid "Follow system"
+msgstr ""
 
-msgid "Customize quick buttons"
-msgstr "Schnelltasten anpassen"
+msgid "Light"
+msgstr ""
 
-msgid "Customize…"
-msgstr "Anpassen…"
+msgid "Dark"
+msgstr ""
+
+#, fuzzy
+msgid "Timestamp format"
+msgstr "Zeitstempel"
+
+msgid "Applied when line timestamps are enabled"
+msgstr ""
+
+#, fuzzy
+msgid "Log filename"
+msgstr "Protokolldatei"
+
+#, fuzzy
+msgid "tio-gui default"
+msgstr "Systemstandard"
+
+msgid "Date first"
+msgstr ""
+
+#, fuzzy
+msgid "Device first"
+msgstr "Gerät"
 
 msgid "Custom…"
 msgstr "Benutzerdefiniert…"
 
-msgid "Data bits"
-msgstr "Datenbits"
+msgid "24-hour"
+msgstr ""
 
-msgid "Delete"
-msgstr "Löschen"
+msgid "Since start"
+msgstr ""
 
-msgid "Delete profile"
-msgstr "Profil löschen"
-
-msgid "Delete profile “%s”?"
-msgstr "Profil „%s“ löschen?"
-
-msgid "Deleted profile “%s”"
-msgstr "Profil „%s“ gelöscht"
-
-msgid "Device"
-msgstr "Gerät"
-
-msgid "Disconnect"
-msgstr "Trennen"
-
-msgid "Disconnected (tio exit status: %d)"
-msgstr "Getrennt (tio-Beendigungsstatus: %d)"
-
-msgid "Disconnecting…"
-msgstr "Verbindung wird getrennt…"
-
-msgid "Display incoming bytes as 16-byte hex rows"
-msgstr "Eingehende Bytes als Hexadezimalzeilen mit 16 Bytes anzeigen"
-
-msgid "Duplicate profile"
-msgstr "Profil duplizieren"
-
-msgid "Duplicate…"
-msgstr "Duplizieren…"
-
-msgid "Enter a profile name"
-msgstr "Einen Profilnamen eingeben"
-
-msgid "Enter a valid baud rate from 1 to 4294967295"
-msgstr "Eine gültige Baudrate zwischen 1 und 4294967295 eingeben"
-
-msgid "Find next"
-msgstr "Weitersuchen"
-
-msgid "Find previous"
+#, fuzzy
+msgid "Since previous"
 msgstr "Rückwärts suchen"
 
-msgid "Flow control"
-msgstr "Flusssteuerung"
+msgid "ISO 8601"
+msgstr ""
 
-msgid "Found %u serial device"
-msgid_plural "Found %u serial devices"
-msgstr[0] "%u serielles Gerät gefunden"
-msgstr[1] "%u serielle Geräte gefunden"
+msgid "Unix epoch"
+msgstr ""
 
-msgid "Invalid search pattern: %s"
-msgstr "Ungültiges Suchmuster: %s"
+msgid "GitHub project"
+msgstr ""
 
-msgid "Label"
-msgstr "Beschriftung"
-
-msgid "Language"
-msgstr "Sprache"
-
-msgid "Line delay (ms)"
-msgstr "Zeilenverzögerung (ms)"
-
-msgid "Line ending"
-msgstr "Zeilenende"
-
-msgid "Loaded profile “%s”"
-msgstr "Profil „%s“ geladen"
-
-msgid "Local echo"
-msgstr "Lokales Echo"
-
-msgid "Log directory"
-msgstr "Protokollverzeichnis"
-
-msgid "Log file"
-msgstr "Protokolldatei"
-
-msgid "Log session"
-msgstr "Sitzung protokollieren"
-
-msgid "Match case"
-msgstr "Groß-/Kleinschreibung beachten"
-
-msgid "More settings"
+#, fuzzy
+msgid "Export settings…"
 msgstr "Weitere Einstellungen"
 
-msgid "New output ↓"
-msgstr "Neue Ausgabe ↓"
+#, fuzzy
+msgid "Import settings…"
+msgstr "Weitere Einstellungen"
 
-msgid "No history yet"
-msgstr "Noch kein Verlauf"
+msgid "A lightweight, reliable GUI for tio"
+msgstr ""
 
-msgid "No line ending"
-msgstr "Kein Zeilenende"
+#, c-format
+msgid "Version %s is available"
+msgstr ""
 
-msgid "No matches"
-msgstr "Keine Treffer"
+msgid "Download update"
+msgstr ""
 
-msgid "No saved profiles"
-msgstr "Keine gespeicherten Profile"
+#, c-format
+msgid "Version %s"
+msgstr ""
 
-msgid "No serial devices found"
-msgstr "Keine seriellen Geräte gefunden"
+msgid "Baud"
+msgstr "Baudrate"
 
-msgid "Open folder"
-msgstr "Ordner öffnen"
+msgid "System default"
+msgstr "Systemstandard"
 
-msgid "Parity"
-msgstr "Parität"
-
-msgid "Payload"
-msgstr "Nutzlast"
-
-msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
-msgstr "Die Nutzlast unterstützt \\r, \\n, \\t, \\e und \\xNN-Escapes."
-
-msgid "Press Up and Down to browse the send history"
-msgstr "Mit Auf und Ab den Sendeverlauf durchblättern"
-
-msgid "Profile"
-msgstr "Profil"
-
-msgid "Profile name"
-msgstr "Profilname"
-
-msgid "Ready"
-msgstr "Bereit"
+msgid "Custom baud"
+msgstr "Benutzerdefinierte Baudrate"
 
 msgid "Refresh serial devices"
 msgstr "Serielle Geräte aktualisieren"
 
-msgid "Regular expression"
-msgstr "Regulärer Ausdruck"
+msgid "Disconnect"
+msgstr "Trennen"
 
-msgid "Save"
-msgstr "Speichern"
+msgid "Connect"
+msgstr "Verbinden"
 
-msgid "Save as new profile…"
-msgstr "Als neues Profil speichern…"
+msgid "Timestamps"
+msgstr "Zeitstempel"
 
-msgid "Save profile"
-msgstr "Profil speichern"
+msgid "Log session"
+msgstr "Sitzung protokollieren"
 
-msgid "Saved profile “%s”"
-msgstr "Profil „%s“ gespeichert"
+msgid "Log directory"
+msgstr "Protokollverzeichnis"
 
-msgid "Search terminal…"
-msgstr "Terminal durchsuchen…"
+#, fuzzy
+msgid "Choose log directory"
+msgstr "Zuerst ein Protokollverzeichnis auswählen"
 
-msgid "Select a serial device and baud rate first"
-msgstr "Zuerst serielles Gerät und Baudrate auswählen"
+msgid "Data bits"
+msgstr "Datenbits"
+
+msgid "Stop bits"
+msgstr "Stoppbits"
+
+msgid "Parity"
+msgstr "Parität"
+
+msgid "Flow control"
+msgstr "Flusssteuerung"
+
+msgid "Local echo"
+msgstr "Lokales Echo"
+
+msgid "Show all TTY devices"
+msgstr "Alle TTY-Geräte anzeigen"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Character delay (ms)"
+msgstr "Zeichenverzögerung (ms)"
+
+msgid "Line delay (ms)"
+msgstr "Zeilenverzögerung (ms)"
+
+msgid "tio --output-delay: pause between sent characters"
+msgstr "tio --output-delay: Pause zwischen gesendeten Zeichen"
+
+msgid "tio --output-line-delay: pause between sent lines"
+msgstr "tio --output-line-delay: Pause zwischen gesendeten Zeilen"
+
+msgid "Warn above (MB)"
+msgstr "Warnen ab (MB)"
+
+msgid "Warn once the current log file passes this size; 0 disables it"
+msgstr ""
+"Einmal warnen, sobald die aktuelle Protokolldatei diese Größe überschreitet; "
+"0 deaktiviert die Warnung"
+
+msgid "Example: {device}-{date}-{time}.log"
+msgstr ""
+
+msgid "Append"
+msgstr "Anhängen"
+
+msgid "Strip control characters"
+msgstr "Steuerzeichen entfernen"
+
+msgid "Open folder"
+msgstr "Ordner öffnen"
+
+msgid "Clear"
+msgstr "Leeren"
+
+msgid "Clear the terminal and its scrollback history"
+msgstr "Terminal und Rücklaufpuffer leeren"
+
+msgid "Send text…"
+msgstr "Text senden…"
+
+msgid "Press Up and Down to browse the send history"
+msgstr "Mit Auf und Ab den Sendeverlauf durchblättern"
 
 msgid "Send"
 msgstr "Senden"
@@ -243,47 +218,142 @@ msgstr "Senden"
 msgid "Send history"
 msgstr "Sendeverlauf"
 
-msgid "Send history cleared"
-msgstr "Sendeverlauf gelöscht"
+msgid "Line ending"
+msgstr "Zeilenende"
 
-msgid "Send text…"
-msgstr "Text senden…"
+msgid "Clear history"
+msgstr "Verlauf löschen"
 
-msgid "Show all TTY devices"
-msgstr "Alle TTY-Geräte anzeigen"
+msgid "No history yet"
+msgstr "Noch kein Verlauf"
 
-msgid "Stop bits"
-msgstr "Stoppbits"
+msgid "Customize…"
+msgstr "Anpassen…"
 
-msgid "Strip control characters"
-msgstr "Steuerzeichen entfernen"
+msgid "Display incoming bytes as 16-byte hex rows"
+msgstr "Eingehende Bytes als Hexadezimalzeilen mit 16 Bytes anzeigen"
 
-msgid "System default"
-msgstr "Systemstandard"
+msgid "Connection profiles"
+msgstr "Verbindungsprofile"
 
-msgid "That profile name is already in use"
-msgstr "Dieser Profilname wird bereits verwendet"
+#, fuzzy
+msgid "Profiles"
+msgstr "Profil"
 
-msgid "The profile stores the device, serial settings, logging options and quick buttons shown right now."
-msgstr "Das Profil speichert das aktuell angezeigte Gerät, die seriellen Einstellungen, die Protokolloptionen und die Schnelltasten."
-
-msgid "The session log has reached %s: %s"
-msgstr "Das Sitzungsprotokoll hat %s erreicht: %s"
-
-msgid "Timestamps"
-msgstr "Zeitstempel"
+msgid "Save as new profile…"
+msgstr "Als neues Profil speichern…"
 
 msgid "Update this profile"
 msgstr "Dieses Profil aktualisieren"
 
+msgid "Duplicate…"
+msgstr "Duplizieren…"
+
+msgid "Delete profile"
+msgstr "Profil löschen"
+
+msgid "No saved profiles"
+msgstr "Keine gespeicherten Profile"
+
+msgid "Search terminal…"
+msgstr "Terminal durchsuchen…"
+
+msgid "Find previous"
+msgstr "Rückwärts suchen"
+
+msgid "Find next"
+msgstr "Weitersuchen"
+
+msgid "Match case"
+msgstr "Groß-/Kleinschreibung beachten"
+
+msgid "Regular expression"
+msgstr "Regulärer Ausdruck"
+
+msgid "New output ↓"
+msgstr "Neue Ausgabe ↓"
+
+msgid "Back to bottom ↓"
+msgstr "Zum Ende ↓"
+
+msgid "Connected"
+msgstr "Verbunden"
+
+msgid "Ready"
+msgstr "Bereit"
+
+#, c-format
+msgid "Found %u serial device"
+msgid_plural "Found %u serial devices"
+msgstr[0] "%u serielles Gerät gefunden"
+msgstr[1] "%u serielle Geräte gefunden"
+
+msgid "No serial devices found"
+msgstr "Keine seriellen Geräte gefunden"
+
+#, c-format
+msgid "Loaded profile “%s”"
+msgstr "Profil „%s“ geladen"
+
+msgid "Profile"
+msgstr "Profil"
+
+msgid "Enter a profile name"
+msgstr "Einen Profilnamen eingeben"
+
+msgid "A profile name cannot contain [ or ]"
+msgstr "Ein Profilname darf kein [ oder ] enthalten"
+
+msgid "That profile name is already in use"
+msgstr "Dieser Profilname wird bereits verwendet"
+
+#, c-format
+msgid "Saved profile “%s”"
+msgstr "Profil „%s“ gespeichert"
+
+msgid "Duplicate profile"
+msgstr "Profil duplizieren"
+
+msgid "Save profile"
+msgstr "Profil speichern"
+
+msgid ""
+"The profile stores the device, serial settings, logging options and quick "
+"buttons shown right now."
+msgstr ""
+"Das Profil speichert das aktuell angezeigte Gerät, die seriellen "
+"Einstellungen, die Protokolloptionen und die Schnelltasten."
+
+msgid "Profile name"
+msgstr "Profilname"
+
+#, c-format
+msgid "%s copy"
+msgstr "%s Kopie"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Save"
+msgstr "Speichern"
+
+#, c-format
 msgid "Updated profile “%s”"
 msgstr "Profil „%s“ aktualisiert"
 
-msgid "Warn above (MB)"
-msgstr "Warnen ab (MB)"
+#, c-format
+msgid "Deleted profile “%s”"
+msgstr "Profil „%s“ gelöscht"
 
-msgid "Warn once the current log file passes this size; 0 disables it"
-msgstr "Einmal warnen, sobald die aktuelle Protokolldatei diese Größe überschreitet; 0 deaktiviert die Warnung"
+#, c-format
+msgid "Delete profile “%s”?"
+msgstr "Profil „%s“ löschen?"
+
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "no device"
+msgstr "kein Gerät"
 
 msgid "log"
 msgstr "Protokoll"
@@ -294,14 +364,110 @@ msgstr "Protokoll ausstehend"
 msgid "log ready"
 msgstr "Protokoll bereit"
 
-msgid "no device"
-msgstr "kein Gerät"
+#, c-format
+msgid "The session log has reached %s: %s"
+msgstr "Das Sitzungsprotokoll hat %s erreicht: %s"
 
-msgid "tio --output-delay: pause between sent characters"
-msgstr "tio --output-delay: Pause zwischen gesendeten Zeichen"
+#, c-format
+msgid "Disconnected (tio exit status: %d)"
+msgstr "Getrennt (tio-Beendigungsstatus: %d)"
 
-msgid "tio --output-line-delay: pause between sent lines"
-msgstr "tio --output-line-delay: Pause zwischen gesendeten Zeilen"
+#, c-format
+msgid "Could not start tio: %s"
+msgstr "tio konnte nicht gestartet werden: %s"
+
+#, c-format
+msgid "Could not stop tio: %s"
+msgstr "tio konnte nicht beendet werden: %s"
+
+msgid "Disconnecting…"
+msgstr "Verbindung wird getrennt…"
+
+msgid "Select a serial device and baud rate first"
+msgstr "Zuerst serielles Gerät und Baudrate auswählen"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "Eine gültige Baudrate zwischen 1 und 4294967295 eingeben"
 
 msgid "tio was not found in PATH"
 msgstr "tio wurde nicht im PATH gefunden"
+
+msgid "Choose a log directory first"
+msgstr "Zuerst ein Protokollverzeichnis auswählen"
+
+#, c-format
+msgid "Could not create log directory: %s"
+msgstr "Protokollverzeichnis konnte nicht erstellt werden: %s"
+
+msgid "Connecting…"
+msgstr "Verbindung wird hergestellt…"
+
+msgid "Send history cleared"
+msgstr "Sendeverlauf gelöscht"
+
+#, c-format
+msgid "Invalid search pattern: %s"
+msgstr "Ungültiges Suchmuster: %s"
+
+msgid "No matches"
+msgstr "Keine Treffer"
+
+msgid "Customize quick buttons"
+msgstr "Schnelltasten anpassen"
+
+msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
+msgstr "Die Nutzlast unterstützt \\r, \\n, \\t, \\e und \\xNN-Escapes."
+
+msgid "Button"
+msgstr "Taste"
+
+msgid "Label"
+msgstr "Beschriftung"
+
+msgid "Payload"
+msgstr "Nutzlast"
+
+msgid "Choose a local file for settings export"
+msgstr ""
+
+msgid "Settings exported"
+msgstr ""
+
+#, fuzzy
+msgid "Export settings"
+msgstr "Weitere Einstellungen"
+
+#, fuzzy
+msgid "Choose a local settings file"
+msgstr "Zuerst ein Protokollverzeichnis auswählen"
+
+msgid "Settings imported"
+msgstr ""
+
+msgid "Disconnect before importing settings"
+msgstr ""
+
+#, fuzzy
+msgid "Import settings"
+msgstr "Weitere Einstellungen"
+
+#, fuzzy
+msgid "Choose a local log directory"
+msgstr "Zuerst ein Protokollverzeichnis auswählen"
+
+#, fuzzy
+msgid "Log directory selected"
+msgstr "Protokollverzeichnis"
+
+#, c-format
+msgid "Preview: %s"
+msgstr ""
+
+msgid "No line ending"
+msgstr "Kein Zeilenende"
+
+#~ msgid "More settings"
+#~ msgstr "Weitere Einstellungen"
+
+#~ msgid "Automatic name"
+#~ msgstr "Automatischer Name"

@@ -1,12 +1,14 @@
-# Translation template for tio-gui.
-# Copyright (C) tio-gui contributors
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR "tio-gui contributors"
 # This file is distributed under the same license as the tio-gui package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
+"POT-Creation-Date: 2026-09-04 10:42+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,10 +21,99 @@ msgstr ""
 msgid "Device"
 msgstr ""
 
-msgid "Baud"
+msgid "Application settings"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Appearance"
+msgstr ""
+
+msgid "Session"
+msgstr ""
+
+msgid "Connection and logging"
+msgstr ""
+
+msgid "Backup"
+msgstr ""
+
+msgid "About"
+msgstr ""
+
+msgid "Theme"
+msgstr ""
+
+msgid "Follow system"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Timestamp format"
+msgstr ""
+
+msgid "Applied when line timestamps are enabled"
+msgstr ""
+
+msgid "Log filename"
+msgstr ""
+
+msgid "tio-gui default"
+msgstr ""
+
+msgid "Date first"
+msgstr ""
+
+msgid "Device first"
 msgstr ""
 
 msgid "Custom…"
+msgstr ""
+
+msgid "24-hour"
+msgstr ""
+
+msgid "Since start"
+msgstr ""
+
+msgid "Since previous"
+msgstr ""
+
+msgid "ISO 8601"
+msgstr ""
+
+msgid "Unix epoch"
+msgstr ""
+
+msgid "GitHub project"
+msgstr ""
+
+msgid "Export settings…"
+msgstr ""
+
+msgid "Import settings…"
+msgstr ""
+
+msgid "A lightweight, reliable GUI for tio"
+msgstr ""
+
+#, c-format
+msgid "Version %s is available"
+msgstr ""
+
+msgid "Download update"
+msgstr ""
+
+#, c-format
+msgid "Version %s"
+msgstr ""
+
+msgid "Baud"
 msgstr ""
 
 msgid "System default"
@@ -49,7 +140,7 @@ msgstr ""
 msgid "Log directory"
 msgstr ""
 
-msgid "More settings"
+msgid "Choose log directory"
 msgstr ""
 
 msgid "Data bits"
@@ -91,10 +182,7 @@ msgstr ""
 msgid "Warn once the current log file passes this size; 0 disables it"
 msgstr ""
 
-msgid "Log file"
-msgstr ""
-
-msgid "Automatic name"
+msgid "Example: {device}-{date}-{time}.log"
 msgstr ""
 
 msgid "Append"
@@ -140,6 +228,9 @@ msgid "Display incoming bytes as 16-byte hex rows"
 msgstr ""
 
 msgid "Connection profiles"
+msgstr ""
+
+msgid "Profiles"
 msgstr ""
 
 msgid "Save as new profile…"
@@ -325,6 +416,37 @@ msgid "Label"
 msgstr ""
 
 msgid "Payload"
+msgstr ""
+
+msgid "Choose a local file for settings export"
+msgstr ""
+
+msgid "Settings exported"
+msgstr ""
+
+msgid "Export settings"
+msgstr ""
+
+msgid "Choose a local settings file"
+msgstr ""
+
+msgid "Settings imported"
+msgstr ""
+
+msgid "Disconnect before importing settings"
+msgstr ""
+
+msgid "Import settings"
+msgstr ""
+
+msgid "Choose a local log directory"
+msgstr ""
+
+msgid "Log directory selected"
+msgstr ""
+
+#, c-format
+msgid "Preview: %s"
 msgstr ""
 
 msgid "No line ending"

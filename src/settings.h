@@ -23,6 +23,7 @@ typedef struct {
     gboolean local_echo;
     gboolean hex_output;
     gboolean timestamps;
+    gchar *timestamp_format; /* 24hour, 24hour-start, 24hour-delta, iso8601 or epoch */
     gchar *line_ending; /* none, lf, cr or crlf */
     guint output_delay;
     guint output_line_delay;
@@ -43,6 +44,7 @@ typedef struct {
 typedef struct {
     TioSessionConfig session;
     gchar *language;
+    gchar *theme; /* system, light or dark */
     gchar *active_profile;
     gboolean show_all_ttys;
     gboolean advanced_expanded;
@@ -54,6 +56,8 @@ typedef struct {
 void tio_settings_init(TioSettings *settings);
 void tio_settings_load(TioSettings *settings);
 gboolean tio_settings_save(const TioSettings *settings, GError **error);
+gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error);
+gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path, GError **error);
 void tio_settings_clear(TioSettings *settings);
 
 void tio_session_config_init(TioSessionConfig *config);

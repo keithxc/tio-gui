@@ -1,240 +1,201 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
+"Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
+"POT-Creation-Date: 2026-09-04 10:42+0800\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid "%s copy"
-msgstr "%s 複本"
+msgid "Device"
+msgstr "裝置"
 
-msgid "A profile name cannot contain [ or ]"
-msgstr "設定檔名稱不能包含 [ 或 ]"
+msgid "Application settings"
+msgstr "應用程式設定"
 
-msgid "Append"
-msgstr "附加"
+msgid "Settings"
+msgstr "設定"
 
-msgid "Automatic name"
-msgstr "自動命名"
+msgid "Appearance"
+msgstr "外觀"
 
-msgid "Back to bottom ↓"
-msgstr "回到底部 ↓"
+msgid "Session"
+msgstr "工作階段"
 
-msgid "Baud"
-msgstr "傳輸速率"
+msgid "Connection and logging"
+msgstr "連線與記錄"
 
-msgid "Button"
-msgstr "按鈕"
+msgid "Backup"
+msgstr "備份"
 
-msgid "Cancel"
-msgstr "取消"
+msgid "About"
+msgstr "關於"
 
-msgid "Character delay (ms)"
-msgstr "字元延遲（毫秒）"
+msgid "Theme"
+msgstr "主題"
 
-msgid "Choose a log directory first"
-msgstr "請先選擇記錄資料夾"
+msgid "Follow system"
+msgstr "跟隨系統"
 
-msgid "Clear"
-msgstr "清空"
+msgid "Light"
+msgstr "亮色"
 
-msgid "Clear history"
-msgstr "清除歷史"
+msgid "Dark"
+msgstr "深色"
 
-msgid "Clear the terminal and its scrollback history"
-msgstr "清空終端及其回捲歷史"
+msgid "Timestamp format"
+msgstr "時間戳記格式"
 
-msgid "Connect"
-msgstr "連線"
+msgid "Applied when line timestamps are enabled"
+msgstr "啟用行時間戳記時套用此格式"
 
-msgid "Connected"
-msgstr "已連線"
+msgid "Log filename"
+msgstr "記錄檔名稱"
 
-msgid "Connecting…"
-msgstr "正在連線…"
+msgid "tio-gui default"
+msgstr "tio-gui 預設"
 
-msgid "Connection profiles"
-msgstr "連線設定檔"
+msgid "Date first"
+msgstr "日期優先"
 
-msgid "Could not create log directory: %s"
-msgstr "無法建立記錄資料夾：%s"
-
-msgid "Could not start tio: %s"
-msgstr "無法啟動 tio：%s"
-
-msgid "Could not stop tio: %s"
-msgstr "無法停止 tio：%s"
-
-msgid "Custom baud"
-msgstr "自訂傳輸速率"
-
-msgid "Customize quick buttons"
-msgstr "自訂快捷按鈕"
-
-msgid "Customize…"
-msgstr "自訂…"
+msgid "Device first"
+msgstr "裝置優先"
 
 msgid "Custom…"
 msgstr "自訂…"
 
-msgid "Data bits"
-msgstr "資料位元"
+msgid "24-hour"
+msgstr "24 小時制"
 
-msgid "Delete"
-msgstr "刪除"
+msgid "Since start"
+msgstr "從啟動起"
 
-msgid "Delete profile"
-msgstr "刪除設定檔"
+msgid "Since previous"
+msgstr "從上一筆起"
 
-msgid "Delete profile “%s”?"
-msgstr "刪除設定檔「%s」？"
+msgid "ISO 8601"
+msgstr "ISO 8601"
 
-msgid "Deleted profile “%s”"
-msgstr "已刪除設定檔「%s」"
+msgid "Unix epoch"
+msgstr "Unix 時間戳記"
 
-msgid "Device"
-msgstr "裝置"
+msgid "GitHub project"
+msgstr "GitHub 專案"
 
-msgid "Disconnect"
-msgstr "中斷連線"
+msgid "Export settings…"
+msgstr "匯出設定…"
 
-msgid "Disconnected (tio exit status: %d)"
-msgstr "已中斷連線（tio 結束狀態：%d）"
+msgid "Import settings…"
+msgstr "匯入設定…"
 
-msgid "Disconnecting…"
-msgstr "正在中斷連線…"
+msgid "A lightweight, reliable GUI for tio"
+msgstr "輕量、可靠的 tio 圖形介面"
 
-msgid "Display incoming bytes as 16-byte hex rows"
-msgstr "將接收資料以每列 16 位元組顯示為十六進位"
+#, c-format
+msgid "Version %s is available"
+msgstr "發現新版本 %s"
 
-msgid "Duplicate profile"
-msgstr "複製設定檔"
+msgid "Download update"
+msgstr "下載更新"
 
-msgid "Duplicate…"
-msgstr "複製…"
+#, c-format
+msgid "Version %s"
+msgstr "版本 %s"
 
-msgid "Enter a profile name"
-msgstr "請輸入設定檔名稱"
+msgid "Baud"
+msgstr "傳輸速率"
 
-msgid "Enter a valid baud rate from 1 to 4294967295"
-msgstr "請輸入 1 到 4294967295 之間的有效傳輸速率"
+msgid "System default"
+msgstr "跟隨系統"
 
-msgid "Find next"
-msgstr "尋找下一個"
-
-msgid "Find previous"
-msgstr "尋找上一個"
-
-msgid "Flow control"
-msgstr "流量控制"
-
-msgid "Found %u serial device"
-msgid_plural "Found %u serial devices"
-msgstr[0] "發現 %u 個序列埠裝置"
-
-msgid "Invalid search pattern: %s"
-msgstr "搜尋樣式無效：%s"
-
-msgid "Label"
-msgstr "名稱"
-
-msgid "Language"
-msgstr "語言"
-
-msgid "Line delay (ms)"
-msgstr "行延遲（毫秒）"
-
-msgid "Line ending"
-msgstr "行尾"
-
-msgid "Loaded profile “%s”"
-msgstr "已載入設定檔「%s」"
-
-msgid "Local echo"
-msgstr "本機回顯"
-
-msgid "Log directory"
-msgstr "記錄資料夾"
-
-msgid "Log file"
-msgstr "記錄檔"
-
-msgid "Log session"
-msgstr "記錄工作階段"
-
-msgid "Match case"
-msgstr "區分大小寫"
-
-msgid "More settings"
-msgstr "更多設定"
-
-msgid "New output ↓"
-msgstr "有新資料 ↓"
-
-msgid "No history yet"
-msgstr "尚無歷史"
-
-msgid "No line ending"
-msgstr "無行尾"
-
-msgid "No matches"
-msgstr "沒有符合項目"
-
-msgid "No saved profiles"
-msgstr "尚無儲存的設定檔"
-
-msgid "No serial devices found"
-msgstr "找不到序列埠裝置"
-
-msgid "Open folder"
-msgstr "開啟資料夾"
-
-msgid "Parity"
-msgstr "同位檢查"
-
-msgid "Payload"
-msgstr "傳送內容"
-
-msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
-msgstr "傳送內容支援 \\r、\\n、\\t、\\e 與 \\xNN 跳脫字元。"
-
-msgid "Press Up and Down to browse the send history"
-msgstr "按 Up / Down 瀏覽傳送歷史"
-
-msgid "Profile"
-msgstr "設定檔"
-
-msgid "Profile name"
-msgstr "設定檔名稱"
-
-msgid "Ready"
-msgstr "就緒"
+msgid "Custom baud"
+msgstr "自訂傳輸速率"
 
 msgid "Refresh serial devices"
 msgstr "重新整理序列埠裝置"
 
-msgid "Regular expression"
-msgstr "正規表示式"
+msgid "Disconnect"
+msgstr "中斷連線"
 
-msgid "Save"
-msgstr "儲存"
+msgid "Connect"
+msgstr "連線"
 
-msgid "Save as new profile…"
-msgstr "另存為新設定檔…"
+msgid "Timestamps"
+msgstr "時間戳記"
 
-msgid "Save profile"
-msgstr "儲存設定檔"
+msgid "Log session"
+msgstr "記錄工作階段"
 
-msgid "Saved profile “%s”"
-msgstr "已儲存設定檔「%s」"
+msgid "Log directory"
+msgstr "記錄資料夾"
 
-msgid "Search terminal…"
-msgstr "搜尋終端機內容…"
+msgid "Choose log directory"
+msgstr "選擇記錄資料夾"
 
-msgid "Select a serial device and baud rate first"
-msgstr "請先選擇序列埠裝置與傳輸速率"
+msgid "Data bits"
+msgstr "資料位元"
+
+msgid "Stop bits"
+msgstr "停止位元"
+
+msgid "Parity"
+msgstr "同位檢查"
+
+msgid "Flow control"
+msgstr "流量控制"
+
+msgid "Local echo"
+msgstr "本機回顯"
+
+msgid "Show all TTY devices"
+msgstr "顯示所有 TTY 裝置"
+
+msgid "Language"
+msgstr "語言"
+
+msgid "Character delay (ms)"
+msgstr "字元延遲（毫秒）"
+
+msgid "Line delay (ms)"
+msgstr "行延遲（毫秒）"
+
+msgid "tio --output-delay: pause between sent characters"
+msgstr "tio --output-delay：傳送字元之間的間隔"
+
+msgid "tio --output-line-delay: pause between sent lines"
+msgstr "tio --output-line-delay：傳送行之間的間隔"
+
+msgid "Warn above (MB)"
+msgstr "超過提醒（MB）"
+
+msgid "Warn once the current log file passes this size; 0 disables it"
+msgstr "目前記錄檔超過此大小時提醒一次；0 表示停用"
+
+msgid "Example: {device}-{date}-{time}.log"
+msgstr "範例：{device}-{date}-{time}.log"
+
+msgid "Append"
+msgstr "附加"
+
+msgid "Strip control characters"
+msgstr "移除控制字元"
+
+msgid "Open folder"
+msgstr "開啟資料夾"
+
+msgid "Clear"
+msgstr "清空"
+
+msgid "Clear the terminal and its scrollback history"
+msgstr "清空終端及其回捲歷史"
+
+msgid "Send text…"
+msgstr "輸入要傳送的內容…"
+
+msgid "Press Up and Down to browse the send history"
+msgstr "按 Up / Down 瀏覽傳送歷史"
 
 msgid "Send"
 msgstr "傳送"
@@ -242,47 +203,138 @@ msgstr "傳送"
 msgid "Send history"
 msgstr "傳送歷史"
 
-msgid "Send history cleared"
-msgstr "傳送歷史已清除"
+msgid "Line ending"
+msgstr "行尾"
 
-msgid "Send text…"
-msgstr "輸入要傳送的內容…"
+msgid "Clear history"
+msgstr "清除歷史"
 
-msgid "Show all TTY devices"
-msgstr "顯示所有 TTY 裝置"
+msgid "No history yet"
+msgstr "尚無歷史"
 
-msgid "Stop bits"
-msgstr "停止位元"
+msgid "Customize…"
+msgstr "自訂…"
 
-msgid "Strip control characters"
-msgstr "移除控制字元"
+msgid "Display incoming bytes as 16-byte hex rows"
+msgstr "將接收資料以每列 16 位元組顯示為十六進位"
 
-msgid "System default"
-msgstr "跟隨系統"
+msgid "Connection profiles"
+msgstr "連線設定檔"
 
-msgid "That profile name is already in use"
-msgstr "該設定檔名稱已被使用"
+msgid "Profiles"
+msgstr "設定檔"
 
-msgid "The profile stores the device, serial settings, logging options and quick buttons shown right now."
-msgstr "設定檔會儲存目前顯示的裝置、序列埠參數、記錄選項與快捷按鈕。"
-
-msgid "The session log has reached %s: %s"
-msgstr "工作階段記錄檔已達到 %s：%s"
-
-msgid "Timestamps"
-msgstr "時間戳記"
+msgid "Save as new profile…"
+msgstr "另存為新設定檔…"
 
 msgid "Update this profile"
 msgstr "更新目前設定檔"
 
+msgid "Duplicate…"
+msgstr "複製…"
+
+msgid "Delete profile"
+msgstr "刪除設定檔"
+
+msgid "No saved profiles"
+msgstr "尚無儲存的設定檔"
+
+msgid "Search terminal…"
+msgstr "搜尋終端機內容…"
+
+msgid "Find previous"
+msgstr "尋找上一個"
+
+msgid "Find next"
+msgstr "尋找下一個"
+
+msgid "Match case"
+msgstr "區分大小寫"
+
+msgid "Regular expression"
+msgstr "正規表示式"
+
+msgid "New output ↓"
+msgstr "有新資料 ↓"
+
+msgid "Back to bottom ↓"
+msgstr "回到底部 ↓"
+
+msgid "Connected"
+msgstr "已連線"
+
+msgid "Ready"
+msgstr "就緒"
+
+#, c-format
+msgid "Found %u serial device"
+msgid_plural "Found %u serial devices"
+msgstr[0] "發現 %u 個序列埠裝置"
+
+msgid "No serial devices found"
+msgstr "找不到序列埠裝置"
+
+#, c-format
+msgid "Loaded profile “%s”"
+msgstr "已載入設定檔「%s」"
+
+msgid "Profile"
+msgstr "設定檔"
+
+msgid "Enter a profile name"
+msgstr "請輸入設定檔名稱"
+
+msgid "A profile name cannot contain [ or ]"
+msgstr "設定檔名稱不能包含 [ 或 ]"
+
+msgid "That profile name is already in use"
+msgstr "該設定檔名稱已被使用"
+
+#, c-format
+msgid "Saved profile “%s”"
+msgstr "已儲存設定檔「%s」"
+
+msgid "Duplicate profile"
+msgstr "複製設定檔"
+
+msgid "Save profile"
+msgstr "儲存設定檔"
+
+msgid ""
+"The profile stores the device, serial settings, logging options and quick "
+"buttons shown right now."
+msgstr "設定檔會儲存目前顯示的裝置、序列埠參數、記錄選項與快捷按鈕。"
+
+msgid "Profile name"
+msgstr "設定檔名稱"
+
+#, c-format
+msgid "%s copy"
+msgstr "%s 複本"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Save"
+msgstr "儲存"
+
+#, c-format
 msgid "Updated profile “%s”"
 msgstr "已更新設定檔「%s」"
 
-msgid "Warn above (MB)"
-msgstr "超過提醒（MB）"
+#, c-format
+msgid "Deleted profile “%s”"
+msgstr "已刪除設定檔「%s」"
 
-msgid "Warn once the current log file passes this size; 0 disables it"
-msgstr "目前記錄檔超過此大小時提醒一次；0 表示停用"
+#, c-format
+msgid "Delete profile “%s”?"
+msgstr "刪除設定檔「%s」？"
+
+msgid "Delete"
+msgstr "刪除"
+
+msgid "no device"
+msgstr "未選擇裝置"
 
 msgid "log"
 msgstr "記錄"
@@ -293,14 +345,105 @@ msgstr "記錄待寫入"
 msgid "log ready"
 msgstr "記錄已就緒"
 
-msgid "no device"
-msgstr "未選擇裝置"
+#, c-format
+msgid "The session log has reached %s: %s"
+msgstr "工作階段記錄檔已達到 %s：%s"
 
-msgid "tio --output-delay: pause between sent characters"
-msgstr "tio --output-delay：傳送字元之間的間隔"
+#, c-format
+msgid "Disconnected (tio exit status: %d)"
+msgstr "已中斷連線（tio 結束狀態：%d）"
 
-msgid "tio --output-line-delay: pause between sent lines"
-msgstr "tio --output-line-delay：傳送行之間的間隔"
+#, c-format
+msgid "Could not start tio: %s"
+msgstr "無法啟動 tio：%s"
+
+#, c-format
+msgid "Could not stop tio: %s"
+msgstr "無法停止 tio：%s"
+
+msgid "Disconnecting…"
+msgstr "正在中斷連線…"
+
+msgid "Select a serial device and baud rate first"
+msgstr "請先選擇序列埠裝置與傳輸速率"
+
+msgid "Enter a valid baud rate from 1 to 4294967295"
+msgstr "請輸入 1 到 4294967295 之間的有效傳輸速率"
 
 msgid "tio was not found in PATH"
 msgstr "在 PATH 中找不到 tio"
+
+msgid "Choose a log directory first"
+msgstr "請先選擇記錄資料夾"
+
+#, c-format
+msgid "Could not create log directory: %s"
+msgstr "無法建立記錄資料夾：%s"
+
+msgid "Connecting…"
+msgstr "正在連線…"
+
+msgid "Send history cleared"
+msgstr "傳送歷史已清除"
+
+#, c-format
+msgid "Invalid search pattern: %s"
+msgstr "搜尋樣式無效：%s"
+
+msgid "No matches"
+msgstr "沒有符合項目"
+
+msgid "Customize quick buttons"
+msgstr "自訂快捷按鈕"
+
+msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
+msgstr "傳送內容支援 \\r、\\n、\\t、\\e 與 \\xNN 跳脫字元。"
+
+msgid "Button"
+msgstr "按鈕"
+
+msgid "Label"
+msgstr "名稱"
+
+msgid "Payload"
+msgstr "傳送內容"
+
+msgid "Choose a local file for settings export"
+msgstr "請選擇本機檔案以匯出設定"
+
+msgid "Settings exported"
+msgstr "設定已匯出"
+
+msgid "Export settings"
+msgstr "匯出設定"
+
+msgid "Choose a local settings file"
+msgstr "請選擇本機設定檔"
+
+msgid "Settings imported"
+msgstr "設定已匯入"
+
+msgid "Disconnect before importing settings"
+msgstr "請先中斷連線再匯入設定"
+
+msgid "Import settings"
+msgstr "匯入設定"
+
+msgid "Choose a local log directory"
+msgstr "請選擇本機記錄資料夾"
+
+msgid "Log directory selected"
+msgstr "已選擇記錄資料夾"
+
+#, c-format
+msgid "Preview: %s"
+msgstr "預覽：%s"
+
+msgid "No line ending"
+msgstr "無行尾"
+
+#~ msgid "More settings"
+#~ msgstr "更多設定"
+
+#~ msgid "Automatic name"
+#~ msgstr "自動命名"

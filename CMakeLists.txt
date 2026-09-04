@@ -21,12 +21,20 @@ pkg_check_modules(VTE REQUIRED IMPORTED_TARGET vte-2.91-gtk4>=0.74)
 # VteRegex compile flags are PCRE2 compile flags; take them from the header
 # rather than hard-coding the numeric values.
 pkg_check_modules(PCRE2 REQUIRED IMPORTED_TARGET libpcre2-8)
+pkg_check_modules(SOUP REQUIRED IMPORTED_TARGET libsoup-3.0>=3.0)
+pkg_check_modules(JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0>=1.6)
 
 add_executable(tio-gui
   src/main.c
   src/settings.c
 )
-target_link_libraries(tio-gui PRIVATE PkgConfig::GTK4 PkgConfig::VTE PkgConfig::PCRE2)
+target_link_libraries(tio-gui PRIVATE
+  PkgConfig::GTK4
+  PkgConfig::VTE
+  PkgConfig::PCRE2
+  PkgConfig::SOUP
+  PkgConfig::JSON_GLIB
+)
 target_compile_definitions(tio-gui PRIVATE
   TIO_GUI_VERSION="${PROJECT_VERSION}"
   TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
