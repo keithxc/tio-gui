@@ -448,7 +448,8 @@ static void retranslate_ui(TioTab *tab)
 static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data)
 {
     (void)pspec;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     guint selected = gtk_drop_down_get_selected(dropdown);
     if (tab->app->retranslating || selected >= G_N_ELEMENTS(language_values) - 1 ||
         g_strcmp0(tab->app->settings.language, language_values[selected]) == 0) {
@@ -490,7 +491,8 @@ static void apply_theme(const char *theme)
 static void on_theme_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data)
 {
     (void)pspec;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     guint selected = gtk_drop_down_get_selected(dropdown);
     if (tab->app->retranslating || selected >= G_N_ELEMENTS(theme_values) - 1) {
         return;
@@ -2440,7 +2442,8 @@ static void capture_all_settings(TioTab *tab)
 static void on_github_clicked(GtkButton *button, gpointer user_data)
 {
     (void)button;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     GtkUriLauncher *launcher =
         gtk_uri_launcher_new("https://github.com/keithxc/tio-gui");
     gtk_uri_launcher_launch(launcher, GTK_WINDOW(tab->app->window), NULL, NULL, NULL);
@@ -2527,7 +2530,8 @@ static void on_settings_popover_visible(GObject *object,
                                         gpointer user_data)
 {
     (void)pspec;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     if (!gtk_widget_get_visible(GTK_WIDGET(object)) || tab->app->update_check_started) {
         return;
     }
@@ -2555,7 +2559,8 @@ static void on_settings_popover_visible(GObject *object,
 static void on_download_update_clicked(GtkButton *button, gpointer user_data)
 {
     (void)button;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     if (tab->app->update_url == NULL) {
         return;
     }
@@ -2565,7 +2570,8 @@ static void on_download_update_clicked(GtkButton *button, gpointer user_data)
 }
 static void on_export_finished(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     g_autoptr(GError) error = NULL;
     g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error);
     if (file == NULL) {
@@ -2591,15 +2597,15 @@ static void on_export_finished(GObject *source, GAsyncResult *result, gpointer u
 static void on_export_settings_clicked(GtkButton *button, gpointer user_data)
 {
     (void)button;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
     GtkFileDialog *dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, _("Export settings"));
     gtk_file_dialog_set_initial_name(dialog, "tio-gui-settings.ini");
     gtk_file_dialog_save(dialog,
-                         GTK_WINDOW(tab->app->window),
+                         GTK_WINDOW(app->window),
                          NULL,
                          on_export_finished,
-                         tab);
+                         app);
     g_object_unref(dialog);
 }
 
@@ -2627,7 +2633,8 @@ static void apply_imported_settings(TioTab *tab)
 
 static void on_import_finished(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     g_autoptr(GError) error = NULL;
     g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
     if (file == NULL) {
@@ -2663,7 +2670,8 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
 static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
 {
     (void)button;
-    TioTab *tab = user_data;
+    TioApp *app = user_data;
+    TioTab *tab = app->active;
     if (tab->child_pid > 0) {
         set_status(tab, _("Disconnect before importing settings"));
         return;
@@ -2674,7 +2682,7 @@ static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
                          GTK_WINDOW(tab->app->window),
                          NULL,
                          on_import_finished,
-                         tab);
+                         app);
     g_object_unref(dialog);
 }
 
@@ -2797,54 +2805,10 @@ static void on_timestamp_format_changed(GtkDropDown *dropdown,
     update_settings_previews(user_data);
 }
 
-static GtkWidget *build_settings_popover(TioTab *tab)
+/* The controls for one connection. Built per session and parented into that
+   session's expander, so each tab configures its own link. */
+static void build_session_settings(TioTab *tab)
 {
-    GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
-    gtk_widget_set_size_request(root, 360, -1);
-    gtk_widget_set_margin_top(root, 12);
-    gtk_widget_set_margin_bottom(root, 12);
-    gtk_widget_set_margin_start(root, 12);
-    gtk_widget_set_margin_end(root, 12);
-
-    tab->app->settings_title_label = GTK_LABEL(make_label(_("Settings")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->settings_title_label), "settings-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->settings_title_label));
-
-    tab->app->appearance_section_label = GTK_LABEL(make_label(_("Appearance")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->appearance_section_label),
-                             "settings-section-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->appearance_section_label));
-
-    GtkWidget *appearance_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
-    gtk_widget_add_css_class(appearance_card, "settings-card");
-
-    GtkWidget *theme_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    tab->app->theme_label = GTK_LABEL(make_label(_("Theme")));
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->theme_label), TRUE);
-    const char *theme_names[] = {_("Follow system"), _("Light"), _("Dark"), NULL};
-    tab->app->theme_dropdown = make_string_dropdown(theme_names,
-                                                value_index(theme_values,
-                                                            tab->app->settings.theme,
-                                                            0));
-    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(tab->app->theme_label));
-    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(tab->app->theme_dropdown));
-    gtk_box_append(GTK_BOX(appearance_card), theme_row);
-
-    GtkWidget *language_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    tab->app->language_label = GTK_LABEL(make_label(_("Language")));
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->language_label), TRUE);
-    const char *language_names[] = {
-        _("System default"), "简体中文", "繁體中文", "English", "日本語", "Deutsch", NULL,
-    };
-    tab->app->language_dropdown = make_string_dropdown(
-        language_names, value_index(language_values, tab->app->settings.language, 0));
-    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(tab->app->language_label));
-    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(tab->app->language_dropdown));
-    gtk_box_append(GTK_BOX(appearance_card), language_row);
-    gtk_box_append(GTK_BOX(root), appearance_card);
-
-    /* Built here because the popover builder owns these widgets, but parented
-       into the session's own expander: they configure one connection. */
     tab->session_section_label = GTK_LABEL(make_label(_("Session")));
     gtk_widget_add_css_class(GTK_WIDGET(tab->session_section_label), "settings-section-title");
 
@@ -2909,69 +2873,6 @@ static GtkWidget *build_settings_popover(TioTab *tab)
     tab->connection_settings_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
     gtk_widget_add_css_class(GTK_WIDGET(tab->connection_settings_box), "settings-card");
 
-    /* What is left in the popover applies to the whole window. */
-    tab->app->general_section_label = GTK_LABEL(make_label(_("General")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->general_section_label),
-                             "settings-section-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->general_section_label));
-    tab->app->general_settings_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->general_settings_box), "settings-card");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->general_settings_box));
-
-    tab->app->backup_section_label = GTK_LABEL(make_label(_("Backup")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->backup_section_label), "settings-section-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->backup_section_label));
-
-    tab->app->export_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Export settings…")));
-    tab->app->import_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Import settings…")));
-    GtkWidget *backup_card = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_widget_add_css_class(backup_card, "settings-card");
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->export_settings_button), TRUE);
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->import_settings_button), TRUE);
-    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(tab->app->export_settings_button));
-    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(tab->app->import_settings_button));
-    gtk_box_append(GTK_BOX(root), backup_card);
-
-    tab->app->about_section_label = GTK_LABEL(make_label(_("About")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->about_section_label), "settings-section-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(tab->app->about_section_label));
-
-    GtkWidget *about_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
-    gtk_widget_add_css_class(about_card, "settings-card");
-    GtkWidget *about_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-
-    g_autofree gchar *version = g_strdup_printf(_("Version %s"), TIO_GUI_VERSION);
-    tab->app->version_label = GTK_LABEL(gtk_label_new(version));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->version_label), "settings-version");
-    gtk_label_set_xalign(tab->app->version_label, 0.0F);
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->version_label), TRUE);
-    tab->app->github_button = GTK_BUTTON(gtk_button_new_with_label(_("GitHub project")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->github_button), "flat");
-    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(tab->app->version_label));
-    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(tab->app->github_button));
-    gtk_box_append(GTK_BOX(about_card), about_header);
-    tab->app->about_description_label =
-        GTK_LABEL(make_label(_("A lightweight, reliable GUI for tio")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->about_description_label), "settings-hint");
-    gtk_box_append(GTK_BOX(about_card), GTK_WIDGET(tab->app->about_description_label));
-    GtkWidget *update_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    tab->app->update_available_label = GTK_LABEL(make_label(""));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->update_available_label), "settings-hint");
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->app->update_available_label), TRUE);
-    tab->app->download_update_button =
-        GTK_BUTTON(gtk_button_new_with_label(_("Download update")));
-    gtk_widget_add_css_class(GTK_WIDGET(tab->app->download_update_button), "suggested-action");
-    gtk_widget_set_visible(GTK_WIDGET(tab->app->update_available_label), FALSE);
-    gtk_widget_set_visible(GTK_WIDGET(tab->app->download_update_button), FALSE);
-    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(tab->app->update_available_label));
-    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(tab->app->download_update_button));
-    gtk_box_append(GTK_BOX(about_card), update_row);
-    gtk_box_append(GTK_BOX(root), about_card);
-
-    g_signal_connect(tab->app->theme_dropdown,
-                     "notify::selected",
-                     G_CALLBACK(on_theme_changed),
-                     tab);
     g_signal_connect(tab->timestamp_format_dropdown,
                      "notify::selected",
                      G_CALLBACK(on_timestamp_format_changed),
@@ -2984,23 +2885,149 @@ static GtkWidget *build_settings_popover(TioTab *tab)
                              "changed",
                              G_CALLBACK(update_settings_previews),
                              tab);
-    g_signal_connect(tab->app->language_dropdown,
+}
+
+static GtkWidget *build_settings_popover(TioApp *app)
+{
+    GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
+    gtk_widget_set_size_request(root, 360, -1);
+    gtk_widget_set_margin_top(root, 12);
+    gtk_widget_set_margin_bottom(root, 12);
+    gtk_widget_set_margin_start(root, 12);
+    gtk_widget_set_margin_end(root, 12);
+
+    app->settings_title_label = GTK_LABEL(make_label(_("Settings")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
+
+    app->appearance_section_label = GTK_LABEL(make_label(_("Appearance")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->appearance_section_label),
+                             "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->appearance_section_label));
+
+    GtkWidget *appearance_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
+    gtk_widget_add_css_class(appearance_card, "settings-card");
+
+    GtkWidget *theme_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    app->theme_label = GTK_LABEL(make_label(_("Theme")));
+    gtk_widget_set_hexpand(GTK_WIDGET(app->theme_label), TRUE);
+    const char *theme_names[] = {_("Follow system"), _("Light"), _("Dark"), NULL};
+    app->theme_dropdown = make_string_dropdown(theme_names,
+                                                value_index(theme_values,
+                                                            app->settings.theme,
+                                                            0));
+    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(app->theme_label));
+    gtk_box_append(GTK_BOX(theme_row), GTK_WIDGET(app->theme_dropdown));
+    gtk_box_append(GTK_BOX(appearance_card), theme_row);
+
+    GtkWidget *language_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    app->language_label = GTK_LABEL(make_label(_("Language")));
+    gtk_widget_set_hexpand(GTK_WIDGET(app->language_label), TRUE);
+    const char *language_names[] = {
+        _("System default"), "简体中文", "繁體中文", "English", "日本語", "Deutsch", NULL,
+    };
+    app->language_dropdown = make_string_dropdown(
+        language_names, value_index(language_values, app->settings.language, 0));
+    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(app->language_label));
+    gtk_box_append(GTK_BOX(language_row), GTK_WIDGET(app->language_dropdown));
+    gtk_box_append(GTK_BOX(appearance_card), language_row);
+    gtk_box_append(GTK_BOX(root), appearance_card);
+
+
+    /* What is left in the popover applies to the whole window. */
+    app->general_section_label = GTK_LABEL(make_label(_("General")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->general_section_label),
+                             "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->general_section_label));
+    app->general_settings_box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 6));
+    gtk_widget_add_css_class(GTK_WIDGET(app->general_settings_box), "settings-card");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->general_settings_box));
+
+    app->show_all_ttys_check =
+        GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Show all TTY devices")));
+    gtk_check_button_set_active(app->show_all_ttys_check, app->settings.show_all_ttys);
+    GtkWidget *general_row = make_settings_row(GTK_WIDGET(app->general_settings_box));
+    gtk_box_append(GTK_BOX(general_row), GTK_WIDGET(app->show_all_ttys_check));
+
+    app->log_warning_label = GTK_LABEL(make_label(_("Warn above (MB)")));
+    app->log_warning_spin =
+        make_spin_button(app->settings.log_warning_mb, 65536.0, 16.0);
+    GtkWidget *warning_row = make_settings_row(GTK_WIDGET(app->general_settings_box));
+    append_labelled(warning_row,
+                    app->log_warning_label,
+                    GTK_WIDGET(app->log_warning_spin));
+
+    app->backup_section_label = GTK_LABEL(make_label(_("Backup")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->backup_section_label), "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->backup_section_label));
+
+    app->export_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Export settings…")));
+    app->import_settings_button = GTK_BUTTON(gtk_button_new_with_label(_("Import settings…")));
+    GtkWidget *backup_card = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_add_css_class(backup_card, "settings-card");
+    gtk_widget_set_hexpand(GTK_WIDGET(app->export_settings_button), TRUE);
+    gtk_widget_set_hexpand(GTK_WIDGET(app->import_settings_button), TRUE);
+    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(app->export_settings_button));
+    gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(app->import_settings_button));
+    gtk_box_append(GTK_BOX(root), backup_card);
+
+    app->about_section_label = GTK_LABEL(make_label(_("About")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->about_section_label), "settings-section-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->about_section_label));
+
+    GtkWidget *about_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(about_card, "settings-card");
+    GtkWidget *about_header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+
+    g_autofree gchar *version = g_strdup_printf(_("Version %s"), TIO_GUI_VERSION);
+    app->version_label = GTK_LABEL(gtk_label_new(version));
+    gtk_widget_add_css_class(GTK_WIDGET(app->version_label), "settings-version");
+    gtk_label_set_xalign(app->version_label, 0.0F);
+    gtk_widget_set_hexpand(GTK_WIDGET(app->version_label), TRUE);
+    app->github_button = GTK_BUTTON(gtk_button_new_with_label(_("GitHub project")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->github_button), "flat");
+    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(app->version_label));
+    gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(app->github_button));
+    gtk_box_append(GTK_BOX(about_card), about_header);
+    app->about_description_label =
+        GTK_LABEL(make_label(_("A lightweight, reliable GUI for tio")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->about_description_label), "settings-hint");
+    gtk_box_append(GTK_BOX(about_card), GTK_WIDGET(app->about_description_label));
+    GtkWidget *update_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    app->update_available_label = GTK_LABEL(make_label(""));
+    gtk_widget_add_css_class(GTK_WIDGET(app->update_available_label), "settings-hint");
+    gtk_widget_set_hexpand(GTK_WIDGET(app->update_available_label), TRUE);
+    app->download_update_button =
+        GTK_BUTTON(gtk_button_new_with_label(_("Download update")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->download_update_button), "suggested-action");
+    gtk_widget_set_visible(GTK_WIDGET(app->update_available_label), FALSE);
+    gtk_widget_set_visible(GTK_WIDGET(app->download_update_button), FALSE);
+    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(app->update_available_label));
+    gtk_box_append(GTK_BOX(update_row), GTK_WIDGET(app->download_update_button));
+    gtk_box_append(GTK_BOX(about_card), update_row);
+    gtk_box_append(GTK_BOX(root), about_card);
+
+    g_signal_connect(app->theme_dropdown,
+                     "notify::selected",
+                     G_CALLBACK(on_theme_changed),
+                     app);
+    g_signal_connect(app->language_dropdown,
                      "notify::selected",
                      G_CALLBACK(on_language_changed),
-                     tab);
-    g_signal_connect(tab->app->github_button, "clicked", G_CALLBACK(on_github_clicked), tab);
-    g_signal_connect(tab->app->download_update_button,
+                     app);
+    g_signal_connect(app->github_button, "clicked", G_CALLBACK(on_github_clicked), app);
+    g_signal_connect(app->download_update_button,
                      "clicked",
                      G_CALLBACK(on_download_update_clicked),
-                     tab);
-    g_signal_connect(tab->app->export_settings_button,
+                     app);
+    g_signal_connect(app->export_settings_button,
                      "clicked",
                      G_CALLBACK(on_export_settings_clicked),
-                     tab);
-    g_signal_connect(tab->app->import_settings_button,
+                     app);
+    g_signal_connect(app->import_settings_button,
                      "clicked",
                      G_CALLBACK(on_import_settings_clicked),
-                     tab);
+                     app);
     GtkWidget *scroll = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
                                    GTK_POLICY_NEVER,
@@ -3210,13 +3237,16 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_popover_set_position(tab->app->settings_popover, GTK_POS_BOTTOM);
     gtk_widget_set_halign(GTK_WIDGET(tab->app->settings_popover), GTK_ALIGN_START);
     gtk_popover_set_offset(tab->app->settings_popover, 12, 0);
-    gtk_popover_set_child(tab->app->settings_popover, build_settings_popover(tab));
+    gtk_popover_set_child(tab->app->settings_popover, build_settings_popover(app));
     g_signal_connect(tab->app->settings_popover,
                      "notify::visible",
                      G_CALLBACK(on_settings_popover_visible),
-                     tab);
+                     app);
     gtk_menu_button_set_popover(tab->app->settings_button, GTK_WIDGET(tab->app->settings_popover));
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(tab->app->settings_button));
+
+    /* The session's own controls, parented into its expander further down. */
+    build_session_settings(tab);
 
     tab->profile_button = GTK_MENU_BUTTON(gtk_menu_button_new());
     gtk_menu_button_set_label(tab->profile_button, _("Profiles"));
@@ -3283,17 +3313,12 @@ static void activate(GtkApplication *application, gpointer user_data)
     tab->parity_dropdown = make_string_dropdown(parity_values, 0);
     tab->flow_dropdown = make_string_dropdown(flow_values, 0);
     tab->local_echo_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Local echo")));
-    tab->app->show_all_ttys_check =
-        GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Show all TTY devices")));
     tab->output_delay_spin = make_spin_button(0, 10000.0, 1.0);
     tab->output_line_delay_spin = make_spin_button(0, 10000.0, 1.0);
-    tab->app->log_warning_spin = make_spin_button(tab->app->settings.log_warning_mb, 65536.0, 16.0);
     tab->log_append_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Append")));
     tab->log_strip_check =
         GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Strip control characters")));
     tab->open_log_directory_button = GTK_BUTTON(gtk_button_new_with_label(_("Open folder")));
-
-    gtk_check_button_set_active(tab->app->show_all_ttys_check, tab->app->settings.show_all_ttys);
 
     tab->data_bits_label = GTK_LABEL(make_label(_("Data bits")));
     tab->stop_bits_label = GTK_LABEL(make_label(_("Stop bits")));
@@ -3301,7 +3326,6 @@ static void activate(GtkApplication *application, gpointer user_data)
     tab->flow_label = GTK_LABEL(make_label(_("Flow control")));
     tab->output_delay_label = GTK_LABEL(make_label(_("Character delay (ms)")));
     tab->output_line_delay_label = GTK_LABEL(make_label(_("Line delay (ms)")));
-    tab->app->log_warning_label = GTK_LABEL(make_label(_("Warn above (MB)")));
 
     GtkWidget *framing_row = make_settings_row(advanced_box);
     append_labelled(framing_row, tab->data_bits_label, GTK_WIDGET(tab->data_bits_dropdown));
@@ -3330,14 +3354,6 @@ static void activate(GtkApplication *application, gpointer user_data)
 
     GtkWidget *log_limit_row = make_settings_row(advanced_box);
     gtk_box_append(GTK_BOX(log_limit_row), GTK_WIDGET(tab->open_log_directory_button));
-
-    /* Window-wide switches live in the popover, beside theme and language. */
-    GtkWidget *general_row = make_settings_row(GTK_WIDGET(tab->app->general_settings_box));
-    gtk_box_append(GTK_BOX(general_row), GTK_WIDGET(tab->app->show_all_ttys_check));
-    GtkWidget *warning_row = make_settings_row(GTK_WIDGET(tab->app->general_settings_box));
-    append_labelled(warning_row,
-                    tab->app->log_warning_label,
-                    GTK_WIDGET(tab->app->log_warning_spin));
 
     /* One collapsed place for everything that belongs to this session only. */
     tab->session_settings_expander = gtk_expander_new(NULL);
