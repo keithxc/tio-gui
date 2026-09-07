@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:25+0800\n"
+"POT-Creation-Date: 2026-09-07 13:37+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -459,4 +459,30 @@ msgid "Preview: %s"
 msgstr ""
 
 msgid "No line ending"
+msgstr ""
+
+#, c-format
+msgid "Session %u"
+msgstr ""
+
+msgid "Close this session"
+msgstr ""
+
+msgid "Close this session?"
+msgstr ""
+
+#, c-format
+msgid "tio is still connected to %s."
+msgstr ""
+
+msgid "the serial device"
+msgstr ""
+
+msgid "The session log is still open."
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "New session"
 msgstr ""

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:25+0800\n"
+"POT-Creation-Date: 2026-09-07 13:37+0800\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -450,6 +450,32 @@ msgstr "預覽：%s"
 
 msgid "No line ending"
 msgstr "無行尾"
+
+#, c-format
+msgid "Session %u"
+msgstr "工作階段 %u"
+
+msgid "Close this session"
+msgstr "關閉此工作階段"
+
+msgid "Close this session?"
+msgstr "關閉此工作階段？"
+
+#, c-format
+msgid "tio is still connected to %s."
+msgstr "tio 仍連接著 %s。"
+
+msgid "the serial device"
+msgstr "該序列埠裝置"
+
+msgid "The session log is still open."
+msgstr "工作階段記錄仍在寫入。"
+
+msgid "Close"
+msgstr "關閉"
+
+msgid "New session"
+msgstr "新增工作階段"
 
 #~ msgid "More settings"
 #~ msgstr "更多設定"
