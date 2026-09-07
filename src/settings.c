@@ -7,7 +7,9 @@
 
 #include <glib/gstdio.h>
 
-#define TIO_GUI_SESSION_GROUP "session"
+#define TIO_GUI_DEFAULTS_GROUP "defaults"
+/* 0.2.x wrote the same fields under [session]. Read-only, for migration. */
+#define TIO_GUI_LEGACY_SESSION_GROUP "session"
 #define TIO_GUI_PROFILE_PREFIX "profile:"
 
 static gchar *settings_path(void)
@@ -302,7 +304,7 @@ void tio_settings_init(TioSettings *settings)
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
     };
-    tio_session_config_init(&settings->session);
+    tio_session_config_init(&settings->defaults);
 }
 
 gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error)
@@ -315,10 +317,12 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
         return FALSE;
     }
 
-    if (g_key_file_has_group(key_file, TIO_GUI_SESSION_GROUP)) {
-        session_config_read(key_file, TIO_GUI_SESSION_GROUP, &settings->session);
+    if (g_key_file_has_group(key_file, TIO_GUI_DEFAULTS_GROUP)) {
+        session_config_read(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
+    } else if (g_key_file_has_group(key_file, TIO_GUI_LEGACY_SESSION_GROUP)) {
+        session_config_read(key_file, TIO_GUI_LEGACY_SESSION_GROUP, &settings->defaults);
     } else {
-        session_config_read_legacy(key_file, &settings->session);
+        session_config_read_legacy(key_file, &settings->defaults);
     }
 
     replace_string_from_key(key_file, "general", "language", &settings->language);
@@ -388,7 +392,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
                            "advanced-expanded",
                            settings->advanced_expanded);
     g_key_file_set_integer(key_file, "general", "log-warning-mb", (gint)settings->log_warning_mb);
-    session_config_write(key_file, TIO_GUI_SESSION_GROUP, &settings->session);
+    session_config_write(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
 
     if (settings->history->len > 0) {
         g_key_file_set_string_list(key_file,
@@ -447,7 +451,7 @@ void tio_settings_clear(TioSettings *settings)
         return;
     }
 
-    tio_session_config_clear(&settings->session);
+    tio_session_config_clear(&settings->defaults);
     g_clear_pointer(&settings->language, g_free);
     g_clear_pointer(&settings->theme, g_free);
     g_clear_pointer(&settings->active_profile, g_free);

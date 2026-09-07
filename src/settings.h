@@ -42,7 +42,10 @@ typedef struct {
 } TioProfile;
 
 typedef struct {
-    TioSessionConfig session;
+    /* Starting values for a new session. Today a single session both seeds
+       itself from this and writes back to it on connect; once sessions become
+       per-tab, a tab keeps its own copy and only new tabs read this. */
+    TioSessionConfig defaults;
     gchar *language;
     gchar *theme; /* system, light or dark */
     gchar *active_profile;

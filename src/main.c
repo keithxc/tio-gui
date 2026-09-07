@@ -567,7 +567,7 @@ static void refresh_devices(TioGui *gui)
     if (devices->len > 0) {
         guint selected = 0;
         for (guint index = 0; index < devices->len; ++index) {
-            if (g_strcmp0(g_ptr_array_index(devices, index), gui->settings.session.device) == 0) {
+            if (g_strcmp0(g_ptr_array_index(devices, index), gui->settings.defaults.device) == 0) {
                 selected = index;
                 break;
             }
@@ -1283,8 +1283,8 @@ static void connect_tio(TioGui *gui)
         return;
     }
 
-    capture_session_config(gui, &gui->settings.session);
-    const TioSessionConfig *config = &gui->settings.session;
+    capture_session_config(gui, &gui->settings.defaults);
+    const TioSessionConfig *config = &gui->settings.defaults;
 
     g_clear_pointer(&gui->log_path, g_free);
     gui->log_warning_shown = FALSE;
@@ -1769,7 +1769,7 @@ static void on_quick_button_clicked(GtkButton *button, gpointer user_data)
 
     guint index = stored_index - 1;
     g_autoptr(GByteArray) bytes =
-        decode_quick_payload(gui->settings.session.quick_payloads[index]);
+        decode_quick_payload(gui->settings.defaults.quick_payloads[index]);
     send_bytes(gui, (const char *)bytes->data, bytes->len);
 }
 
@@ -1780,12 +1780,12 @@ static void update_quick_buttons(TioGui *gui)
         if (button == NULL) {
             continue;
         }
-        gtk_button_set_label(button, gui->settings.session.quick_labels[index]);
+        gtk_button_set_label(button, gui->settings.defaults.quick_labels[index]);
         gtk_widget_set_tooltip_text(GTK_WIDGET(button),
-                                    gui->settings.session.quick_payloads[index]);
+                                    gui->settings.defaults.quick_payloads[index]);
         gtk_widget_set_sensitive(GTK_WIDGET(button),
                                  gui->child_pid > 0 &&
-                                     gui->settings.session.quick_payloads[index][0] != '\0');
+                                     gui->settings.defaults.quick_payloads[index][0] != '\0');
     }
 }
 
@@ -1793,7 +1793,7 @@ static void on_quick_editor_save(GtkButton *button, gpointer user_data)
 {
     (void)button;
     QuickButtonEditor *editor = user_data;
-    TioSessionConfig *session = &editor->gui->settings.session;
+    TioSessionConfig *session = &editor->gui->settings.defaults;
 
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         g_free(session->quick_labels[index]);
@@ -1858,14 +1858,14 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
 
         editor->label_entries[index] = GTK_ENTRY(gtk_entry_new());
         gtk_editable_set_text(GTK_EDITABLE(editor->label_entries[index]),
-                              gui->settings.session.quick_labels[index]);
+                              gui->settings.defaults.quick_labels[index]);
         gtk_grid_attach(GTK_GRID(grid),
                         GTK_WIDGET(editor->label_entries[index]),
                         1, (gint)index + 1, 1, 1);
 
         editor->payload_entries[index] = GTK_ENTRY(gtk_entry_new());
         gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[index]),
-                              gui->settings.session.quick_payloads[index]);
+                              gui->settings.defaults.quick_payloads[index]);
         gtk_widget_set_hexpand(GTK_WIDGET(editor->payload_entries[index]), TRUE);
         gtk_grid_attach(GTK_GRID(grid),
                         GTK_WIDGET(editor->payload_entries[index]),
@@ -2154,7 +2154,7 @@ static void install_css(void)
 
 static void capture_all_settings(TioGui *gui)
 {
-    capture_session_config(gui, &gui->settings.session);
+    capture_session_config(gui, &gui->settings.defaults);
     gui->settings.show_all_ttys = gtk_check_button_get_active(gui->show_all_ttys_check);
     gui->settings.advanced_expanded = FALSE;
     gui->settings.log_warning_mb =
@@ -2336,7 +2336,7 @@ static void apply_imported_settings(TioGui *gui)
                                value_index(language_values, gui->settings.language, 0));
     gtk_check_button_set_active(gui->show_all_ttys_check, gui->settings.show_all_ttys);
     gtk_spin_button_set_value(gui->log_warning_spin, gui->settings.log_warning_mb);
-    apply_session_config(gui, &gui->settings.session);
+    apply_session_config(gui, &gui->settings.defaults);
     update_quick_buttons(gui);
     refresh_profile_ui(gui);
     refresh_history_ui(gui);
@@ -2581,7 +2581,7 @@ static GtkWidget *build_settings_popover(TioGui *gui)
     };
     gui->timestamp_format_dropdown = make_string_dropdown(
         timestamp_names,
-        value_index(timestamp_format_values, gui->settings.session.timestamp_format, 3));
+        value_index(timestamp_format_values, gui->settings.defaults.timestamp_format, 3));
     gtk_box_append(GTK_BOX(timestamp_row), GTK_WIDGET(gui->timestamp_format_label));
     gtk_box_append(GTK_BOX(timestamp_row), GTK_WIDGET(gui->timestamp_format_dropdown));
     gtk_box_append(GTK_BOX(session_card), timestamp_row);
@@ -2602,10 +2602,10 @@ static GtkWidget *build_settings_popover(TioGui *gui)
     const char *filename_names[] = {
         _("tio-gui default"), _("Date first"), _("Device first"), _("Custom…"), NULL,
     };
-    guint filename_index = gui->settings.session.log_file[0] == '\0'
+    guint filename_index = gui->settings.defaults.log_file[0] == '\0'
                                ? 0
                                : value_index(log_filename_templates,
-                                             gui->settings.session.log_file,
+                                             gui->settings.defaults.log_file,
                                              TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
     gui->log_filename_dropdown = make_string_dropdown(filename_names, filename_index);
     gtk_box_append(GTK_BOX(filename_row), GTK_WIDGET(gui->log_filename_format_label));
@@ -2616,7 +2616,7 @@ static GtkWidget *build_settings_popover(TioGui *gui)
                                    _("Example: {device}-{date}-{time}.log"));
     gtk_editable_set_text(GTK_EDITABLE(gui->log_file_entry),
                           filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX
-                              ? gui->settings.session.log_file
+                              ? gui->settings.defaults.log_file
                               : log_filename_templates[filename_index]);
     gtk_widget_set_visible(GTK_WIDGET(gui->log_file_entry),
                            filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
@@ -3236,12 +3236,12 @@ static void activate(GtkApplication *application, gpointer user_data)
 
     install_shortcuts(application, gui);
 
-    apply_session_config(gui, &gui->settings.session);
+    apply_session_config(gui, &gui->settings.defaults);
     update_quick_buttons(gui);
     gtk_widget_set_sensitive(GTK_WIDGET(gui->log_directory_entry),
-                             gui->settings.session.logging);
+                             gui->settings.defaults.logging);
     gtk_widget_set_sensitive(GTK_WIDGET(gui->choose_log_directory_button),
-                             gui->settings.session.logging);
+                             gui->settings.defaults.logging);
     refresh_profile_ui(gui);
     refresh_history_ui(gui);
     refresh_devices(gui);
