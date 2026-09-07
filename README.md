@@ -13,13 +13,25 @@ Early development. The first release targets x86-64 Linux.
 ### Devices and connection
 
 - Show common `/dev/ttyACM*` and `/dev/ttyUSB*` devices by default, with ACM devices first
-- Optionally reveal every `/dev/tty*` device from the advanced settings
+- Optionally reveal every `/dev/tty*` device from the window menu
 - Select common baud rates, including 1,500,000 baud, or enter a custom rate
-- Configure data bits, stop bits, parity, flow control, and local echo under a compact advanced section
+- Configure data bits, stop bits, parity, flow control, and local echo per session, in that
+  session's own settings expander
 - Set the `tio` output character delay and output line delay for slow or fragile receivers
 - Start and stop a `tio` session inside an embedded terminal
 - Preserve `tio` automatic reconnection behavior
 - Report missing devices, permissions, and process failures clearly
+
+### Sessions
+
+- Run several serial devices at once, one session per tab, each with its own `tio` process,
+  terminal, log and settings; a background tab keeps capturing while another is in front
+- `Ctrl+T` opens a session, `Ctrl+W` closes one, `Ctrl+PgUp`/`Ctrl+PgDn` switch between them
+- Connecting to a port another session already holds is refused with a plain message, and the
+  device list marks those ports as in use
+- Closing a tab that is still connected or still writing a log asks first
+- Optionally reopen the tabs that were open last time; restored tabs are configured but do not
+  connect on their own
 
 ### Connection profiles
 
@@ -28,13 +40,15 @@ Early development. The first release targets x86-64 Linux.
 - Profiles also remember the matching `/dev/serial/by-id` name, so a saved entry keeps working
   after the kernel renumbers `/dev/ttyUSB*`
 
-### Terminal and session
+### Terminal
 
 - Clear both the visible terminal and its scrollback history without sending data to the device
 - Search the scrollback with `Ctrl+Shift+F`, including case-sensitive and regular-expression matching
 - Follow new output while the view sits at the bottom, and pause following once you scroll up;
   a button reports new output and returns to the bottom
 - Read the device, baud rate, framing, flow control, connected time, and log size from the status bar
+- See received bytes, line count and throughput taken from the serial stream itself, not from
+  the rendered terminal, so they stay correct with hex output or timestamps switched on
 
 ### Sending
 
@@ -51,13 +65,14 @@ Early development. The first release targets x86-64 Linux.
 - Choose a device-first or date-first filename rule, or build a custom filename with
   `{device}`, `{date}`, and `{time}` placeholders and inspect the result before connecting
 - Append to an existing log or start a new one, and optionally strip control characters
-- Open the log directory from the settings panel and see the current log file and its size
+- Open the log directory from the session's settings and see the current log file and its size
 - Get a one-time warning when the current log passes a configurable size
 
 ### Interface
 
-- Keep the main workspace focused on frequent switches and open grouped appearance,
-  session, connection, logging, backup, and project details from the top-left settings button
+- Keep the main workspace focused on frequent switches: window-wide appearance, language,
+  backup and project details sit in the top-left menu, and everything describing one
+  connection sits in that session's own expander
 - Follow the desktop theme by default, or explicitly select the light or dark appearance
 - Export the complete INI configuration for backup and import it on another machine
 - Select any timestamp format supported by `tio`: 24-hour clock, time since start,
@@ -71,7 +86,7 @@ Early development. The first release targets x86-64 Linux.
 - Keyboard shortcuts: `Ctrl+Shift+L` clear, `Ctrl+Shift+C`/`Ctrl+Shift+V` copy and paste,
   `Ctrl+Shift+F` search, `F5` connect, `F6` disconnect. Plain control characters such as
   `Ctrl+C` are never intercepted and always reach the device
-- A second launch activates the running window instead of opening a competing session
+- A second launch opens a session in the running window instead of a competing one
 - Install a Wayland-compatible desktop entry and branded `tio` application icon
 - Follow the system locale, with English, Simplified Chinese, and Traditional Chinese included initially
 
@@ -113,24 +128,40 @@ cmake --build build
 
 ## Architecture
 
-The GUI launches `tio` as a separate child process attached to a VTE pseudo-terminal. Version 1 deliberately does not implement an alternative serial backend: it manages and controls `tio` through its public command-line behavior.
+The GUI launches one `tio` per session as a separate child process attached to that session's VTE
+pseudo-terminal. Version 1 deliberately does not implement an alternative serial backend: it manages and controls `tio` through its public command-line behavior.
 
-User preferences are stored in `~/.config/tio-gui/config.ini`. The file holds the last session under
-`[session]`, general options (including the theme) under `[general]`, the send history under `[send]`, and one
-`[profile:<name>]` group per saved profile. Files written by 0.1.x are migrated automatically on first
-start. Session logs default to the user's `Documents/tio-gui` directory.
+Each session also asks `tio` for a unix socket with `--socket` and attaches to it. That socket carries
+the bytes as received, unaffected by `--output-mode` or `--timestamp`, and `tio`'s own messages never
+appear on it. So one session has three independent streams: the pty that VTE renders, the log file
+`tio` writes, and this raw tap. Anything that needs the actual bytes — today the received counters,
+later highlighting, filtering and plotting — reads the tap rather than scraping the screen. A socket
+path that would not fit in `sun_path` is dropped rather than passed on, because `tio` refuses to start
+at all on a long one and connecting matters more than the counters.
 
-Normal launches keep a single window and a single session: starting tio-gui again activates the window
-that is already running. Developers can set `TIO_GUI_NON_UNIQUE=1` to run an isolated preview beside an
-existing session without activating or controlling that existing window.
+User preferences are stored in `~/.config/tio-gui/config.ini`. The file holds general options
+(including the theme) under `[general]`, the starting values for a new session under `[defaults]`,
+the send history under `[send]`, one `[profile:<name>]` group per saved profile, and one `[tab:<n>]`
+group per session that was open at exit. Files written by 0.1.x and 0.2.x are migrated automatically
+on first start. Session logs default to the user's `Documents/tio-gui` directory.
+
+Settings are split by what they belong to. The window menu holds what there is one of per window:
+theme, language, update checks, configuration backup, the device filter and the log size warning.
+Everything that describes one link — framing, flow control, delays, local echo, timestamp format,
+log filename and log options — sits in that session's own expander, because each tab configures its
+own connection.
+
+One window holds every session. Starting tio-gui again opens another tab in it. Developers can set
+`TIO_GUI_NON_UNIQUE=1` to run an isolated preview beside an existing window without activating or
+controlling it.
 
 The Nix development shell defaults to the `zh_TW.UTF-8` locale for the maintainer's local debugging. Source strings, documentation, packaged defaults, and GitHub communication remain English; release builds follow the user's system locale.
 
 Enabling session logging also enables ISO 8601 line timestamps with millisecond precision. tio-gui always
 passes an absolute `--log-file` path, including for automatically named logs, so it can show and monitor
 the file it started. `tio` 3.9 does not provide size-based log rotation; tio-gui therefore only warns once
-when a log passes the configured size. A safe rotation policy is planned as part of the future session
-proxy instead of being simulated with an unsafe file truncation workaround.
+when a log passes the configured size. A safe rotation policy is planned on top of the raw tap instead
+of being simulated with an unsafe file truncation workaround.
 
 ## Planned highlighting
 
@@ -143,7 +174,7 @@ An optional line-oriented highlight view is planned with these conservative defa
 - grey: `DEBUG`, `TRACE`
 - accent colour: decimal numbers and hexadecimal values or addresses
 
-Matching will be case-insensitive and word-boundary aware to avoid false positives such as highlighting `OK` inside another word. The renderer will consume a display copy of the session instead of modifying the raw terminal stream or `tio` log output. User-defined regular-expression rules can be layered on after the safe defaults.
+Matching will be case-insensitive and word-boundary aware to avoid false positives such as highlighting `OK` inside another word. The renderer will consume the raw tap instead of modifying the terminal stream or `tio` log output. User-defined regular-expression rules can be layered on after the safe defaults.
 
 ### Process isolation
 
