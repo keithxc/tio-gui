@@ -589,6 +589,73 @@ static gchar *device_from_stable_id(const char *device_id)
     return realpath(device_id, NULL);
 }
 
+/* A serial device belongs to one session at a time: tio takes a lock, so a
+   second session on the same port fails with a message the user has to decode.
+   Answer the question here instead. Uses the config captured at connect time,
+   which is what the running tio was actually given. */
+static TioTab *tab_holding_device(TioApp *app, const char *device, const TioTab *except)
+{
+    if (device == NULL || device[0] == '\0') {
+        return NULL;
+    }
+    for (guint index = 0; index < app->tabs->len; ++index) {
+        TioTab *other = g_ptr_array_index(app->tabs, index);
+        if (other == except || other->child_pid <= 0) {
+            continue;
+        }
+        if (g_strcmp0(other->config.device, device) == 0) {
+            return other;
+        }
+    }
+    return NULL;
+}
+
+static gboolean log_path_in_use(TioApp *app, const char *path, const TioTab *except)
+{
+    for (guint index = 0; index < app->tabs->len; ++index) {
+        TioTab *other = g_ptr_array_index(app->tabs, index);
+        if (other != except && g_strcmp0(other->log_path, path) == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static void on_device_item_setup(GtkSignalListItemFactory *factory,
+                                 GObject *item,
+                                 gpointer user_data)
+{
+    (void)factory;
+    (void)user_data;
+    GtkWidget *label = gtk_label_new(NULL);
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
+    gtk_list_item_set_child(GTK_LIST_ITEM(item), label);
+}
+
+/* Marks the devices other sessions are holding. The row stays selectable:
+   GtkDropDown has no per-item sensitivity, and connect_tio refuses anyway. */
+static void on_device_item_bind(GtkSignalListItemFactory *factory,
+                                GObject *item,
+                                gpointer user_data)
+{
+    (void)factory;
+    TioTab *tab = user_data;
+    GtkStringObject *entry = gtk_list_item_get_item(GTK_LIST_ITEM(item));
+    GtkWidget *label = gtk_list_item_get_child(GTK_LIST_ITEM(item));
+    if (entry == NULL || label == NULL) {
+        return;
+    }
+    const char *device = gtk_string_object_get_string(entry);
+    if (tab_holding_device(tab->app, device, tab) != NULL) {
+        g_autofree gchar *text = g_strdup_printf(_("%s · in use"), device);
+        gtk_label_set_text(GTK_LABEL(label), text);
+        gtk_widget_add_css_class(label, "dim-label");
+    } else {
+        gtk_label_set_text(GTK_LABEL(label), device);
+        gtk_widget_remove_css_class(label, "dim-label");
+    }
+}
+
 static void refresh_devices(TioTab *tab)
 {
     GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
@@ -1553,6 +1620,13 @@ static void connect_tio(TioTab *tab)
         return;
     }
 
+    if (tab_holding_device(tab->app, device, tab) != NULL) {
+        g_autofree gchar *message =
+            g_strdup_printf(_("Another session is already connected to %s"), device);
+        set_status(tab, message);
+        return;
+    }
+
     capture_session_config(tab, &tab->config);
     /* The last connection seeds whatever session is opened next. */
     tio_session_config_copy(&tab->app->settings.defaults, &tab->config);
@@ -1566,6 +1640,19 @@ static void connect_tio(TioTab *tab)
             return;
         }
         tab->log_path = build_log_path(config);
+        /* Two sessions started in the same second, or sharing a custom
+           filename template, would otherwise write to one file. */
+        for (guint suffix = 2; suffix < 1000 &&
+                               log_path_in_use(tab->app, tab->log_path, tab); ++suffix) {
+            g_autofree gchar *taken = g_steal_pointer(&tab->log_path);
+            const char *extension = strrchr(taken, '.');
+            gsize stem = extension != NULL ? (gsize)(extension - taken) : strlen(taken);
+            tab->log_path = g_strdup_printf("%.*s-%u%s",
+                                            (int)stem,
+                                            taken,
+                                            suffix,
+                                            extension != NULL ? extension : "");
+        }
         g_autofree gchar *log_parent = g_path_get_dirname(tab->log_path);
         if (g_mkdir_with_parents(log_parent, 0750) == -1) {
             g_autofree gchar *message =
@@ -3284,6 +3371,11 @@ static TioTab *tio_tab_new(TioApp *app)
     tab->device_label = GTK_LABEL(make_label(_("Device")));
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(tab->device_label));
     tab->device_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(NULL, NULL));
+    GtkListItemFactory *device_factory = gtk_signal_list_item_factory_new();
+    g_signal_connect(device_factory, "setup", G_CALLBACK(on_device_item_setup), tab);
+    g_signal_connect(device_factory, "bind", G_CALLBACK(on_device_item_bind), tab);
+    gtk_drop_down_set_list_factory(tab->device_dropdown, device_factory);
+    g_object_unref(device_factory);
     gtk_widget_set_hexpand(GTK_WIDGET(tab->device_dropdown), TRUE);
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(tab->device_dropdown));
 
@@ -3783,6 +3875,10 @@ static void activate(GtkApplication *application, gpointer user_data)
     GtkWidget *existing = g_object_get_data(G_OBJECT(application), "tio-gui-window");
     if (existing != NULL) {
         gtk_window_present(GTK_WINDOW(existing));
+        TioApp *running = g_object_get_data(G_OBJECT(existing), "tio-gui");
+        if (running != NULL) {
+            (void)tio_app_add_tab(running);
+        }
         return;
     }
 
