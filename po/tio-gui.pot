@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-04 10:42+0800\n"
+"POT-Creation-Date: 2026-09-07 13:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -28,6 +28,9 @@ msgid "Settings"
 msgstr ""
 
 msgid "Appearance"
+msgstr ""
+
+msgid "General"
 msgstr ""
 
 msgid "Session"
@@ -344,6 +347,12 @@ msgid "Delete"
 msgstr ""
 
 msgid "no device"
+msgstr ""
+
+msgid "rx"
+msgstr ""
+
+msgid "lines"
 msgstr ""
 
 msgid "log"

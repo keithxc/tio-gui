@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-04 10:42+0800\n"
+"POT-Creation-Date: 2026-09-07 13:25+0800\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -20,6 +20,9 @@ msgstr "設定"
 
 msgid "Appearance"
 msgstr "外觀"
+
+msgid "General"
+msgstr "一般"
 
 msgid "Session"
 msgstr "工作階段"
@@ -335,6 +338,12 @@ msgstr "刪除"
 
 msgid "no device"
 msgstr "未選擇裝置"
+
+msgid "rx"
+msgstr "接收"
+
+msgid "lines"
+msgstr "行"
 
 msgid "log"
 msgstr "記錄"
