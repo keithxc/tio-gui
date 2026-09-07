@@ -10,9 +10,11 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/un.h>
 
 #include <pcre2.h>
 
+#include <gio/gunixsocketaddress.h>
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 #include <json-glib/json-glib.h>
@@ -27,6 +29,7 @@
 
 typedef struct _TioApp TioApp;
 typedef struct _TioTab TioTab;
+typedef struct _TioRawTap TioRawTap;
 
 /* One serial session: its own tio child process, terminal, controls and
    configuration. Only the window chrome around it is shared. */
@@ -91,6 +94,16 @@ struct _TioTab {
     gboolean log_warning_shown;
     gint64 connected_at;
     guint session_timer;
+
+    /* Raw data tap: the bytes tio received, before any display formatting. */
+    gchar *socket_path;
+    TioRawTap *raw;
+    guint raw_connect_timer;
+    guint raw_connect_attempts;
+    guint64 rx_bytes;
+    guint64 rx_lines;
+    guint64 rx_bytes_at_tick;
+    guint64 rx_rate;
 };
 
 /* The window and everything there is exactly one of, no matter how many
@@ -203,6 +216,8 @@ static void update_quick_buttons(TioTab *tab);
 static GtkWidget *make_label(const char *text);
 static void set_status(TioTab *tab, const char *message);
 static void update_session_label(TioTab *tab);
+static void raw_tap_start(TioTab *tab);
+static void raw_tap_stop(TioTab *tab);
 static void refresh_profile_ui(TioTab *tab);
 static void refresh_history_ui(TioTab *tab);
 static void capture_session_config(TioTab *tab, TioSessionConfig *config);
@@ -1072,6 +1087,16 @@ static void update_session_label(TioTab *tab)
                                (int)(seconds % 60));
     }
 
+    if (tab->child_pid > 0 && tab->raw != NULL) {
+        g_autofree gchar *received = g_format_size(tab->rx_bytes);
+        g_string_append_printf(text, " · %s %s", _("rx"), received);
+        g_string_append_printf(text, " · %" G_GUINT64_FORMAT " %s", tab->rx_lines, _("lines"));
+        if (tab->rx_rate > 0) {
+            g_autofree gchar *rate = g_format_size(tab->rx_rate);
+            g_string_append_printf(text, " · %s/s", rate);
+        }
+    }
+
     if (tab->log_path != NULL) {
         GStatBuf info;
         if (g_stat(tab->log_path, &info) == 0) {
@@ -1096,6 +1121,10 @@ static void update_session_label(TioTab *tab)
 static gboolean on_session_tick(gpointer user_data)
 {
     TioTab *tab = user_data;
+
+    /* The tick is one second, so the byte delta is the rate. */
+    tab->rx_rate = tab->rx_bytes - tab->rx_bytes_at_tick;
+    tab->rx_bytes_at_tick = tab->rx_bytes;
     update_session_label(tab);
 
     if (tab->log_path != NULL && !tab->log_warning_shown && tab->app->settings.log_warning_mb > 0) {
@@ -1127,6 +1156,7 @@ static void on_child_exited(VteTerminal *terminal, gint status, gpointer user_da
 
     tab->child_pid = -1;
     stop_session_timer(tab);
+    raw_tap_stop(tab);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->connect_button), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_entry), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), FALSE);
@@ -1154,12 +1184,14 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
         set_status(tab, message);
         tab->child_pid = -1;
         g_clear_pointer(&tab->log_path, g_free);
+        raw_tap_stop(tab);
         gtk_button_set_label(tab->connect_button, _("Connect"));
         return;
     }
 
     tab->child_pid = pid;
     tab->connected_at = g_get_monotonic_time();
+    raw_tap_start(tab);
     gtk_button_set_label(tab->connect_button, _("Disconnect"));
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_entry), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), TRUE);
@@ -1211,7 +1243,196 @@ static gchar *build_log_path(const TioSessionConfig *config)
     return g_build_filename(config->log_directory, name, NULL);
 }
 
-static gchar **build_tio_argv(const TioSessionConfig *config, const char *log_path)
+/* ------------------------------------------------------------- raw tap */
+
+/* tio's --socket multiplexes the serial stream to every connected client, and
+   that copy is the bytes as received: --output-mode and --timestamp change
+   only what the terminal renders. Reading it here gives the raw stream without
+   scraping the rendered screen and without a proxy process of our own.
+
+   Three streams stay independent: VTE renders the pty, tio writes the log, and
+   this tap feeds anything that needs the bytes themselves. */
+
+#define TIO_GUI_RAW_BUFFER_SIZE 8192
+#define TIO_GUI_RAW_CONNECT_INTERVAL_MS 50
+/* tio creates the socket before it opens the device, but the GUI still has to
+   wait for it. Give up after two seconds rather than retrying forever. */
+#define TIO_GUI_RAW_CONNECT_ATTEMPTS 40
+
+/* Refcounted so a read that is already in flight cannot outlive the session:
+   the tab drops its reference and clears `tab`, and the pending callback then
+   sees a detached tap and only releases the last reference. */
+struct _TioRawTap {
+    gint reference_count;
+    TioTab *tab;
+    GSocketConnection *connection;
+    GCancellable *cancellable;
+    guint8 buffer[TIO_GUI_RAW_BUFFER_SIZE];
+};
+
+static void raw_tap_read(TioRawTap *tap);
+
+static TioRawTap *raw_tap_ref(TioRawTap *tap)
+{
+    tap->reference_count++;
+    return tap;
+}
+
+static void raw_tap_unref(TioRawTap *tap)
+{
+    if (--tap->reference_count > 0) {
+        return;
+    }
+    g_clear_object(&tap->cancellable);
+    g_clear_object(&tap->connection);
+    g_free(tap);
+}
+
+/* Detach the tap from its session. Any read still in flight is cancelled and
+   releases its own reference when the callback runs. */
+static void raw_tap_stop(TioTab *tab)
+{
+    if (tab->raw_connect_timer != 0) {
+        g_source_remove(tab->raw_connect_timer);
+        tab->raw_connect_timer = 0;
+    }
+    if (tab->raw != NULL) {
+        TioRawTap *tap = tab->raw;
+        tab->raw = NULL;
+        tap->tab = NULL;
+        g_cancellable_cancel(tap->cancellable);
+        raw_tap_unref(tap);
+    }
+    if (tab->socket_path != NULL) {
+        g_unlink(tab->socket_path);
+        g_clear_pointer(&tab->socket_path, g_free);
+    }
+}
+
+static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    TioRawTap *tap = user_data;
+    g_autoptr(GError) error = NULL;
+    gssize count = g_input_stream_read_finish(G_INPUT_STREAM(source), result, &error);
+
+    if (tap->tab == NULL) {
+        raw_tap_unref(tap);
+        return;
+    }
+    if (count <= 0) {
+        /* Zero is EOF: tio exited or closed the socket. An error other than
+           cancellation ends the tap too; the session itself is unaffected. */
+        tap->tab->raw = NULL;
+        tap->tab = NULL;
+        raw_tap_unref(tap);
+        return;
+    }
+
+    tap->tab->rx_bytes += (guint64)count;
+    for (gssize index = 0; index < count; ++index) {
+        if (tap->buffer[index] == '\n') {
+            tap->tab->rx_lines++;
+        }
+    }
+    raw_tap_read(tap);
+    raw_tap_unref(tap);
+}
+
+static void raw_tap_read(TioRawTap *tap)
+{
+    GInputStream *stream = g_io_stream_get_input_stream(G_IO_STREAM(tap->connection));
+    g_input_stream_read_async(stream,
+                              tap->buffer,
+                              sizeof tap->buffer,
+                              G_PRIORITY_DEFAULT,
+                              tap->cancellable,
+                              on_raw_tap_read,
+                              raw_tap_ref(tap));
+}
+
+static gboolean raw_tap_try_connect(gpointer user_data)
+{
+    TioTab *tab = user_data;
+
+    if (tab->socket_path == NULL || tab->child_pid <= 0) {
+        tab->raw_connect_timer = 0;
+        return G_SOURCE_REMOVE;
+    }
+    if (!g_file_test(tab->socket_path, G_FILE_TEST_EXISTS)) {
+        if (++tab->raw_connect_attempts >= TIO_GUI_RAW_CONNECT_ATTEMPTS) {
+            tab->raw_connect_timer = 0;
+            return G_SOURCE_REMOVE;
+        }
+        return G_SOURCE_CONTINUE;
+    }
+
+    g_autoptr(GSocketAddress) address = g_unix_socket_address_new(tab->socket_path);
+    g_autoptr(GSocketClient) client = g_socket_client_new();
+    g_autoptr(GError) error = NULL;
+    /* A local unix socket connects immediately or not at all, so this does not
+       block the main loop in any meaningful way. */
+    GSocketConnection *connection =
+        g_socket_client_connect(client, G_SOCKET_CONNECTABLE(address), NULL, &error);
+    if (connection == NULL) {
+        if (++tab->raw_connect_attempts >= TIO_GUI_RAW_CONNECT_ATTEMPTS) {
+            tab->raw_connect_timer = 0;
+            return G_SOURCE_REMOVE;
+        }
+        return G_SOURCE_CONTINUE;
+    }
+
+    TioRawTap *tap = g_new0(TioRawTap, 1);
+    tap->reference_count = 1;
+    tap->tab = tab;
+    tap->connection = connection;
+    tap->cancellable = g_cancellable_new();
+    tab->raw = tap;
+    raw_tap_read(tap);
+
+    tab->raw_connect_timer = 0;
+    return G_SOURCE_REMOVE;
+}
+
+/* Connect as soon as the session starts: the socket only carries what arrives
+   after a client attaches, and the device banner is the part worth having. */
+static void raw_tap_start(TioTab *tab)
+{
+    if (tab->socket_path == NULL) {
+        return;
+    }
+    tab->raw_connect_attempts = 0;
+    if (raw_tap_try_connect(tab)) {
+        tab->raw_connect_timer =
+            g_timeout_add(TIO_GUI_RAW_CONNECT_INTERVAL_MS, raw_tap_try_connect, tab);
+    }
+}
+
+/* One socket per session, so several sessions never collide.
+
+   Returns NULL when no usable path exists, and the session then runs without a
+   tap: losing the byte counters is acceptable, refusing to connect is not. A
+   unix socket path is capped at sizeof(struct sockaddr_un.sun_path), and tio
+   refuses to start at all if it is handed a longer one. */
+static gchar *build_socket_path(void)
+{
+    static guint serial = 0;
+    g_autofree gchar *directory =
+        g_build_filename(g_get_user_runtime_dir(), "tio-gui", NULL);
+    if (g_mkdir_with_parents(directory, 0700) == -1) {
+        return NULL;
+    }
+    g_autofree gchar *name = g_strdup_printf("s-%d-%u.sock", (int)getpid(), ++serial);
+    gchar *path = g_build_filename(directory, name, NULL);
+    if (strlen(path) >= sizeof(((struct sockaddr_un *)NULL)->sun_path)) {
+        g_free(path);
+        return NULL;
+    }
+    return path;
+}
+
+static gchar **build_tio_argv(const TioSessionConfig *config,
+                              const char *log_path,
+                              const char *socket_path)
 {
     GPtrArray *arguments = g_ptr_array_new_with_free_func(g_free);
 
@@ -1258,6 +1479,11 @@ static gchar **build_tio_argv(const TioSessionConfig *config, const char *log_pa
         if (config->log_strip) {
             g_ptr_array_add(arguments, g_strdup("--log-strip"));
         }
+    }
+
+    if (socket_path != NULL) {
+        g_ptr_array_add(arguments, g_strdup("--socket"));
+        g_ptr_array_add(arguments, g_strdup_printf("unix:%s", socket_path));
     }
 
     g_ptr_array_add(arguments, g_strdup(config->device));
@@ -1325,8 +1551,15 @@ static void connect_tio(TioTab *tab)
         }
     }
 
+    raw_tap_stop(tab);
+    tab->socket_path = build_socket_path();
+    tab->rx_bytes = 0;
+    tab->rx_lines = 0;
+    tab->rx_bytes_at_tick = 0;
+    tab->rx_rate = 0;
+
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
-    tab->spawn_argv = build_tio_argv(config, tab->log_path);
+    tab->spawn_argv = build_tio_argv(config, tab->log_path, tab->socket_path);
     set_status(tab, _("Connecting…"));
     gtk_widget_set_sensitive(GTK_WIDGET(tab->connect_button), FALSE);
 
@@ -2069,6 +2302,7 @@ static void tio_tab_free(TioTab *tab)
         return;
     }
     stop_session_timer(tab);
+    raw_tap_stop(tab);
     g_clear_pointer(&tab->spawn_argv, g_strfreev);
     g_clear_pointer(&tab->log_path, g_free);
     g_clear_pointer(&tab->history_draft, g_free);
