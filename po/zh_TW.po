@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:40+0800\n"
+"POT-Creation-Date: 2026-09-07 13:45+0800\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -455,6 +455,12 @@ msgstr "已選擇記錄資料夾"
 #, c-format
 msgid "Preview: %s"
 msgstr "預覽：%s"
+
+msgid "Reopen sessions on startup"
+msgstr "啟動時恢復工作階段"
+
+msgid "Reopen the tabs that were open last time, without connecting"
+msgstr "重新開啟上次的分頁，但不自動連線"
 
 msgid "No line ending"
 msgstr "無行尾"

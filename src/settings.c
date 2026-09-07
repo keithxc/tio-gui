@@ -11,6 +11,7 @@
 /* 0.2.x wrote the same fields under [session]. Read-only, for migration. */
 #define TIO_GUI_LEGACY_SESSION_GROUP "session"
 #define TIO_GUI_PROFILE_PREFIX "profile:"
+#define TIO_GUI_TAB_PREFIX "tab:"
 
 static gchar *settings_path(void)
 {
@@ -174,6 +175,16 @@ void tio_session_config_clear(TioSessionConfig *config)
     }
 }
 
+static void session_config_free(gpointer data)
+{
+    TioSessionConfig *config = data;
+    if (config == NULL) {
+        return;
+    }
+    tio_session_config_clear(config);
+    g_free(config);
+}
+
 static void profile_free(gpointer data)
 {
     TioProfile *profile = data;
@@ -303,6 +314,7 @@ void tio_settings_init(TioSettings *settings)
         .log_warning_mb = 256,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
+        .tab_configs = g_ptr_array_new_with_free_func(session_config_free),
     };
     tio_session_config_init(&settings->defaults);
 }
@@ -334,6 +346,7 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
                              "advanced-expanded",
                              &settings->advanced_expanded);
     replace_uint_from_key(key_file, "general", "log-warning-mb", &settings->log_warning_mb, 65536);
+    replace_boolean_from_key(key_file, "general", "restore-tabs", &settings->restore_tabs);
     /* 0.1.x kept these two in other groups. */
     replace_string_from_key(key_file, "display", "language", &settings->language);
     replace_boolean_from_key(key_file, "serial", "show-all-ttys", &settings->show_all_ttys);
@@ -362,6 +375,19 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
         tio_session_config_init(&profile->session);
         session_config_read(key_file, groups[index], &profile->session);
         g_ptr_array_add(settings->profiles, profile);
+    }
+
+    /* Read [tab:N] by index rather than by file order, so the tabs come back
+       in the order they were in. */
+    for (guint position = 0; position < 64; ++position) {
+        g_autofree gchar *group = g_strdup_printf("%s%u", TIO_GUI_TAB_PREFIX, position);
+        if (!g_key_file_has_group(key_file, group)) {
+            continue;
+        }
+        TioSessionConfig *session = g_new0(TioSessionConfig, 1);
+        tio_session_config_init(session);
+        session_config_read(key_file, group, session);
+        g_ptr_array_add(settings->tab_configs, session);
     }
     return TRUE;
 }
@@ -392,6 +418,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
                            "advanced-expanded",
                            settings->advanced_expanded);
     g_key_file_set_integer(key_file, "general", "log-warning-mb", (gint)settings->log_warning_mb);
+    g_key_file_set_boolean(key_file, "general", "restore-tabs", settings->restore_tabs);
     session_config_write(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
 
     if (settings->history->len > 0) {
@@ -407,6 +434,12 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
         g_autofree gchar *group =
             g_strconcat(TIO_GUI_PROFILE_PREFIX, profile->name, NULL);
         session_config_write(key_file, group, &profile->session);
+    }
+
+    for (guint index = 0; index < settings->tab_configs->len; ++index) {
+        const TioSessionConfig *session = g_ptr_array_index(settings->tab_configs, index);
+        g_autofree gchar *group = g_strdup_printf("%s%u", TIO_GUI_TAB_PREFIX, index);
+        session_config_write(key_file, group, session);
     }
 
     gsize length = 0;
@@ -457,6 +490,24 @@ void tio_settings_clear(TioSettings *settings)
     g_clear_pointer(&settings->active_profile, g_free);
     g_clear_pointer(&settings->profiles, g_ptr_array_unref);
     g_clear_pointer(&settings->history, g_ptr_array_unref);
+    g_clear_pointer(&settings->tab_configs, g_ptr_array_unref);
+}
+
+void tio_settings_clear_tabs(TioSettings *settings)
+{
+    g_return_if_fail(settings != NULL);
+    g_ptr_array_set_size(settings->tab_configs, 0);
+}
+
+void tio_settings_add_tab(TioSettings *settings, const TioSessionConfig *session)
+{
+    g_return_if_fail(settings != NULL);
+    g_return_if_fail(session != NULL);
+
+    TioSessionConfig *copy = g_new0(TioSessionConfig, 1);
+    tio_session_config_init(copy);
+    tio_session_config_copy(copy, session);
+    g_ptr_array_add(settings->tab_configs, copy);
 }
 
 TioProfile *tio_settings_find_profile(const TioSettings *settings, const char *name)

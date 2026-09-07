@@ -52,8 +52,12 @@ typedef struct {
     gboolean show_all_ttys;
     gboolean advanced_expanded;
     guint log_warning_mb; /* 0 disables the log size warning */
-    GPtrArray *profiles;  /* TioProfile *, in display order */
-    GPtrArray *history;   /* gchar *, oldest first */
+    /* Reopen the sessions that were open at the last exit. Off by default:
+       reconnecting serial ports without being asked is not always wanted. */
+    gboolean restore_tabs;
+    GPtrArray *profiles;    /* TioProfile *, in display order */
+    GPtrArray *history;     /* gchar *, oldest first */
+    GPtrArray *tab_configs; /* TioSessionConfig *, in tab order */
 } TioSettings;
 
 void tio_settings_init(TioSettings *settings);
@@ -72,6 +76,9 @@ void tio_settings_store_profile(TioSettings *settings,
                                 const char *name,
                                 const TioSessionConfig *session);
 void tio_settings_remove_profile(TioSettings *settings, const char *name);
+
+void tio_settings_clear_tabs(TioSettings *settings);
+void tio_settings_add_tab(TioSettings *settings, const TioSessionConfig *session);
 
 void tio_settings_push_history(TioSettings *settings, const char *text);
 void tio_settings_clear_history(TioSettings *settings);

@@ -183,6 +183,7 @@ struct _TioApp {
     GtkLabel *log_warning_label;
     GtkSpinButton *log_warning_spin;
     GtkCheckButton *show_all_ttys_check;
+    GtkCheckButton *restore_tabs_check;
 
     /* Status. */
     gboolean retranslating;
@@ -2432,6 +2433,20 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
     if (app->active != NULL) {
         capture_all_settings(app->active);
     }
+
+    /* Record the sessions themselves, in page order, so they can come back. */
+    tio_settings_clear_tabs(&app->settings);
+    if (app->settings.restore_tabs) {
+        for (guint index = 0; index < app->tabs->len; ++index) {
+            TioTab *tab = g_ptr_array_index(app->tabs, index);
+            TioSessionConfig snapshot;
+            tio_session_config_init(&snapshot);
+            capture_session_config(tab, &snapshot);
+            tio_settings_add_tab(&app->settings, &snapshot);
+            tio_session_config_clear(&snapshot);
+        }
+    }
+
     g_autoptr(GError) error = NULL;
     if (!tio_settings_save(&app->settings, &error)) {
         g_warning("Could not save settings: %s", error->message);
@@ -2456,6 +2471,7 @@ static void tio_tab_free(TioTab *tab)
     g_clear_pointer(&tab->log_path, g_free);
     g_clear_pointer(&tab->history_draft, g_free);
     g_clear_pointer(&tab->search_pattern, g_free);
+    g_clear_pointer(&tab->pending_profile_delete, g_free);
     tio_session_config_clear(&tab->config);
     g_free(tab);
 }
@@ -2476,7 +2492,6 @@ static void tio_app_free(gpointer data)
         g_clear_pointer(&app->tabs, g_ptr_array_unref);
     }
     app->active = NULL;
-    g_clear_pointer(&app->active->pending_profile_delete, g_free);
     g_clear_pointer(&app->update_url, g_free);
     g_clear_pointer(&app->latest_version, g_free);
     tio_settings_clear(&app->settings);
@@ -2578,6 +2593,8 @@ static void capture_all_settings(TioTab *tab)
     capture_session_config(tab, &tab->config);
     tio_session_config_copy(&tab->app->settings.defaults, &tab->config);
     tab->app->settings.show_all_ttys = gtk_check_button_get_active(tab->app->show_all_ttys_check);
+    tab->app->settings.restore_tabs =
+        gtk_check_button_get_active(tab->app->restore_tabs_check);
     tab->app->settings.advanced_expanded =
         gtk_expander_get_expanded(GTK_EXPANDER(tab->session_settings_expander));
     tab->app->settings.log_warning_mb =
@@ -2762,6 +2779,7 @@ static void apply_imported_settings(TioTab *tab)
     gtk_drop_down_set_selected(tab->app->language_dropdown,
                                value_index(language_values, tab->app->settings.language, 0));
     gtk_check_button_set_active(tab->app->show_all_ttys_check, tab->app->settings.show_all_ttys);
+    gtk_check_button_set_active(tab->app->restore_tabs_check, tab->app->settings.restore_tabs);
     gtk_spin_button_set_value(tab->app->log_warning_spin, tab->app->settings.log_warning_mb);
     /* An imported file replaces the defaults; the open session adopts them. */
     tio_session_config_copy(&tab->config, &tab->app->settings.defaults);
@@ -3104,6 +3122,14 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_check_button_set_active(app->show_all_ttys_check, app->settings.show_all_ttys);
     GtkWidget *general_row = make_settings_row(GTK_WIDGET(app->general_settings_box));
     gtk_box_append(GTK_BOX(general_row), GTK_WIDGET(app->show_all_ttys_check));
+
+    app->restore_tabs_check =
+        GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Reopen sessions on startup")));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(app->restore_tabs_check),
+                                _("Reopen the tabs that were open last time, without connecting"));
+    gtk_check_button_set_active(app->restore_tabs_check, app->settings.restore_tabs);
+    GtkWidget *restore_row = make_settings_row(GTK_WIDGET(app->general_settings_box));
+    gtk_box_append(GTK_BOX(restore_row), GTK_WIDGET(app->restore_tabs_check));
 
     app->log_warning_label = GTK_LABEL(make_label(_("Warn above (MB)")));
     app->log_warning_spin =
@@ -3940,7 +3966,23 @@ static void activate(GtkApplication *application, gpointer user_data)
     g_signal_connect(app->notebook, "switch-page", G_CALLBACK(on_notebook_switch_page), app);
 
     install_shortcuts(application, app);
-    (void)tio_app_add_tab(app);
+
+    /* Reopen the recorded sessions, configured but not connected: reconnecting
+       serial ports unasked is not a safe default. */
+    if (app->settings.restore_tabs && app->settings.tab_configs->len > 0) {
+        for (guint index = 0; index < app->settings.tab_configs->len; ++index) {
+            const TioSessionConfig *session =
+                g_ptr_array_index(app->settings.tab_configs, index);
+            TioTab *restored = tio_app_add_tab(app);
+            tio_session_config_copy(&restored->config, session);
+            apply_session_config(restored, &restored->config);
+            update_quick_buttons(restored);
+            update_tab_label(restored);
+        }
+        gtk_notebook_set_current_page(app->notebook, 0);
+    } else {
+        (void)tio_app_add_tab(app);
+    }
 
     g_signal_connect(app->window,
                      "close-request",

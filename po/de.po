@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:40+0800\n"
+"POT-Creation-Date: 2026-09-07 13:45+0800\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -478,6 +478,12 @@ msgstr "Protokollverzeichnis"
 #, c-format
 msgid "Preview: %s"
 msgstr ""
+
+msgid "Reopen sessions on startup"
+msgstr "Sitzungen beim Start wiederherstellen"
+
+msgid "Reopen the tabs that were open last time, without connecting"
+msgstr "Öffnet die zuletzt geöffneten Tabs erneut, ohne zu verbinden"
 
 msgid "No line ending"
 msgstr "Kein Zeilenende"
