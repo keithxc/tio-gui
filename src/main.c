@@ -141,6 +141,7 @@ struct _TioTab {
     TioLogModel *log_model;
     GtkWidget *analyzer_window;
     GtkWidget *sequence_window;
+    GtkWidget *quick_window;
     TioSequenceRunner *sequence_runner;
     gboolean sequence_paused;
     guint quick_send_timer;
@@ -255,6 +256,7 @@ struct _TioApp {
     TioSettings settings;
 
     guint close_capture_timer;
+    gboolean close_confirmed, close_dialog_pending;
     GtkButton *new_tab_button;
     GtkNotebook *notebook;
     GPtrArray *tabs; /* TioTab *, in page order */
@@ -262,6 +264,32 @@ struct _TioApp {
     /* The session the window is currently showing. */
     TioTab *active;
 };
+
+/* Dialogs may finish after their session has closed or moved. */
+typedef struct { GWeakRef window; guint64 id; gchar *text; } TabRequest;
+static TabRequest *tab_request_new(TioTab *tab, const char *text)
+{
+    TabRequest *request = g_new0(TabRequest, 1);
+    g_weak_ref_init(&request->window, tab->app->window);
+    request->id = tab->id; request->text = g_strdup(text);
+    return request;
+}
+static void tab_request_free(TabRequest *request)
+{
+    g_weak_ref_clear(&request->window); g_free(request->text); g_free(request);
+}
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(TabRequest, tab_request_free)
+static TioTab *tab_request_resolve(TabRequest *request, GtkWindow *window)
+{
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window))) return NULL;
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    if (!app) return NULL;
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        if (tab->id == request->id && !tab->close_requested) return tab;
+    }
+    return NULL;
+}
 
 typedef struct {
     GtkWidget *window;
@@ -289,12 +317,13 @@ typedef enum {
 } TioProfileSaveMode;
 
 typedef struct {
-    TioTab *tab;
+    TabRequest *request;
     GtkWidget *window;
     GtkEntry *name_entry;
     GtkLabel *hint_label;
 } ProfileNameDialog;
 
+static const char *selected_string(GtkDropDown *dropdown);
 static void update_quick_buttons(TioTab *tab);
 static GtkWidget *make_label(const char *text);
 static void set_status(TioTab *tab, const char *message);
@@ -737,6 +766,8 @@ static void on_device_item_bind(GtkSignalListItemFactory *factory,
 
 static void refresh_devices(TioTab *tab)
 {
+    g_autofree gchar *wanted = g_strdup(selected_string(tab->device_dropdown));
+    if (!wanted || !*wanted) { g_free(wanted); wanted = g_strdup(tab->config.device); }
     GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
     GPtrArray *devices = g_ptr_array_new_with_free_func(g_free);
 
@@ -759,6 +790,9 @@ static void refresh_devices(TioTab *tab)
         globfree(&matches);
     }
 
+    guint detected = devices->len;
+    if (wanted && *wanted && !g_hash_table_contains(seen, wanted))
+        g_ptr_array_add(devices, g_strdup(wanted));
     g_ptr_array_sort(devices, compare_devices);
 
     GtkStringList *model = gtk_string_list_new(NULL);
@@ -771,7 +805,7 @@ static void refresh_devices(TioTab *tab)
     if (devices->len > 0) {
         guint selected = 0;
         for (guint index = 0; index < devices->len; ++index) {
-            if (g_strcmp0(g_ptr_array_index(devices, index), tab->config.device) == 0) {
+            if (g_strcmp0(g_ptr_array_index(devices, index), wanted) == 0) {
                 selected = index;
                 break;
             }
@@ -780,7 +814,7 @@ static void refresh_devices(TioTab *tab)
         const char *format = ngettext("Found %u serial device",
                                      "Found %u serial devices",
                                      devices->len);
-        g_autofree gchar *message = g_strdup_printf(format, devices->len);
+        g_autofree gchar *message = g_strdup_printf(format, detected);
         set_status(tab, message);
     } else {
         set_status(tab, _("No serial devices found"));
@@ -935,9 +969,21 @@ static void capture_session_config(TioTab *tab, TioSessionConfig *config)
 
 static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
 {
+    if (config != &tab->config) {
+        g_autofree gchar *name = g_strdup(tab->config.tab_name);
+        tio_session_config_copy(&tab->config, config);
+        g_free(tab->config.tab_name);
+        tab->config.tab_name = g_steal_pointer(&name);
+        config = &tab->config;
+    }
     g_autofree gchar *resolved = device_from_stable_id(config->device_id);
     const char *device = resolved != NULL ? resolved : config->device;
     if (device != NULL) {
+        GtkStringList *model = GTK_STRING_LIST(gtk_drop_down_get_model(tab->device_dropdown));
+        gboolean found = FALSE;
+        for (guint i = 0; i < g_list_model_get_n_items(G_LIST_MODEL(model)); ++i)
+            if (g_strcmp0(gtk_string_list_get_string(model, i), device) == 0) { found = TRUE; break; }
+        if (!found) gtk_string_list_append(model, device);
         select_string(tab->device_dropdown, device);
     }
 
@@ -988,6 +1034,7 @@ static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
     gtk_editable_set_text(GTK_EDITABLE(tab->rs485_entry), config->rs485_config);
     gtk_spin_button_set_value(tab->output_delay_spin, config->output_delay);
     gtk_spin_button_set_value(tab->output_line_delay_spin, config->output_line_delay);
+    update_quick_buttons(tab);
     update_session_label(tab);
 }
 
@@ -1063,7 +1110,9 @@ static void on_profile_name_save(GtkButton *button, gpointer user_data)
 {
     (void)button;
     ProfileNameDialog *dialog = user_data;
-    TioTab *tab = dialog->tab;
+    g_autoptr(GtkWindow) parent = g_weak_ref_get(&dialog->request->window);
+    TioTab *tab = tab_request_resolve(dialog->request, parent);
+    if (!tab) { gtk_window_destroy(GTK_WINDOW(dialog->window)); return; }
 
     g_autofree gchar *name =
         g_strstrip(g_strdup(gtk_editable_get_text(GTK_EDITABLE(dialog->name_entry))));
@@ -1100,18 +1149,26 @@ static void on_profile_name_save(GtkButton *button, gpointer user_data)
     gtk_window_destroy(GTK_WINDOW(dialog->window));
 }
 
+static void profile_name_free(gpointer data)
+{
+    ProfileNameDialog *dialog = data;
+    tab_request_free(dialog->request);
+    g_free(dialog);
+}
+
 static void present_profile_name_dialog(TioTab *tab, TioProfileSaveMode mode)
 {
     ProfileNameDialog *dialog = g_new0(ProfileNameDialog, 1);
-    dialog->tab = tab;
+    dialog->request = tab_request_new(tab, NULL);
     dialog->window = gtk_window_new();
     gtk_window_set_title(GTK_WINDOW(dialog->window),
                          mode == TIO_GUI_PROFILE_SAVE_DUPLICATE ? _("Duplicate profile")
                                                                 : _("Save profile"));
     gtk_window_set_transient_for(GTK_WINDOW(dialog->window), GTK_WINDOW(tab->app->window));
     gtk_window_set_modal(GTK_WINDOW(dialog->window), TRUE);
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(dialog->window), TRUE);
     gtk_window_set_default_size(GTK_WINDOW(dialog->window), 380, 120);
-    g_object_set_data_full(G_OBJECT(dialog->window), "profile-dialog", dialog, g_free);
+    g_object_set_data_full(G_OBJECT(dialog->window), "profile-dialog", dialog, profile_name_free);
 
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     gtk_widget_set_margin_top(root, 12);
@@ -1198,12 +1255,14 @@ static void on_profile_update_clicked(GtkButton *button, gpointer user_data)
 
 static void on_profile_delete_response(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioTab *tab = user_data;
-    g_autofree gchar *name = g_steal_pointer(&tab->pending_profile_delete);
+    g_autoptr(TabRequest) request = user_data;
+    g_autoptr(GtkWindow) window = g_weak_ref_get(&request->window);
+    TioTab *tab = tab_request_resolve(request, window);
+    const char *name = request->text;
 
     g_autoptr(GError) error = NULL;
     int choice = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(source), result, &error);
-    if (error != NULL || choice != 1 || name == NULL) {
+    if (!tab || error != NULL || choice != 1 || name == NULL) {
         return;
     }
 
@@ -1245,7 +1304,7 @@ static void on_profile_delete_clicked(GtkButton *button, gpointer user_data)
                             GTK_WINDOW(tab->app->window),
                             NULL,
                             on_profile_delete_response,
-                            tab);
+                            tab_request_new(tab, tab->app->settings.active_profile));
 }
 
 /* ----------------------------------------------------------------- session */
@@ -2789,9 +2848,12 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
 {
     (void)button;
     TioTab *tab = user_data;
+    if (tab->quick_window) { gtk_window_present(GTK_WINDOW(tab->quick_window)); return; }
     QuickButtonEditor *editor = g_new0(QuickButtonEditor, 1);
     editor->tab = tab;
     editor->window = gtk_window_new();
+    tab->quick_window = editor->window;
+    g_object_add_weak_pointer(G_OBJECT(editor->window), (gpointer *)&tab->quick_window);
     gtk_window_set_title(GTK_WINDOW(editor->window), _("Customize quick buttons"));
     gtk_window_set_transient_for(GTK_WINDOW(editor->window), GTK_WINDOW(tab->app->window));
     gtk_window_set_modal(GTK_WINDOW(editor->window), TRUE);
@@ -3804,6 +3866,15 @@ static void action_search(GSimpleAction *action, GVariant *parameter, gpointer u
     }
 }
 
+static void action_select_tab(GSimpleAction *action, GVariant *parameter, gpointer data)
+{
+    (void)action;
+    TioApp *app = data;
+    gint page = g_variant_get_int32(parameter);
+    if (page >= 0 && page < gtk_notebook_get_n_pages(app->notebook))
+        gtk_notebook_set_current_page(app->notebook, page);
+}
+
 static void install_shortcuts(GtkApplication *application, TioApp *app)
 {
     static const GActionEntry entries[] = {
@@ -3813,6 +3884,7 @@ static void install_shortcuts(GtkApplication *application, TioApp *app)
         {.name = "connect", .activate = action_connect},
         {.name = "disconnect", .activate = action_disconnect},
         {.name = "search", .activate = action_search},
+        {.name = "select-tab", .activate = action_select_tab, .parameter_type = "i"},
         {.name = "new-tab", .activate = action_new_tab},
         {.name = "close-tab", .activate = action_close_tab},
         {.name = "next-tab", .activate = action_next_tab},
@@ -3822,6 +3894,13 @@ static void install_shortcuts(GtkApplication *application, TioApp *app)
                                     entries,
                                     G_N_ELEMENTS(entries),
                                     app);
+
+    for (guint i = 0; i < 9; ++i) {
+        g_autofree gchar *action = g_strdup_printf("win.select-tab(%u)", i);
+        g_autofree gchar *key = g_strdup_printf("<Alt>%u", i + 1);
+        const char *keys[] = {key, NULL};
+        gtk_application_set_accels_for_action(application, action, keys);
+    }
 
     /* Only Shift-modified control combinations and the function keys are
        claimed, so plain Ctrl-C and friends still reach the serial device. */
@@ -3861,11 +3940,47 @@ static gboolean close_after_capture(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
+static gboolean app_has_live_sessions(TioApp *app)
+{
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        if (tab->child_pid > 0 || tab->spawn_pending || !tio_capture_finished(tab->capture)) return TRUE;
+    }
+    return FALSE;
+}
+
+static void on_confirm_window_close(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GtkWindow *window = data;
+    g_autoptr(GError) error = NULL;
+    int choice = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(source), result, &error);
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    if (app && gtk_widget_get_visible(GTK_WIDGET(window))) {
+        app->close_dialog_pending = FALSE;
+        if (choice == 1) { app->close_confirmed = TRUE; gtk_window_close(window); }
+    }
+    g_object_unref(window);
+}
+
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
 {
     (void)window;
     TioApp *app = user_data;
 
+    if (!app->close_confirmed && app_has_live_sessions(app)) {
+        if (!app->close_dialog_pending) {
+            app->close_dialog_pending = TRUE;
+            GtkAlertDialog *dialog = gtk_alert_dialog_new("%s", _("Close all active sessions?"));
+            gtk_alert_dialog_set_detail(dialog, _("Connections will stop and pending recordings will finish writing."));
+            const char *buttons[] = {_("Cancel"), _("Close"), NULL};
+            gtk_alert_dialog_set_buttons(dialog, buttons);
+            gtk_alert_dialog_set_cancel_button(dialog, 0);
+            gtk_alert_dialog_set_default_button(dialog, 0);
+            gtk_alert_dialog_choose(dialog, window, NULL, on_confirm_window_close, g_object_ref(window));
+            g_object_unref(dialog);
+        }
+        return TRUE;
+    }
     /* Stop every session, not just the visible one. */
     for (guint index = 0; index < app->tabs->len; ++index) {
         TioTab *tab = g_ptr_array_index(app->tabs, index);
@@ -3925,6 +4040,12 @@ static void tio_tab_free(TioTab *tab)
         return;
     }
 
+    if (tab->quick_window) {
+        GtkWidget *quick = tab->quick_window;
+        g_object_remove_weak_pointer(G_OBJECT(quick), (gpointer *)&tab->quick_window);
+        tab->quick_window = NULL;
+        gtk_window_destroy(GTK_WINDOW(quick));
+    }
     if (tab->sequence_window) gtk_window_destroy(GTK_WINDOW(tab->sequence_window));
     if (tab->analyzer_window) gtk_window_destroy(GTK_WINDOW(tab->analyzer_window));
     g_clear_pointer(&tab->log_model, tio_log_model_free);
@@ -4099,11 +4220,12 @@ static gint compare_versions(const char *left, const char *right)
     }
     g_auto(GStrv) left_parts = g_strsplit(left, ".", 4);
     g_auto(GStrv) right_parts = g_strsplit(right, ".", 4);
+    guint left_len = g_strv_length(left_parts), right_len = g_strv_length(right_parts);
     for (guint index = 0; index < 3; ++index) {
-        guint64 left_value = left_parts[index] != NULL
+        guint64 left_value = index < left_len
                                  ? g_ascii_strtoull(left_parts[index], NULL, 10)
                                  : 0;
-        guint64 right_value = right_parts[index] != NULL
+        guint64 right_value = index < right_len
                                   ? g_ascii_strtoull(right_parts[index], NULL, 10)
                                   : 0;
         if (left_value != right_value) {
@@ -4129,7 +4251,7 @@ static void on_update_check_finished(GObject *source,
     g_autoptr(GError) error = NULL;
     g_autoptr(GBytes) body =
         soup_session_send_and_read_finish(SOUP_SESSION(source), result, &error);
-    if (app == NULL || body == NULL ||
+    if (app == NULL || !gtk_widget_get_visible(check->window) || body == NULL ||
         soup_message_get_status(check->message) != SOUP_STATUS_OK) {
         update_check_free(check);
         return;
@@ -4151,7 +4273,7 @@ static void on_update_check_finished(GObject *source,
     JsonObject *object = json_node_get_object(root);
     const char *tag = json_object_get_string_member_with_default(object, "tag_name", NULL);
     const char *url = json_object_get_string_member_with_default(object, "html_url", NULL);
-    if (tag != NULL && url != NULL && compare_versions(tag, TIO_GUI_VERSION) > 0) {
+    if (tag != NULL && url != NULL && g_str_has_prefix(url, "https://github.com/keithxc/tio-gui/releases/") && compare_versions(tag, TIO_GUI_VERSION) > 0) {
         g_free(app->latest_version);
         app->latest_version = g_strdup(tag);
         g_free(app->update_url);
@@ -4171,11 +4293,11 @@ static void on_settings_popover_visible(GObject *object,
     (void)pspec;
     TioApp *app = user_data;
     TioTab *tab = app->active;
-    if (!gtk_widget_get_visible(GTK_WIDGET(object)) || tab->app->update_check_started) {
+    if (!tab || !gtk_widget_get_visible(GTK_WIDGET(object)) || app->update_check_started) {
         return;
     }
     tab->app->update_check_started = TRUE;
-    SoupSession *session = soup_session_new();
+    SoupSession *session = soup_session_new_with_options("timeout", 15u, NULL);
     SoupMessage *message = soup_message_new(
         "GET", "https://api.github.com/repos/keithxc/tio-gui/releases/latest");
     SoupMessageHeaders *headers = soup_message_get_request_headers(message);
@@ -4464,10 +4586,13 @@ static void on_log_directory_finished(GObject *source,
                                       GAsyncResult *result,
                                       gpointer user_data)
 {
-    TioTab *tab = user_data;
+    g_autoptr(TabRequest) request = user_data;
+    g_autoptr(GtkWindow) window = g_weak_ref_get(&request->window);
+    TioTab *tab = tab_request_resolve(request, window);
     g_autoptr(GError) error = NULL;
     g_autoptr(GFile) folder =
         gtk_file_dialog_select_folder_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!tab) return;
     if (folder == NULL) {
         if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
             set_status(tab, error->message);
@@ -4499,7 +4624,7 @@ static void on_choose_log_directory(GtkButton *button, gpointer user_data)
                                   GTK_WINDOW(tab->app->window),
                                   NULL,
                                   on_log_directory_finished,
-                                  tab);
+                                  tab_request_new(tab, NULL));
     g_object_unref(dialog);
 }
 
@@ -4672,19 +4797,138 @@ static void build_session_settings(TioTab *tab)
                              tab);
 }
 
-static GtkWidget *build_settings_popover(TioApp *app)
+/* A read-only view follows stable session IDs, never notebook positions. */
+typedef struct {
+    GWeakRef parent;
+    GArray *ids;
+    GtkDropDown *sessions[2];
+    GtkTextView *views[2];
+    GtkCheckButton *follow;
+    GtkEntry *filter;
+    guint timer;
+} SessionCompare;
+
+static gboolean compare_refresh(gpointer data)
+{
+    SessionCompare *compare = data;
+    if (!gtk_check_button_get_active(compare->follow)) return G_SOURCE_CONTINUE;
+    g_autoptr(GtkWindow) parent = g_weak_ref_get(&compare->parent);
+    TioApp *app = parent ? g_object_get_data(G_OBJECT(parent), "tio-gui") : NULL;
+    if (!app || !gtk_widget_get_visible(GTK_WIDGET(parent))) return G_SOURCE_CONTINUE;
+    const char *filter = gtk_editable_get_text(GTK_EDITABLE(compare->filter));
+    for (guint side = 0; side < 2; ++side) {
+        guint selection = gtk_drop_down_get_selected(compare->sessions[side]);
+        TioTab *tab = NULL;
+        if (selection < compare->ids->len) {
+            guint64 id = g_array_index(compare->ids, guint64, selection);
+            for (guint i = 0; i < app->tabs->len; ++i) {
+                TioTab *candidate = g_ptr_array_index(app->tabs, i);
+                if (candidate->id == id) { tab = candidate; break; }
+            }
+        }
+        GString *text = g_string_new(tab ? "" : _("Session closed. Reopen comparison to choose new sessions."));
+        if (tab) {
+            const GQueue *entries = tio_log_model_entries(tab->log_model);
+            GList *first = entries->tail;
+            for (guint i = 1; first && first->prev && i < 200; ++i) first = first->prev;
+            for (GList *item = first; item; item = item->next) {
+                TioLogEntry *entry = item->data;
+                if (*filter && !strstr(entry->text, filter)) continue;
+                g_autofree gchar *line = g_strdup_printf("%.3f  %s\n", (double)entry->time_us / 1000000.0, entry->text);
+                if (text->len + strlen(line) > 128 * 1024) break;
+                g_string_append(text, line);
+            }
+        }
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(compare->views[side]);
+        GtkTextIter begin, end;
+        gtk_text_buffer_get_bounds(buffer, &begin, &end);
+        g_autofree gchar *old = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+        if (!g_str_equal(old, text->str)) {
+            gtk_text_buffer_set_text(buffer, text->str, (gint)text->len);
+            gtk_text_buffer_get_end_iter(buffer, &end);
+            gtk_text_view_scroll_to_iter(compare->views[side], &end, 0, FALSE, 0, 1);
+        }
+        g_string_free(text, TRUE);
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+static void compare_free(gpointer data)
+{
+    SessionCompare *compare = data;
+    if (compare->timer) g_source_remove(compare->timer);
+    g_weak_ref_clear(&compare->parent);
+    g_array_unref(compare->ids);
+    g_free(compare);
+}
+
+static void on_compare_sessions(GtkButton *button, gpointer data)
+{
+    (void)button;
+    TioApp *app = data;
+    SessionCompare *compare = g_new0(SessionCompare, 1);
+    g_weak_ref_init(&compare->parent, app->window);
+    compare->ids = g_array_new(FALSE, FALSE, sizeof(guint64));
+    GtkStringList *names = gtk_string_list_new(NULL);
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        g_array_append_val(compare->ids, tab->id);
+        gtk_string_list_append(names, gtk_label_get_text(tab->tab_label));
+    }
+    GtkWidget *window = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(window), _("Compare sessions"));
+    gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(app->window));
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(window), 1100, 650);
+    GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_top(root, 12); gtk_widget_set_margin_bottom(root, 12);
+    gtk_widget_set_margin_start(root, 12); gtk_widget_set_margin_end(root, 12);
+    gtk_box_append(GTK_BOX(root), gtk_label_new(_("Read-only raw log comparison · latest 200 entries per session")));
+    GtkWidget *bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    compare->follow = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Follow")));
+    gtk_check_button_set_active(compare->follow, TRUE);
+    compare->filter = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_placeholder_text(compare->filter, _("Shared substring filter"));
+    gtk_widget_set_hexpand(GTK_WIDGET(compare->filter), TRUE);
+    gtk_box_append(GTK_BOX(bar), GTK_WIDGET(compare->follow));
+    gtk_box_append(GTK_BOX(bar), GTK_WIDGET(compare->filter));
+    gtk_box_append(GTK_BOX(root), bar);
+    GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_widget_set_vexpand(paned, TRUE);
+    for (guint side = 0; side < 2; ++side) {
+        GtkWidget *column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+        compare->sessions[side] = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(g_object_ref(names)), NULL));
+        gtk_drop_down_set_selected(compare->sessions[side], MIN(side, app->tabs->len ? app->tabs->len - 1 : 0));
+        gtk_box_append(GTK_BOX(column), GTK_WIDGET(compare->sessions[side]));
+        compare->views[side] = GTK_TEXT_VIEW(gtk_text_view_new());
+        gtk_text_view_set_editable(compare->views[side], FALSE);
+        gtk_text_view_set_monospace(compare->views[side], TRUE);
+        GtkWidget *scroll = gtk_scrolled_window_new();
+        gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), GTK_WIDGET(compare->views[side]));
+        gtk_widget_set_vexpand(scroll, TRUE);
+        gtk_widget_set_hexpand(scroll, TRUE);
+        gtk_widget_set_size_request(scroll, 300, 200);
+        gtk_box_append(GTK_BOX(column), scroll);
+        if (!side) gtk_paned_set_start_child(GTK_PANED(paned), column);
+        else gtk_paned_set_end_child(GTK_PANED(paned), column);
+    }
+    g_object_unref(names);
+    gtk_box_append(GTK_BOX(root), paned);
+    gtk_window_set_child(GTK_WINDOW(window), root);
+    g_object_set_data_full(G_OBJECT(window), "session-compare", compare, compare_free);
+    compare->timer = g_timeout_add(250, compare_refresh, compare);
+    compare_refresh(compare);
+    gtk_window_present(GTK_WINDOW(window));
+}
+
+static GtkWidget *build_tools_popover(TioApp *app)
 {
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
-    gtk_widget_set_size_request(root, 360, -1);
-    gtk_widget_set_margin_top(root, 12);
-    gtk_widget_set_margin_bottom(root, 12);
-    gtk_widget_set_margin_start(root, 12);
-    gtk_widget_set_margin_end(root, 12);
-
-    app->settings_title_label = GTK_LABEL(make_label(_("Settings")));
-    gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
-    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
-
+    gtk_widget_set_margin_top(root, 12); gtk_widget_set_margin_bottom(root, 12);
+    gtk_widget_set_margin_start(root, 12); gtk_widget_set_margin_end(root, 12);
+    GtkWidget *comparison = gtk_button_new_with_label(_("Compare sessions…"));
+    g_signal_connect(comparison, "clicked", G_CALLBACK(on_compare_sessions), app);
+    gtk_box_append(GTK_BOX(root), comparison);
     GtkWidget *ble_button = gtk_button_new_with_label(_("BLE GATT debugging…"));
     g_signal_connect(ble_button, "clicked", G_CALLBACK(on_ble_tools), app);
     gtk_box_append(GTK_BOX(root), ble_button);
@@ -4703,6 +4947,22 @@ static GtkWidget *build_settings_popover(TioApp *app)
     GtkWidget *rules_button = gtk_button_new_with_label(_("Custom highlight rules…"));
     g_signal_connect(rules_button, "clicked", G_CALLBACK(on_highlight_rules), app);
     gtk_box_append(GTK_BOX(root), rules_button);
+    return root;
+}
+
+static GtkWidget *build_settings_popover(TioApp *app)
+{
+    GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 7);
+    gtk_widget_set_size_request(root, 360, -1);
+    gtk_widget_set_margin_top(root, 12);
+    gtk_widget_set_margin_bottom(root, 12);
+    gtk_widget_set_margin_start(root, 12);
+    gtk_widget_set_margin_end(root, 12);
+
+    app->settings_title_label = GTK_LABEL(make_label(_("Settings")));
+    gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
+
     app->appearance_section_label = GTK_LABEL(make_label(_("Appearance")));
     gtk_widget_add_css_class(GTK_WIDGET(app->appearance_section_label),
                              "settings-section-title");
@@ -5008,6 +5268,8 @@ static TioTab *tio_tab_new(TioApp *app)
     tio_session_config_init(&tab->config);
     tab->highlight_follow = TRUE;
     tio_session_config_copy(&tab->config, &app->settings.defaults);
+    g_clear_pointer(&tab->config.tab_name, g_free);
+    tab->config.tab_name = g_strdup("");
 
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
     gtk_widget_set_margin_top(root, 8);
@@ -5037,7 +5299,7 @@ static TioTab *tio_tab_new(TioApp *app)
 
     tab->device_label = GTK_LABEL(make_label(_("Device")));
     gtk_box_append(GTK_BOX(toolbar), GTK_WIDGET(tab->device_label));
-    tab->device_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(NULL, NULL));
+    tab->device_dropdown = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(gtk_string_list_new(NULL)), NULL));
     GtkListItemFactory *device_factory = gtk_signal_list_item_factory_new();
     g_signal_connect(device_factory, "setup", G_CALLBACK(on_device_item_setup), tab);
     g_signal_connect(device_factory, "bind", G_CALLBACK(on_device_item_bind), tab);
@@ -5475,8 +5737,70 @@ static void update_tab_label(TioTab *tab)
         }
         text = g_strdup_printf(_("Session %u"), position);
     }
-    gtk_label_set_text(tab->tab_label, text);
+    gtk_label_set_text(tab->tab_label, tab->config.tab_name && *tab->config.tab_name ? tab->config.tab_name : text);
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->tab_label), text);
+}
+
+typedef struct {
+    GWeakRef parent;
+    guint64 tab_id;
+    GtkWidget *window;
+    GtkEntry *entry;
+} RenameTab;
+
+static void rename_tab_free(gpointer data)
+{
+    RenameTab *rename = data;
+    g_weak_ref_clear(&rename->parent);
+    g_free(rename);
+}
+
+static void rename_tab_apply(GtkButton *button, gpointer data)
+{
+    (void)button;
+    RenameTab *rename = data;
+    g_autoptr(GtkWindow) parent = g_weak_ref_get(&rename->parent);
+    TioApp *app = parent ? g_object_get_data(G_OBJECT(parent), "tio-gui") : NULL;
+    if (app && gtk_widget_get_visible(GTK_WIDGET(parent))) {
+        for (guint i = 0; i < app->tabs->len; ++i) {
+            TioTab *tab = g_ptr_array_index(app->tabs, i);
+            if (tab->id != rename->tab_id) continue;
+            g_free(tab->config.tab_name);
+            tab->config.tab_name = g_strdup(gtk_editable_get_text(GTK_EDITABLE(rename->entry)));
+            g_strstrip(tab->config.tab_name);
+            update_tab_label(tab);
+            break;
+        }
+    }
+    gtk_window_destroy(GTK_WINDOW(rename->window));
+}
+
+static void on_tab_rename(GtkGestureClick *gesture, int presses, double x, double y, gpointer data)
+{
+    (void)gesture; (void)presses; (void)x; (void)y;
+    TioTab *tab = data;
+    RenameTab *rename = g_new0(RenameTab, 1);
+    g_weak_ref_init(&rename->parent, tab->app->window);
+    rename->tab_id = tab->id;
+    rename->window = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(rename->window), _("Rename session"));
+    gtk_window_set_transient_for(GTK_WINDOW(rename->window), GTK_WINDOW(tab->app->window));
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(rename->window), TRUE);
+    gtk_window_set_modal(GTK_WINDOW(rename->window), TRUE);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_margin_top(box, 16); gtk_widget_set_margin_bottom(box, 16);
+    gtk_widget_set_margin_start(box, 16); gtk_widget_set_margin_end(box, 16);
+    gtk_box_append(GTK_BOX(box), gtk_label_new(_("Leave blank to use the device name.")));
+    rename->entry = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_max_length(rename->entry, 64);
+    gtk_editable_set_text(GTK_EDITABLE(rename->entry), tab->config.tab_name ? tab->config.tab_name : "");
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(rename->entry));
+    GtkWidget *save = gtk_button_new_with_label(_("Save"));
+    gtk_box_append(GTK_BOX(box), save);
+    g_signal_connect(save, "clicked", G_CALLBACK(rename_tab_apply), rename);
+    gtk_window_set_child(GTK_WINDOW(rename->window), box);
+    g_object_set_data_full(G_OBJECT(rename->window), "rename-tab", rename, rename_tab_free);
+    gtk_window_present(GTK_WINDOW(rename->window));
 }
 
 static void on_notebook_switch_page(GtkNotebook *notebook, GtkWidget *page,
@@ -5519,6 +5843,10 @@ static TioTab *tio_app_add_tab(TioApp *app)
     gtk_label_set_width_chars(tab->tab_label, 16);
     gtk_label_set_max_width_chars(tab->tab_label, 22);
     gtk_box_append(GTK_BOX(label_box), GTK_WIDGET(tab->tab_label));
+    GtkGesture *rename = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(rename), 3);
+    g_signal_connect(rename, "pressed", G_CALLBACK(on_tab_rename), tab);
+    gtk_widget_add_controller(GTK_WIDGET(tab->tab_label), GTK_EVENT_CONTROLLER(rename));
 
     GtkWidget *close = gtk_button_new_from_icon_name("window-close-symbolic");
     gtk_button_set_has_frame(GTK_BUTTON(close), FALSE);
@@ -5581,9 +5909,12 @@ static void tio_app_finish_close_tab(TioApp *app, TioTab *tab)
 
 static void on_close_tab_response(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioTab *tab = user_data;
+    g_autoptr(TabRequest) request = user_data;
+    g_autoptr(GtkWindow) window = g_weak_ref_get(&request->window);
+    TioTab *tab = tab_request_resolve(request, window);
     g_autoptr(GError) error = NULL;
     int choice = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(source), result, &error);
+    if (!tab) return;
     if (choice != 1) {
         return;
     }
@@ -5597,7 +5928,7 @@ static void on_close_tab_response(GObject *source, GAsyncResult *result, gpointe
    stray click. */
 static void tio_app_close_tab(TioApp *app, TioTab *tab)
 {
-    if (tab->child_pid <= 0 && tab->log_path == NULL) {
+    if (tab->child_pid <= 0 && !tab->spawn_pending && tio_capture_finished(tab->capture) && tab->log_path == NULL) {
         tio_app_finish_close_tab(app, tab);
         return;
     }
@@ -5618,7 +5949,7 @@ static void tio_app_close_tab(TioApp *app, TioTab *tab)
                             GTK_WINDOW(app->window),
                             NULL,
                             on_close_tab_response,
-                            tab);
+                            tab_request_new(tab, NULL));
     g_object_unref(dialog);
 }
 
@@ -5723,6 +6054,12 @@ static void activate(GtkApplication *application, gpointer user_data)
     g_signal_connect_swapped(app->new_tab_button, "clicked", G_CALLBACK(tio_app_add_tab), app);
 
     GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    GtkWidget *tools = gtk_menu_button_new();
+    gtk_menu_button_set_label(GTK_MENU_BUTTON(tools), _("Tools"));
+    GtkWidget *tools_popover = gtk_popover_new();
+    gtk_popover_set_child(GTK_POPOVER(tools_popover), build_tools_popover(app));
+    gtk_menu_button_set_popover(GTK_MENU_BUTTON(tools), tools_popover);
+    gtk_box_append(GTK_BOX(actions), tools);
     gtk_box_append(GTK_BOX(actions), GTK_WIDGET(app->settings_button));
     gtk_box_append(GTK_BOX(actions), GTK_WIDGET(app->new_tab_button));
     gtk_notebook_set_action_widget(app->notebook, actions, GTK_PACK_START);
@@ -5760,6 +6097,46 @@ static void activate(GtkApplication *application, gpointer user_data)
     gtk_window_present(GTK_WINDOW(app->window));
 }
 
+static int on_command_line(GApplication *application, GApplicationCommandLine *command, gpointer data)
+{
+    (void)data;
+    GVariantDict *options = g_application_command_line_get_options_dict(command);
+    const char *device = NULL, *baud = NULL;
+    g_auto(GStrv) remaining = NULL;
+    g_variant_dict_lookup(options, "device", "&s", &device);
+    g_variant_dict_lookup(options, "baud", "&s", &baud);
+    g_variant_dict_lookup(options, G_OPTION_REMAINING, "^as", &remaining);
+    if (remaining && remaining[0]) {
+        if (device || remaining[1]) {
+            g_application_command_line_printerr(command, "Specify exactly one serial device.\n"); return 2;
+        }
+        device = remaining[0];
+    }
+    if ((baud && !baud_is_valid(baud)) ||
+        (device && (!*device || *device == '-' || strpbrk(device, "\r\n"))) ||
+        (g_variant_dict_contains(options, "connect") && g_variant_dict_contains(options, "no-connect"))) {
+        g_application_command_line_printerr(command, "Invalid device, baud rate, or conflicting connection options.\n"); return 2;
+    }
+    g_application_activate(application);
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    TioApp *app = window ? g_object_get_data(G_OBJECT(window), "tio-gui") : NULL;
+    if (!app || !app->active) return 1;
+    TioTab *tab = app->active;
+    if (device) {
+        g_free(tab->config.device); tab->config.device = g_strdup(device);
+        g_clear_pointer(&tab->config.device_id, g_free);
+        tab->config.auto_connect = 0;
+        GtkStringList *model = GTK_STRING_LIST(gtk_drop_down_get_model(tab->device_dropdown));
+        gtk_string_list_append(model, device);
+        gtk_drop_down_set_selected(tab->device_dropdown, g_list_model_get_n_items(G_LIST_MODEL(model)) - 1);
+    }
+    if (baud) { g_free(tab->config.baud); tab->config.baud = g_strdup(baud); }
+    apply_session_config(tab, &tab->config);
+    update_tab_label(tab);
+    if ((device || g_variant_dict_contains(options, "connect")) && !g_variant_dict_contains(options, "no-connect")) connect_tio(tab);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && g_str_equal(argv[1], "--version")) {
@@ -5789,13 +6166,23 @@ int main(int argc, char **argv)
         g_warning("Locale is unavailable for language: %s", startup_language);
     }
 
-    GApplicationFlags application_flags = G_APPLICATION_DEFAULT_FLAGS;
+    GApplicationFlags application_flags = G_APPLICATION_HANDLES_COMMAND_LINE;
     if (g_getenv("TIO_GUI_NON_UNIQUE") != NULL) {
         application_flags |= G_APPLICATION_NON_UNIQUE;
     }
 
     g_autoptr(GtkApplication) application =
         gtk_application_new("io.github.keithxc.tio_gui", application_flags);
+    const GOptionEntry options[] = {
+        {"device", 'd', 0, G_OPTION_ARG_STRING, NULL, "Serial device or tio topology ID", "DEVICE"},
+        {"baud", 'b', 0, G_OPTION_ARG_STRING, NULL, "Baud rate", "BAUD"},
+        {"connect", 0, 0, G_OPTION_ARG_NONE, NULL, "Connect the new session", NULL},
+        {"no-connect", 0, 0, G_OPTION_ARG_NONE, NULL, "Open the configured session disconnected", NULL},
+        {G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_STRING_ARRAY, NULL, "Serial device", "DEVICE"},
+        {NULL}
+    };
+    g_application_add_main_option_entries(G_APPLICATION(application), options);
+    g_signal_connect(application, "command-line", G_CALLBACK(on_command_line), NULL);
     g_signal_connect(application, "activate", G_CALLBACK(activate), NULL);
     return g_application_run(G_APPLICATION(application), argc, argv);
 }

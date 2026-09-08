@@ -94,6 +94,7 @@ void tio_session_config_init(TioSessionConfig *config)
     }
 
     *config = (TioSessionConfig){
+        .tab_name = g_strdup(""),
         .baud = g_strdup("115200"),
         .capture_part_mb = 16,
         .capture_part_seconds = 0,
@@ -137,6 +138,7 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
         return;
     }
 
+    replace_string(&destination->tab_name, source->tab_name);
     replace_string(&destination->device, source->device);
     replace_string(&destination->device_id, source->device_id);
     replace_string(&destination->baud, source->baud);
@@ -196,6 +198,7 @@ void tio_session_config_clear(TioSessionConfig *config)
     g_clear_pointer(&config->exclude_tids, g_free);
 
     g_clear_pointer(&config->device, g_free);
+    g_clear_pointer(&config->tab_name, g_free);
     g_clear_pointer(&config->device_id, g_free);
     g_clear_pointer(&config->baud, g_free);
     g_clear_pointer(&config->data_bits, g_free);
@@ -238,6 +241,7 @@ static void session_config_read(GKeyFile *key_file,
                                 TioSessionConfig *config)
 {
     replace_string_from_key(key_file, group, "device", &config->device);
+    replace_string_from_key(key_file, group, "tab-name", &config->tab_name);
     replace_string_from_key(key_file, group, "device-id", &config->device_id);
     replace_string_from_key(key_file, group, "baud", &config->baud);
     replace_string_from_key(key_file, group, "data-bits", &config->data_bits);
@@ -309,6 +313,7 @@ static void session_config_write(GKeyFile *key_file,
     if (config->device_id != NULL) {
         g_key_file_set_string(key_file, group, "device-id", config->device_id);
     }
+    g_key_file_set_string(key_file, group, "tab-name", config->tab_name ? config->tab_name : "");
     g_key_file_set_string(key_file, group, "baud", config->baud);
     g_key_file_set_string(key_file, group, "data-bits", config->data_bits);
     g_key_file_set_string(key_file, group, "stop-bits", config->stop_bits);

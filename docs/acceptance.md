@@ -336,3 +336,23 @@ Connect. The real system BlueZ ObjectManager is also queried read-only; no real
 scan, pairing, GATT write or device connection was performed. Radio range, pairing
 workflows and real peripheral interoperability remain hardware validation limits.
 Reference: [BlueZ GATT API](https://bluez.readthedocs.io/en/latest/gatt-api/).
+
+## Session and usability closeout (2026-09-08)
+
+- Added persistent right-click session names, Alt+1…9 selection, `--device/-d`,
+  `--baud/-b`, positional device, `--connect` and `--no-connect`. Explicit devices
+  connect by default; restored sessions still start disconnected.
+- Window close asks before stopping live sessions, then drains recording/spawn
+  work. Profile/file/close dialogs resolve weak windows and stable session IDs.
+  Quick editors are destroyed with their session. Missing devices remain selected
+  across refresh, and loading profiles now restores binary quick-button settings.
+- Tools menu separates protocol debuggers from appearance/settings. Compare
+  sessions shows bounded, read-only raw log entries side by side, with common
+  substring filtering and pause/follow. Reordering cannot switch its underlying
+  sessions; a closed session is reported explicitly. Reopen to choose new tabs.
+- GTK regression checks cover profile restoration, tab-name INI round trip,
+  missing-device refresh, numeric tab actions, compare after reorder/close,
+  late-dialog lookup and close draining. Short version comparison no longer
+  indexes past a split string; update links must point to this project's releases.
+- Update check remains asynchronous, once when opening Settings, with a 15-second
+  network timeout. It only offers the release page and never replaces binaries.

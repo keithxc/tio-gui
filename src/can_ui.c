@@ -43,7 +43,7 @@ static void event(const struct canfd_frame *frame, gboolean fd,
   g_autoptr(GString) line = g_string_new(NULL);
   g_string_append_printf(line, "RX %08X %s%s%s ", frame->can_id,
                          fd ? "FD " : "",
-                         frame->flags & CANFD_BRS ? "BRS " : "",
+                         fd && (frame->flags & CANFD_BRS) ? "BRS " : "",
                          frame->can_id & CAN_RTR_FLAG ? "RTR " : "");
   for (guint i = 0; i < frame->len; ++i)
     g_string_append_printf(line, "%02X ", frame->data[i]);

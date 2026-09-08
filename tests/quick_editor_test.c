@@ -288,6 +288,104 @@ static void check_about(void)
     gtk_window_destroy(GTK_WINDOW(app.window));
 }
 
+static gboolean check_cli_window(gpointer data)
+{
+    GtkApplication *application = data;
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    if (!window) return G_SOURCE_CONTINUE;
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    g_assert_cmpstr(selected_string(app->active->device_dropdown), ==, "/dev/tio-cli-test");
+    g_assert_cmpstr(selected_baud(app->active), ==, "250000");
+    g_assert_cmpint(app->active->child_pid, <=, 0);
+    gtk_window_close(GTK_WINDOW(window));
+    return G_SOURCE_REMOVE;
+}
+
+static void check_cli(void)
+{
+    g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.cli.tests",
+        G_APPLICATION_NON_UNIQUE | G_APPLICATION_HANDLES_COMMAND_LINE);
+    const GOptionEntry options[] = {
+        {"device", 'd', 0, G_OPTION_ARG_STRING, NULL, "Device", "DEVICE"},
+        {"baud", 'b', 0, G_OPTION_ARG_STRING, NULL, "Baud", "BAUD"},
+        {"no-connect", 0, 0, G_OPTION_ARG_NONE, NULL, "No connect", NULL},
+        {NULL}
+    };
+    g_application_add_main_option_entries(G_APPLICATION(application), options);
+    g_signal_connect(application, "activate", G_CALLBACK(activate), NULL);
+    g_signal_connect(application, "command-line", G_CALLBACK(on_command_line), NULL);
+    char *args[] = {"test", "--device", "/dev/tio-cli-test", "--baud", "250000", "--no-connect", NULL};
+    g_timeout_add(20, check_cli_window, application);
+    g_assert_cmpint(g_application_run(G_APPLICATION(application), 6, args), ==, 0);
+}
+
+static void check_session_tools(void)
+{
+    g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.tools.tests", G_APPLICATION_NON_UNIQUE);
+    g_assert_true(g_application_register(G_APPLICATION(application), NULL, NULL));
+    activate(application, NULL);
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    TioTab *first = app->active, *second = tio_app_add_tab(app);
+    g_autoptr(TabRequest) request = tab_request_new(second, "snapshot");
+    g_assert_true(tab_request_resolve(request, GTK_WINDOW(window)) == second);
+    g_free(first->config.device); first->config.device = g_strdup("/dev/tio-missing-test");
+    apply_session_config(first, &first->config);
+    refresh_devices(first);
+    g_assert_cmpstr(selected_string(first->device_dropdown), ==, "/dev/tio-missing-test");
+    TioSessionConfig profile; tio_session_config_init(&profile);
+    g_free(profile.quick_payloads[0]); profile.quick_payloads[0] = g_strdup("00 FF");
+    profile.quick_modes[0] = 1;
+    apply_session_config(first, &profile);
+    g_assert_cmpstr(first->config.quick_payloads[0], ==, "00 FF");
+    tio_session_config_clear(&profile);
+    g_free(first->config.tab_name); first->config.tab_name = g_strdup("Board A");
+    update_tab_label(first);
+    g_assert_cmpstr(gtk_label_get_text(first->tab_label), ==, "Board A");
+    tio_settings_clear_tabs(&app->settings);
+    tio_settings_add_tab(&app->settings, &first->config);
+    g_autofree gchar *path = g_build_filename(g_get_user_config_dir(), "tabs.ini", NULL);
+    g_assert_true(tio_settings_save_to_file(&app->settings, path, NULL));
+    TioSettings restored; tio_settings_init(&restored);
+    g_assert_true(tio_settings_load_from_file(&restored, path, NULL));
+    g_assert_cmpstr(((TioSessionConfig *)g_ptr_array_index(restored.tab_configs, 0))->tab_name, ==, "Board A");
+    tio_settings_clear(&restored); g_unlink(path);
+    g_action_group_activate_action(G_ACTION_GROUP(window), "select-tab", g_variant_new_int32(0));
+    g_assert_true(app->active == first);
+    tio_log_model_feed(first->log_model, (const guint8 *)"board-a=1\n", 10, 1000000);
+    tio_log_model_feed(second->log_model, (const guint8 *)"board-b=2\n", 10, 2000000);
+    on_compare_sessions(NULL, app);
+    GListModel *windows = gtk_window_get_toplevels();
+    GtkWindow *comparison = NULL;
+    SessionCompare *compare = NULL;
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        GtkWindow *candidate = g_list_model_get_item(windows, i);
+        compare = g_object_get_data(G_OBJECT(candidate), "session-compare");
+        if (compare) { comparison = candidate; break; }
+        g_object_unref(candidate);
+    }
+    g_assert_nonnull(compare);
+    gtk_notebook_reorder_child(app->notebook, second->content, 0);
+    compare_refresh(compare);
+    GtkTextIter begin, end;
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(compare->views[0]);
+    gtk_text_buffer_get_bounds(buffer, &begin, &end);
+    g_autofree gchar *text = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+    g_assert_nonnull(strstr(text, "board-a=1"));
+    tio_app_finish_close_tab(app, second);
+    g_assert_null(tab_request_resolve(request, GTK_WINDOW(window)));
+    compare_refresh(compare);
+    buffer = gtk_text_view_get_buffer(compare->views[1]);
+    gtk_text_buffer_get_bounds(buffer, &begin, &end);
+    g_free(text); text = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+    g_assert_nonnull(strstr(text, "Session closed"));
+    gtk_window_destroy(comparison); g_object_unref(comparison);
+    gtk_window_close(GTK_WINDOW(window));
+    g_assert_cmpint(compare_versions("1", "1.0.1"), <, 0);
+    g_assert_cmpint(compare_versions("v0.10.0", "0.9.9"), >, 0);
+    g_assert_cmpint(compare_versions("0.3", "0.3.0"), ==, 0);
+}
+
 static void check_application_lifecycle(void)
 {
     g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.tests", G_APPLICATION_NON_UNIQUE);
@@ -313,6 +411,8 @@ static void check_application_lifecycle(void)
     TioCapture *capture = tio_capture_ref(first->capture);
     const guint8 bytes[] = {0, 0x14, 0xff};
     g_assert_true(tio_capture_record(capture, TIO_CAPTURE_RX, bytes, sizeof bytes, g_get_real_time()));
+    g_assert_true(app_has_live_sessions(app));
+    app->close_confirmed = TRUE;
     gtk_window_close(GTK_WINDOW(window));
     gint64 until = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
     while (window && g_get_monotonic_time() < until) {
@@ -341,6 +441,8 @@ int main(int argc, char **argv)
     g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
     g_test_add_func("/connection/real-reconnect", check_reconnect_observer);
     g_test_add_func("/about/version-diagnostics", check_about);
+    g_test_add_func("/application/command-line", check_cli);
+    g_test_add_func("/application/session-tools", check_session_tools);
     g_test_add_func("/application/reorder-close-drain", check_application_lifecycle);
     int result = g_test_run();
     g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);

@@ -11,6 +11,7 @@
    structure, so saving a profile is a plain snapshot instead of a second list
    of fields that has to be kept in step by hand. */
 typedef struct {
+    gchar *tab_name;
     gchar *device;
     /* Stable /dev/serial/by-id path for `device`, when the kernel provides
        one. Profiles prefer it so a saved entry survives ttyUSB renumbering. */
