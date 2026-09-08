@@ -356,3 +356,36 @@ Reference: [BlueZ GATT API](https://bluez.readthedocs.io/en/latest/gatt-api/).
   indexes past a split string; update links must point to this project's releases.
 - Update check remains asynchronous, once when opening Settings, with a 15-second
   network timeout. It only offers the release page and never replaces binaries.
+
+## Final 0.3.0 acceptance (2026-09-08)
+
+`nix develop --command python3 tests/headless.py sh tests/acceptance.sh`
+completed successfully: 10 CTest groups, GTK application/editor/analyzer/plugin
+checks, real tio binary/sequence/line-control/reconnect/transfer PTYs, TCP/UDP,
+Modbus TCP/RTU including malformed/exception/timeout replies, real Mosquitto,
+private BlueZ and kernel vcan. The additional keyboard driver verifies actual
+GTK events through hidden VTE to a PTY for text, Enter, Tab, Escape, Up and Ctrl-C.
+
+All four catalogs (zh_CN, zh_TW, ja, de) contain 430 translated messages with no
+fuzzy/untranslated entries and pass `msgfmt --check`. Traditional Chinese was
+checked on Wayland; German long labels were checked at a 1000×660 window on a
+private X display. Source extraction now includes every protocol UI module and
+preserves complete 64-bit format strings. Existing tool windows should be reopened
+after switching language; restart updates every pre-existing control.
+
+ASan + UBSan passed the full application GTK regression executable and capture,
+log-model, DBC and Modbus codec tests (`detect_leaks=0` for process-global GTK/GLib
+caches; this is not a claim of exhaustive leak checking).
+
+The private display keeps synthetic selection/focus tests independent of the
+running desktop: the same scroll test lost its synthetic primary selection under
+the host Wayland desktop, but passed follow/pause/selection retention/resume on
+Xvfb without changing application logic. Hardware Wayland keyboard/IME behavior
+is not substituted by the X11 automation.
+
+Transfer acceptance was strengthened after exposing a reference-peer PTY race:
+lrzsz terminal cleanup can flush the final ACK/OO before tio reads it. The reference
+peer now uses a socketpair relayed to the real tio PTY. Both directions of all three
+protocols passed again, including exact 8192-byte comparisons, nonempty-directory
+protection and stalled-peer cleanup. Application timeout messages retain the last
+protocol status. The relay does not synthesize protocol acknowledgements.

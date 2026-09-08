@@ -6,9 +6,11 @@
 
 ## Status
 
-Early development. The first release targets x86-64 Linux.
+Version 0.3.0 targets x86-64 Linux with tio 3.9. Software acceptance covers real
+PTY serial transport, protocol peers and GTK controls; electrical and wireless
+hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 
-## Initial scope
+## Features
 
 ### Devices and connection
 
@@ -32,10 +34,12 @@ Early development. The first release targets x86-64 Linux.
 
 - Run several serial devices at once, one session per tab, each with its own `tio` process,
   terminal, log and settings; a background tab keeps capturing while another is in front
-- `Ctrl+T` opens a session, `Ctrl+W` closes one, `Ctrl+PgUp`/`Ctrl+PgDn` switch between them
+- `Ctrl+T` opens a session, `Ctrl+W` closes one, `Ctrl+PgUp`/`Ctrl+PgDn` and
+  `Alt+1`…`Alt+9` switch between them. Drag tabs to reorder; right-click the name to rename.
+- Tools → Compare sessions shows two raw logs with common filtering and pause/follow
 - Connecting to a port another session already holds is refused with a plain message, and the
   device list marks those ports as in use
-- Closing a tab that is still connected or still writing a log asks first
+- Closing a connected tab or the whole window asks first and drains pending recordings
 - Optionally reopen the tabs that were open last time; restored tabs are configured but do not
   connect on their own
 
@@ -104,15 +108,13 @@ Early development. The first release targets x86-64 Linux.
 - Open the GitHub project and inspect the application version directly from the settings menu
 - Check the latest GitHub Release asynchronously the first time settings are opened; when a newer
   semantic version exists, show a compact notice linking to its release download page
-- Check the latest published GitHub Release asynchronously when settings is first opened and show
-  a quiet download prompt only when a newer semantic version is available
-- Switch the interface immediately between the system default, Simplified Chinese, Traditional Chinese, English, Japanese, and German
+- Choose system default, Simplified Chinese, Traditional Chinese, English, Japanese or German.
+  Core controls update immediately; reopen tools or restart to refresh all existing controls.
 - Keyboard shortcuts: `Ctrl+Shift+L` clear, `Ctrl+Shift+C`/`Ctrl+Shift+V` copy and paste,
   `Ctrl+Shift+F` search, `F5` connect, `F6` disconnect. Plain control characters such as
   `Ctrl+C` are never intercepted and always reach the device
 - A second launch opens a session in the running window instead of a competing one
 - Install a Wayland-compatible desktop entry and branded `tio` application icon
-- Follow the system locale, with English, Simplified Chinese, and Traditional Chinese included initially
 
 SSH, SFTP, Windows, macOS, and a general-purpose terminal emulator are deliberately outside the first release.
 
@@ -142,7 +144,9 @@ The initial packaging order is Nix/NixOS first, AppImage second, and Arch Linux 
 
 ## Build on other Linux distributions
 
-Install a C17 compiler, CMake, pkg-config, GTK4, VTE for GTK4, PCRE2, and `tio`, then run:
+Install a C17 compiler, CMake, gettext, pkg-config, GTK4 ≥4.12, VTE for GTK4 ≥0.74,
+PCRE2, libsoup 3, JSON-GLib and `tio` 3.9. File transfer uses lrzsz; analysis plugins
+require bubblewrap, QuickJS and Lua 5.4. BLE requires the system BlueZ service. Then run:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -158,8 +162,8 @@ pseudo-terminal. Version 1 deliberately does not implement an alternative serial
 Each session also asks `tio` for a unix socket with `--socket` and attaches to it. That socket carries
 the bytes as received, unaffected by `--output-mode` or `--timestamp`, and `tio`'s own messages never
 appear on it. So one session has three independent streams: the pty that VTE renders, the log file
-`tio` writes, and this raw tap. Anything that needs the actual bytes — today the received counters,
-later highlighting, filtering and plotting — reads the tap rather than scraping the screen. A socket
+`tio` writes, and this raw tap. Anything that needs the actual bytes — received counters,
+highlighting, filtering, recording and plotting — reads the tap rather than scraping the screen. A socket
 path that would not fit in `sun_path` is dropped rather than passed on, because `tio` refuses to start
 at all on a long one and connecting matters more than the counters.
 
@@ -184,8 +188,7 @@ The Nix development shell defaults to the `zh_TW.UTF-8` locale for the maintaine
 Enabling session logging also enables ISO 8601 line timestamps with millisecond precision. tio-gui always
 passes an absolute `--log-file` path, including for automatically named logs, so it can show and monitor
 the file it started. `tio` 3.9 does not provide size-based log rotation; tio-gui therefore only warns once
-when a log passes the configured size. A safe rotation policy is planned on top of the raw tap instead
-of being simulated with an unsafe file truncation workaround.
+when a log passes the configured size. The separate raw recorder rotates closed parts safely, without truncating tio logs.
 
 ## Serial log analysis
 
@@ -201,6 +204,51 @@ The analyzer retains at most 10,000 normalized lines / 8 MiB, limits each line t
 was cleared. Numeric curves retain at most 5000 points each. Regex matching and
 JSON nesting are bounded. This view is for line-oriented logs, not terminal screen
 emulation or byte-exact archival.
+
+## Recording and protocol tools
+
+Use the session's **Recording / safe rotation** controls for timestamped, byte-exact
+`.tiocap` files. Configure part size/time, retained parts and disk budget. Open a
+recording or retained part from Analyze for offline playback at 0.1–32× speed;
+playback never sends data to devices. Recording and analyzer retention are separate.
+Socket attachment has a startup gap; recording cannot recover earlier bytes.
+
+The session expander contains DTR/RTS/Break, RS-485, reconnect policy, Modbus RTU
+and XMODEM/YMODEM/ZMODEM transfer. Transfers support cancellation and timeouts;
+receive into an empty directory. XMODEM may retain final-block padding.
+
+The **Tools** menu opens independent protocol windows:
+
+| Tool | Implemented scope |
+| --- | --- |
+| TCP / UDP | TCP client or UDP peer, binary send preview, counters and analysis |
+| Modbus TCP / RTU | Functions 01–06, zero-based addresses, validated responses, no automatic retry |
+| MQTT | MQTT 3.1.1 over plain TCP, QoS 0/1, subscribe/publish/retain, username/password |
+| CAN / DBC | SocketCAN classic/FD, extended ID, BRS/RTR; integer DBC signals and simple multiplexing |
+| BLE GATT | BlueZ scan/connect, characteristic read/write and notifications; pairing in system settings |
+| Compare sessions | Read-only latest 200 raw log entries per side, shared filter and pause/follow |
+
+These are debugging tools with explicit boundaries: MQTT TLS/QoS 2, advanced DBC
+multiplexing and non-Linux backends are outside this release. See
+[acceptance details](docs/acceptance.md) for data limits and hardware coverage.
+
+Analyze can save declarative parser rules and run manually reviewed Lua/JavaScript
+transformations on one entry snapshot. Plugins have no device API and run in a
+bounded sandbox. See [plugin API and examples](docs/plugins.md).
+
+## Command line and acceptance
+
+```sh
+tio-gui /dev/ttyUSB0 --baud 115200         # open a new tab and connect
+tio-gui --device /dev/ttyACM0 -b 250000 --no-connect
+tio-gui --help
+nix develop --command python3 tests/headless.py sh tests/acceptance.sh
+```
+
+The acceptance runner uses private PTYs, localhost services, a private display,
+a fake BlueZ service and a separate vcan network namespace. It does not connect
+to attached boards. A real BlueZ **read-only** check can additionally be run with
+`TIO_TEST_BLUEZ_SYSTEM=1 .cache/build/ble-test` inside the development shell.
 
 ## Semantic highlighting
 

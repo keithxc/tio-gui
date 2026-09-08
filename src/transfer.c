@@ -36,7 +36,10 @@ void tio_transfer_free(TioTransfer *t) { if (t) { tio_transfer_cancel(t); unref(
 static gboolean timeout(gpointer data)
 {
     TioTransfer *t = data; t->timer = 0;
-    tio_transfer_cancel(t); status(t, "Transfer timed out; check the peer before resuming commands");
+    g_autofree gchar *last = g_strdup(t->status);
+    tio_transfer_cancel(t);
+    g_autofree gchar *message = g_strdup_printf("Transfer timed out; check the peer before resuming commands. Last status: %s", last);
+    status(t, message);
     return G_SOURCE_REMOVE;
 }
 static void exited(GObject *source, GAsyncResult *result, gpointer data)

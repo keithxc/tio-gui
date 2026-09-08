@@ -55,6 +55,9 @@
           tio
           lrzsz
           mosquitto
+          python3
+          xorg-server
+          xdotool
           bubblewrap
           quickjs
           lua5_4

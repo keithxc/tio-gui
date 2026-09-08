@@ -288,6 +288,52 @@ static void check_about(void)
     gtk_window_destroy(GTK_WINDOW(app.window));
 }
 
+static void save_layout(GtkWindow *window, const char *name)
+{
+    const char *directory = g_getenv("TIO_TEST_LAYOUT_DIR");
+    if (!directory) return;
+    gint64 until = g_get_monotonic_time() + 300000;
+    while (g_get_monotonic_time() < until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    g_autoptr(GdkPaintable) paintable = gtk_widget_paintable_new(GTK_WIDGET(window));
+    GtkSnapshot *snapshot = gtk_snapshot_new();
+    gdk_paintable_snapshot(paintable, GDK_SNAPSHOT(snapshot),
+        gtk_widget_get_width(GTK_WIDGET(window)), gtk_widget_get_height(GTK_WIDGET(window)));
+    g_autoptr(GskRenderNode) node = gtk_snapshot_free_to_node(snapshot);
+    g_autoptr(GdkTexture) texture = gsk_renderer_render_texture(gtk_native_get_renderer(GTK_NATIVE(window)), node, NULL);
+    g_autofree gchar *path = g_build_filename(directory, name, NULL);
+    g_assert_true(gdk_texture_save_to_png(texture, path));
+}
+
+static void check_layout(void)
+{
+    const char *language = g_getenv("TIO_TEST_LAYOUT_LANGUAGE");
+    if (!language) { g_test_skip("Set TIO_TEST_LAYOUT_LANGUAGE for localized layout smoke checks"); return; }
+    bindtextdomain("tio-gui", TIO_GUI_BUILD_LOCALE_DIR);
+    bind_textdomain_codeset("tio-gui", "UTF-8");
+    textdomain("tio-gui");
+    g_assert_true(apply_language(language));
+    g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.layout.tests", G_APPLICATION_NON_UNIQUE);
+    g_assert_true(g_application_register(G_APPLICATION(application), NULL, NULL));
+    activate(application, NULL);
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    tio_app_add_tab(app);
+    save_layout(GTK_WINDOW(window), "main.png");
+    on_compare_sessions(NULL, app);
+    GListModel *windows = gtk_window_get_toplevels();
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        g_autoptr(GtkWindow) candidate = g_list_model_get_item(windows, i);
+        if (g_object_get_data(G_OBJECT(candidate), "session-compare")) save_layout(candidate, "compare.png");
+    }
+    on_customize_quick_buttons(NULL, app->active);
+    save_layout(GTK_WINDOW(app->active->quick_window), "quick.png");
+    gtk_window_destroy(GTK_WINDOW(app->active->quick_window));
+    gtk_expander_set_expanded(GTK_EXPANDER(app->active->session_settings_expander), TRUE);
+    save_layout(GTK_WINDOW(window), "advanced.png");
+    gtk_window_close(GTK_WINDOW(window));
+    apply_language("en");
+}
+
 static gboolean check_cli_window(gpointer data)
 {
     GtkApplication *application = data;
@@ -441,6 +487,7 @@ int main(int argc, char **argv)
     g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
     g_test_add_func("/connection/real-reconnect", check_reconnect_observer);
     g_test_add_func("/about/version-diagnostics", check_about);
+    g_test_add_func("/application/layout", check_layout);
     g_test_add_func("/application/command-line", check_cli);
     g_test_add_func("/application/session-tools", check_session_tools);
     g_test_add_func("/application/reorder-close-drain", check_application_lifecycle);
