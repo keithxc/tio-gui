@@ -187,6 +187,21 @@ the file it started. `tio` 3.9 does not provide size-based log rotation; tio-gui
 when a log passes the configured size. A safe rotation policy is planned on top of the raw tap instead
 of being simulated with an unsafe file truncation workaround.
 
+## Serial log analysis
+
+Open **Analyze…** for per-session filtering, level counts, expandable JSON/key/value
+fields and live numeric curves. Plot JSON paths, key/value names, CSV `col1`/`col2`,
+or named regex captures; choose up to three comma-separated fields and click Plot.
+Hide individual curves with the legend checkboxes. Selecting text or an entry
+pauses following; enable Follow to catch up. Capture and tio logging continue.
+Export filtered CSV includes discovered fields and protects spreadsheet formulas.
+
+The analyzer retains at most 10,000 normalized lines / 8 MiB, limits each line to
+16 KiB, and shows the latest 1000 matches. Counters cover all lines since analysis
+was cleared. Numeric curves retain at most 5000 points each. Regex matching and
+JSON nesting are bounded. This view is for line-oriented logs, not terminal screen
+emulation or byte-exact archival.
+
 ## Semantic highlighting
 
 An optional line-oriented highlight view consumes the raw tap and uses these conservative defaults:

@@ -28,6 +28,7 @@
 #include "sequence.h"
 #include "serial_options.h"
 #include "connection_state.h"
+#include "analyzer.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -117,6 +118,8 @@ struct _TioTab {
 
     /* Raw data tap: the bytes tio received, before any display formatting. */
     gchar *socket_path;
+    TioLogModel *log_model;
+    GtkWidget *analyzer_window;
     GtkWidget *sequence_window;
     TioSequenceRunner *sequence_runner;
     gboolean sequence_paused;
@@ -1588,6 +1591,7 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
         }
     }
     tio_highlighter_feed(tap->tab->highlighter, tap->buffer, (gsize)count);
+    if (tap->tab->log_model) tio_log_model_feed(tap->tab->log_model, tap->buffer, (gsize)count, g_get_real_time());
     if (tap->tab->highlight_follow) {
         scroll_highlight_to_bottom(tap->tab);
     }
@@ -1937,6 +1941,13 @@ static void on_payload_written(GObject *source, GAsyncResult *result, gpointer d
     g_autoptr(GError) error = NULL;
     gsize written = 0;
     gboolean ok = g_output_stream_write_all_finish(G_OUTPUT_STREAM(source), result, &written, &error);
+    if (ok && tap->tab && tap->tab->log_model) {
+        gsize length;
+        const guint8 *bytes = g_bytes_get_data(tap->sending, &length);
+        GByteArray payload = {(guint8 *)bytes, (guint)length};
+        g_autofree gchar *preview = tio_payload_preview(&payload);
+        tio_log_model_command(tap->tab->log_model, preview, g_get_real_time());
+    }
     g_clear_pointer(&tap->sending, g_bytes_unref);
     tap->send_failed = !ok;
     if (tap->tab) {
@@ -1990,6 +2001,7 @@ static void send_entry_contents(TioTab *tab)
     }
 
     tio_settings_push_history(&tab->app->settings, payload);
+    if (tab->log_model) tio_log_model_command(tab->log_model, payload, g_get_real_time());
     refresh_history_ui(tab);
     tab->history_cursor = 0;
     g_clear_pointer(&tab->history_draft, g_free);
@@ -3112,6 +3124,16 @@ static GtkWidget *sequence_button(SequenceEditor *editor, const char *label, con
     return button;
 }
 
+static void on_analyzer_clicked(GtkButton *button, gpointer data)
+{
+    (void)button;
+    TioTab *tab = data;
+    if (!tab->analyzer_window) {
+        tab->analyzer_window = tio_analyzer_new(GTK_WINDOW(tab->app->window), tab->log_model);
+        g_object_add_weak_pointer(G_OBJECT(tab->analyzer_window), (gpointer *)&tab->analyzer_window);
+    } else gtk_window_present(GTK_WINDOW(tab->analyzer_window));
+}
+
 static void on_sequences_clicked(GtkButton *button, gpointer data)
 {
     (void)button;
@@ -3541,6 +3563,8 @@ static void tio_tab_free(TioTab *tab)
     }
 
     if (tab->sequence_window) gtk_window_destroy(GTK_WINDOW(tab->sequence_window));
+    if (tab->analyzer_window) gtk_window_destroy(GTK_WINDOW(tab->analyzer_window));
+    g_clear_pointer(&tab->log_model, tio_log_model_free);
     stop_session_timer(tab);
     raw_tap_stop(tab);
     g_clear_pointer(&tab->highlighter, tio_highlighter_free);
@@ -4580,6 +4604,7 @@ static TioTab *tio_tab_new(TioApp *app)
 {
     TioTab *tab = g_new0(TioTab, 1);
     tab->app = app;
+    tab->log_model = tio_log_model_new();
     tab->child_pid = -1;
     tab->follow_output = TRUE;
     tio_session_config_init(&tab->config);
@@ -4889,6 +4914,9 @@ static TioTab *tio_tab_new(TioApp *app)
     GtkWidget *sequences_button = gtk_button_new_with_label(_("Sequences…"));
     gtk_box_append(GTK_BOX(quick_bar), sequences_button);
     g_signal_connect(sequences_button, "clicked", G_CALLBACK(on_sequences_clicked), tab);
+    GtkWidget *analyzer_button = gtk_button_new_with_label(_("Analyze…"));
+    gtk_box_append(GTK_BOX(quick_bar), analyzer_button);
+    g_signal_connect(analyzer_button, "clicked", G_CALLBACK(on_analyzer_clicked), tab);
     tab->hex_toggle = GTK_TOGGLE_BUTTON(gtk_toggle_button_new_with_label("HEX"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->hex_toggle),
                                 _("Display incoming bytes as 16-byte hex rows"));

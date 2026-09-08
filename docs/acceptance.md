@@ -119,3 +119,27 @@ name, user name, paths and device payloads. tio version is queried asynchronousl
 with a five-second timeout. Tests verify portable exports omit seeded private
 paths/history without mutating source settings, and the GTK About window resolves
 the installed tio version and displays expected diagnostic fields.
+
+## Raw-stream analysis — 2026-09-08
+
+The per-session Analyze window consumes raw socket bytes independently of VTE and
+tio logging. It provides substring/bounded PCRE2 filters, seven level counters and
+checkbox filters, a retained entry history, selectable/collapsible JSON or key/value
+fields, and up to three numeric curves. Curves accept JSON paths (including array
+indices), key/value fields, CSV col1..colN, or named regex captures. Each curve is
+bounded to 10–5000 points and can be hidden; axes auto-scale. Selecting a line or
+text pauses view following without pausing capture. CSV exports the filtered
+retained snapshot with discovered fields, normalized text and timestamps, quoting
+cells and escaping spreadsheet formula prefixes. Nested values remain JSON cells.
+
+Retention is limited to 10,000 lines and 8 MiB of text, individual normalized lines
+to 16 KiB, JSON nesting to 32, inspection trees to 256 nodes, and regex pattern,
+match/depth/heap limits. Lifetime level counts are separate from retained history.
+The display shows the most recent 1000 matching entries. Analysis Clear does not
+clear the terminal or files. CSV is a line-oriented text export; byte-exact capture
+is a separate facility.
+
+Tests cover segmented ANSI/CRLF, JSON/nested numeric paths, keys and quoted CSV,
+retention, adversarial regex limits, formula escaping and automatic CSV columns.
+The GTK analyzer test covers live/pause/resume, filter results, numeric curves,
+named captures and field inspection; a synthetic screenshot was inspected.

@@ -31,12 +31,21 @@ add_executable(tio-gui
   src/sequence.c
   src/serial_options.c
   src/connection_state.c
+  src/log_model.c
+  src/analyzer.c
   src/main.c
   src/settings.c
 )
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(analyzer-test tests/analyzer_test.c src/log_model.c)
+  target_include_directories(analyzer-test PRIVATE src)
+  target_link_libraries(analyzer-test PRIVATE PkgConfig::GTK4 PkgConfig::PCRE2 PkgConfig::JSON_GLIB)
+  add_executable(log-model-test tests/log_model_test.c src/log_model.c)
+  target_include_directories(log-model-test PRIVATE src)
+  target_link_libraries(log-model-test PRIVATE PkgConfig::GTK4 PkgConfig::PCRE2 PkgConfig::JSON_GLIB)
+  add_test(NAME log-model COMMAND log-model-test)
   add_executable(connection-state-test tests/connection_state_test.c src/connection_state.c)
   target_include_directories(connection-state-test PRIVATE src)
   target_link_libraries(connection-state-test PRIVATE PkgConfig::GTK4)
@@ -86,7 +95,7 @@ target_compile_options(tio-gui PRIVATE
 )
 
 if(BUILD_TESTING)
-  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c)
   target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(scroll-test PRIVATE
@@ -94,14 +103,14 @@ if(BUILD_TESTING)
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
   # Requires a display: run manually in a desktop session or under Xvfb.
-  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c)
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c)
   target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(keyboard-test PRIVATE
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
-  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c)
+  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c)
   target_link_libraries(quick-editor-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(quick-editor-test PRIVATE
@@ -156,7 +165,7 @@ if(TIO_GUI_XGETTEXT)
             --msgid-bugs-address=https://github.com/keithxc/tio-gui/issues
             --no-location
             -o "${CMAKE_CURRENT_SOURCE_DIR}/po/tio-gui.pot"
-            src/main.c src/settings.c
+            src/main.c src/settings.c src/analyzer.c
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Regenerating po/tio-gui.pot"
     VERBATIM
