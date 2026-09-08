@@ -20,6 +20,9 @@ typedef struct {
     gchar *stop_bits;
     gchar *parity;
     gchar *flow;
+    gboolean reconnect, connection_notify, connection_sound;
+    guint auto_connect; /* 0 direct, 1 new, 2 latest */
+    gchar *exclude_devices, *exclude_drivers, *exclude_tids;
     guint dtr_default, rts_default; /* 0 unchanged, 1 low, 2 high */
     guint line_pulse_ms;
     gboolean rs485;

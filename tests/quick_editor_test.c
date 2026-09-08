@@ -218,6 +218,41 @@ static void check_line_controls_real_tio(void)
     g_object_unref(tab.status_label);
 }
 
+static void check_reconnect_observer(void)
+{
+    const char *pid_text = g_getenv("TIO_TEST_TIO_PID");
+    const char *device = g_getenv("TIO_TEST_TIO_DEVICE");
+    if (!pid_text || !device) { g_test_skip("Run reconnect_acceptance.py"); return; }
+    TioTab tab = {0};
+    tio_session_config_init(&tab.config);
+    tab.config.device = g_strdup(device);
+    tab.child_pid = atoi(pid_text);
+    tab.status_label = GTK_LABEL(g_object_ref_sink(gtk_label_new("")));
+    tab.send_entry = GTK_ENTRY(g_object_ref_sink(gtk_entry_new()));
+    tab.send_button = GTK_BUTTON(g_object_ref_sink(gtk_button_new()));
+    for (guint stage = 0; stage < 3; ++stage) {
+        gint64 until = g_get_monotonic_time() + 8 * G_TIME_SPAN_SECOND;
+        gboolean expected = stage != 1;
+        do {
+            observe_connection(&tab);
+            if (tab.observed_connected == expected) break;
+            g_usleep(10000);
+        } while (g_get_monotonic_time() < until);
+        g_assert_cmpint(tab.observed_connected, ==, expected);
+        g_assert_cmpint(gtk_widget_get_sensitive(GTK_WIDGET(tab.send_button)), ==, expected);
+        g_print("WATCH_%u\n", stage);
+        fflush(stdout);
+    }
+    g_assert_cmpuint(tab.reconnect_count, ==, 1);
+    g_assert_nonnull(tab.disconnect_reason);
+    g_free(tab.disconnect_reason);
+    g_free(tab.observed_device);
+    g_object_unref(tab.status_label);
+    g_object_unref(tab.send_entry);
+    g_object_unref(tab.send_button);
+    tio_session_config_clear(&tab.config);
+}
+
 int main(int argc, char **argv)
 {
     g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
@@ -229,6 +264,7 @@ int main(int argc, char **argv)
     g_test_add_func("/sequences/editor-persistence", check_sequence_editor);
     g_test_add_func("/sequences/real-tio", check_sequence_real_tio);
     g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
+    g_test_add_func("/connection/real-reconnect", check_reconnect_observer);
     int result = g_test_run();
     g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);
     g_autofree gchar *directory = g_path_get_dirname(file);

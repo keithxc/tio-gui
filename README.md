@@ -22,7 +22,10 @@ Early development. The first release targets x86-64 Linux.
   driver support determine whether an adapter can apply these options.
 - Set the `tio` output character delay and output line delay for slow or fragile receivers
 - Start and stop a `tio` session inside an embedded terminal
-- Preserve `tio` automatic reconnection behavior
+- Configure automatic reconnection, same/new/latest device selection, exclusions and
+  optional notifications/sound. Connection status reflects the serial descriptor
+  actually open in tio, with observed reconnect counts and the last disconnect reason.
+  Device selection remains delegated to tio.
 - Report missing devices, permissions, and process failures clearly
 
 ### Sessions

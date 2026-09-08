@@ -5,7 +5,7 @@
 gboolean tio_serial_options_validate(const TioSessionConfig *config, GError **error)
 {
     g_auto(GStrv) parts = NULL;
-    if (config->dtr_default > 2 || config->rts_default > 2 || config->line_pulse_ms > 10000) goto invalid;
+    if (config->auto_connect > 2 || config->dtr_default > 2 || config->rts_default > 2 || config->line_pulse_ms > 10000) goto invalid;
     if (!config->rs485 || !*config->rs485_config) return TRUE;
     parts = g_strsplit(config->rs485_config, ",", -1);
     const char *flags[] = {"RX_DURING_TX", NULL};
@@ -44,6 +44,15 @@ gchar *tio_line_script(guint line, gboolean high)
 
 void tio_serial_options_append(GPtrArray *arguments, const TioSessionConfig *config)
 {
+    const char *strategies[] = {"direct", "new", "latest"};
+    g_ptr_array_add(arguments, g_strdup("--auto-connect"));
+    g_ptr_array_add(arguments, g_strdup(strategies[MIN(config->auto_connect, 2u)]));
+    if (!config->reconnect) g_ptr_array_add(arguments, g_strdup("--no-reconnect"));
+    const char *keys[] = {"--exclude-devices", "--exclude-drivers", "--exclude-tids"};
+    const char *values[] = {config->exclude_devices, config->exclude_drivers, config->exclude_tids};
+    for (guint i = 0; i < 3; ++i) {
+        if (*values[i]) { g_ptr_array_add(arguments, g_strdup(keys[i])); g_ptr_array_add(arguments, g_strdup(values[i])); }
+    }
     if (config->dtr_default || config->rts_default) {
         GString *script = g_string_new("local api = tio or _G; api.set{");
         if (config->dtr_default) g_string_append_printf(script, "DTR=%u,", config->dtr_default - 1);

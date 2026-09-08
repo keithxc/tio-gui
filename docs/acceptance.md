@@ -84,3 +84,22 @@ The shim is never installed or loaded into the application. It verifies software
 behavior and is not an electrical test. tio uses electrical HIGH/LOW terminology:
 HIGH clears the active-low modem-control bit. Break submission is exercised but
 its electrical waveform is not measured.
+
+## Reconnect policy and observed state — 2026-09-08
+
+Per-session settings now expose automatic reconnect, direct/new/latest device
+selection, exclusions for device/driver/topology, and optional desktop notification
+or sound. New/latest omits the positional device and delegates selection to tio.
+
+The GUI observes only its exact child's `/proc/PID/fd` entries, without opening
+or reading the serial device. It displays waiting until tio has a serial descriptor,
+disables payload sends while disconnected, stops pending sequences/delays on an
+observed disconnect, and counts observed reconnections. The last reason distinguishes
+an absent serial descriptor from a child exit; it does not invent a USB hardware
+failure reason. A one-second observer may miss disconnects shorter than its interval.
+
+`connection-state` tests a PTY descriptor opening and closing. The end-to-end
+`python3 tests/reconnect_acceptance.py .cache/build` unplugs/replaces a PTY beneath
+real tio and runs the actual GUI observer, verifying connected → disconnected →
+reconnected, input gating, last reason and count = 1. CLI options are covered by
+`serial-options`; desktop notification delivery remains dependent on the desktop.

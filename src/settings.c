@@ -95,6 +95,10 @@ void tio_session_config_init(TioSessionConfig *config)
 
     *config = (TioSessionConfig){
         .baud = g_strdup("115200"),
+        .reconnect = TRUE,
+        .exclude_devices = g_strdup(""),
+        .exclude_drivers = g_strdup(""),
+        .exclude_tids = g_strdup(""),
         .line_pulse_ms = 100,
         .rs485_config = g_strdup(""),
         .data_bits = g_strdup("8"),
@@ -142,6 +146,14 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
     replace_string(&destination->log_file, source->log_file);
     replace_string(&destination->rs485_config, source->rs485_config);
     destination->rs485 = source->rs485;
+    destination->reconnect = source->reconnect;
+    destination->connection_notify = source->connection_notify;
+    destination->connection_sound = source->connection_sound;
+    destination->auto_connect = source->auto_connect;
+    replace_string(&destination->exclude_devices, source->exclude_devices);
+    replace_string(&destination->exclude_drivers, source->exclude_drivers);
+    replace_string(&destination->exclude_tids, source->exclude_tids);
+
     destination->dtr_default = source->dtr_default;
     destination->rts_default = source->rts_default;
     destination->line_pulse_ms = source->line_pulse_ms;
@@ -171,6 +183,10 @@ void tio_session_config_clear(TioSessionConfig *config)
     }
 
     g_clear_pointer(&config->rs485_config, g_free);
+    g_clear_pointer(&config->exclude_devices, g_free);
+    g_clear_pointer(&config->exclude_drivers, g_free);
+    g_clear_pointer(&config->exclude_tids, g_free);
+
     g_clear_pointer(&config->device, g_free);
     g_clear_pointer(&config->device_id, g_free);
     g_clear_pointer(&config->baud, g_free);
@@ -221,6 +237,13 @@ static void session_config_read(GKeyFile *key_file,
     replace_string_from_key(key_file, group, "parity", &config->parity);
     replace_string_from_key(key_file, group, "flow", &config->flow);
     replace_string_from_key(key_file, group, "line-ending", &config->line_ending);
+    replace_boolean_from_key(key_file, group, "reconnect", &config->reconnect);
+    replace_boolean_from_key(key_file, group, "connection-notify", &config->connection_notify);
+    replace_boolean_from_key(key_file, group, "connection-sound", &config->connection_sound);
+    replace_uint_from_key(key_file, group, "auto-connect", &config->auto_connect, 2);
+    replace_optional_string_from_key(key_file, group, "exclude-devices", &config->exclude_devices);
+    replace_optional_string_from_key(key_file, group, "exclude-drivers", &config->exclude_drivers);
+    replace_optional_string_from_key(key_file, group, "exclude-tids", &config->exclude_tids);
     replace_uint_from_key(key_file, group, "dtr-default", &config->dtr_default, 2);
     replace_uint_from_key(key_file, group, "rts-default", &config->rts_default, 2);
     replace_uint_from_key(key_file, group, "line-pulse-ms", &config->line_pulse_ms, 10000);
@@ -280,6 +303,13 @@ static void session_config_write(GKeyFile *key_file,
     g_key_file_set_string(key_file, group, "parity", config->parity);
     g_key_file_set_string(key_file, group, "flow", config->flow);
     g_key_file_set_string(key_file, group, "line-ending", config->line_ending);
+    g_key_file_set_boolean(key_file, group, "reconnect", config->reconnect);
+    g_key_file_set_boolean(key_file, group, "connection-notify", config->connection_notify);
+    g_key_file_set_boolean(key_file, group, "connection-sound", config->connection_sound);
+    g_key_file_set_integer(key_file, group, "auto-connect", (gint)config->auto_connect);
+    g_key_file_set_string(key_file, group, "exclude-devices", config->exclude_devices);
+    g_key_file_set_string(key_file, group, "exclude-drivers", config->exclude_drivers);
+    g_key_file_set_string(key_file, group, "exclude-tids", config->exclude_tids);
     g_key_file_set_integer(key_file, group, "dtr-default", (gint)config->dtr_default);
     g_key_file_set_integer(key_file, group, "rts-default", (gint)config->rts_default);
     g_key_file_set_integer(key_file, group, "line-pulse-ms", (gint)config->line_pulse_ms);

@@ -26,6 +26,7 @@
 #include "quick_presets.h"
 #include "sequence.h"
 #include "serial_options.h"
+#include "connection_state.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -159,6 +160,12 @@ struct _TioTab {
     GtkLabel *flow_label;
     GtkLabel *output_delay_label;
     GtkLabel *output_line_delay_label;
+    GtkCheckButton *reconnect_check, *connection_notify_check, *connection_sound_check;
+    GtkDropDown *auto_connect_dropdown;
+    GtkEntry *exclude_devices_entry, *exclude_drivers_entry, *exclude_tids_entry;
+    gboolean observed_connected, ever_connected, connection_checked;
+    guint reconnect_count;
+    gchar *observed_device, *disconnect_reason;
     GtkDropDown *dtr_default, *rts_default;
     GtkSpinButton *line_pulse_spin;
     GtkCheckButton *rs485_check;
@@ -692,7 +699,8 @@ static void on_device_item_bind(GtkSignalListItemFactory *factory,
         return;
     }
     const char *device = gtk_string_object_get_string(entry);
-    if (tab_holding_device(tab->app, device, tab) != NULL) {
+    if (gtk_drop_down_get_selected(tab->auto_connect_dropdown) == 0 &&
+        tab_holding_device(tab->app, device, tab) != NULL) {
         g_autofree gchar *text = g_strdup_printf(_("%s · in use"), device);
         gtk_label_set_text(GTK_LABEL(label), text);
         gtk_widget_add_css_class(label, "dim-label");
@@ -866,6 +874,16 @@ static void capture_session_config(TioTab *tab, TioSessionConfig *config)
     g_free(config->log_file);
     config->log_file = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->log_file_entry)));
 
+    config->reconnect = gtk_check_button_get_active(tab->reconnect_check);
+    config->connection_notify = gtk_check_button_get_active(tab->connection_notify_check);
+    config->connection_sound = gtk_check_button_get_active(tab->connection_sound_check);
+    config->auto_connect = gtk_drop_down_get_selected(tab->auto_connect_dropdown);
+    g_free(config->exclude_devices);
+    config->exclude_devices = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->exclude_devices_entry)));
+    g_free(config->exclude_drivers);
+    config->exclude_drivers = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->exclude_drivers_entry)));
+    g_free(config->exclude_tids);
+    config->exclude_tids = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->exclude_tids_entry)));
     config->dtr_default = gtk_drop_down_get_selected(tab->dtr_default);
     config->rts_default = gtk_drop_down_get_selected(tab->rts_default);
     config->line_pulse_ms = (guint)gtk_spin_button_get_value_as_int(tab->line_pulse_spin);
@@ -923,6 +941,13 @@ static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
                               : log_filename_templates[filename_index]);
     gtk_widget_set_visible(GTK_WIDGET(tab->log_file_entry),
                            filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gtk_check_button_set_active(tab->reconnect_check, config->reconnect);
+    gtk_check_button_set_active(tab->connection_notify_check, config->connection_notify);
+    gtk_check_button_set_active(tab->connection_sound_check, config->connection_sound);
+    gtk_drop_down_set_selected(tab->auto_connect_dropdown, config->auto_connect);
+    gtk_editable_set_text(GTK_EDITABLE(tab->exclude_devices_entry), config->exclude_devices);
+    gtk_editable_set_text(GTK_EDITABLE(tab->exclude_drivers_entry), config->exclude_drivers);
+    gtk_editable_set_text(GTK_EDITABLE(tab->exclude_tids_entry), config->exclude_tids);
     gtk_drop_down_set_selected(tab->dtr_default, config->dtr_default);
     gtk_drop_down_set_selected(tab->rts_default, config->rts_default);
     gtk_spin_button_set_value(tab->line_pulse_spin, config->line_pulse_ms);
@@ -1209,9 +1234,54 @@ static char parity_letter(const char *parity)
     return 'N';
 }
 
+static void observe_connection(TioTab *tab)
+{
+    g_autofree gchar *device = tio_connection_device(tab->child_pid,
+        tab->config.auto_connect == 0 ? tab->config.device : NULL);
+    gboolean connected = device != NULL;
+    gboolean changed = connected != tab->observed_connected;
+    tab->connection_checked = TRUE;
+    tab->observed_connected = connected;
+    gtk_widget_set_sensitive(GTK_WIDGET(tab->send_entry), connected);
+    gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), connected);
+    update_quick_buttons(tab);
+    if (!changed) return;
+    g_free(tab->observed_device);
+    tab->observed_device = g_strdup(device);
+    g_autofree gchar *message = NULL;
+    if (connected) {
+        if (tab->ever_connected) ++tab->reconnect_count;
+        tab->ever_connected = TRUE;
+        tab->connected_at = g_get_monotonic_time();
+        message = g_strdup_printf(_("Connected to %s"), device);
+    } else {
+        g_free(tab->disconnect_reason);
+        tab->disconnect_reason = g_strdup(_("tio no longer has the serial device open"));
+        message = g_strdup(_("Device disconnected; waiting for tio to reconnect"));
+        /* A sequence must never continue by surprise when a board reboots. */
+        g_clear_pointer(&tab->sequence_runner, tio_sequence_runner_free);
+        if (tab->quick_send_timer) { g_source_remove(tab->quick_send_timer); tab->quick_send_timer = 0; }
+        g_clear_pointer(&tab->quick_pending, g_byte_array_unref);
+    }
+    set_status(tab, message);
+    gtk_widget_set_sensitive(GTK_WIDGET(tab->send_entry), connected);
+    gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), connected);
+    update_quick_buttons(tab);
+    if (tab->config.connection_sound) gdk_display_beep(gdk_display_get_default());
+    if (tab->config.connection_notify) {
+        GtkApplication *application = gtk_window_get_application(GTK_WINDOW(tab->app->window));
+        if (application) {
+            g_autoptr(GNotification) notification = g_notification_new(_("Serial connection"));
+            g_notification_set_body(notification, message);
+            g_autofree gchar *id = g_strdup_printf("serial-%p", (void *)tab);
+            g_application_send_notification(G_APPLICATION(application), id, notification);
+        }
+    }
+}
+
 static void update_session_label(TioTab *tab)
 {
-    const char *device = selected_string(tab->device_dropdown);
+    const char *device = tab->observed_device ? tab->observed_device : selected_string(tab->device_dropdown);
     const char *baud = selected_baud(tab);
     const char *data_bits = selected_string(tab->data_bits_dropdown);
     const char *stop_bits = selected_string(tab->stop_bits_dropdown);
@@ -1228,7 +1298,7 @@ static void update_session_label(TioTab *tab)
                            stop_bits != NULL ? stop_bits : "?",
                            flow != NULL ? flow : "?");
 
-    if (tab->child_pid > 0) {
+    if (tab->observed_connected) {
         gint64 seconds = (g_get_monotonic_time() - tab->connected_at) / G_USEC_PER_SEC;
         g_string_append_printf(text,
                                " · %02d:%02d:%02d",
@@ -1236,6 +1306,13 @@ static void update_session_label(TioTab *tab)
                                (int)((seconds / 60) % 60),
                                (int)(seconds % 60));
     }
+
+    if (tab->child_pid > 0 && !tab->observed_connected)
+        g_string_append_printf(text, " · %s", _("waiting for device"));
+    if (tab->reconnect_count)
+        g_string_append_printf(text, _(" · reconnects: %u"), tab->reconnect_count);
+    if (tab->disconnect_reason)
+        gtk_widget_set_tooltip_text(GTK_WIDGET(tab->status_label), tab->disconnect_reason);
 
     if (tab->child_pid > 0 && tab->raw != NULL) {
         g_autofree gchar *received = g_format_size(tab->rx_bytes);
@@ -1273,6 +1350,8 @@ static gboolean on_session_tick(gpointer user_data)
 {
     TioTab *tab = user_data;
 
+    observe_connection(tab);
+
     /* The tick is one second, so the byte delta is the rate. */
     tab->rx_rate = tab->rx_bytes - tab->rx_bytes_at_tick;
     tab->rx_bytes_at_tick = tab->rx_bytes;
@@ -1306,6 +1385,9 @@ static void on_child_exited(VteTerminal *terminal, gint status, gpointer user_da
     TioTab *tab = user_data;
 
     tab->child_pid = -1;
+    tab->observed_connected = FALSE;
+    g_free(tab->disconnect_reason);
+    tab->disconnect_reason = g_strdup_printf(_("tio exited with status %d"), status);
     stop_session_timer(tab);
     raw_tap_stop(tab);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->connect_button), TRUE);
@@ -1348,7 +1430,8 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->hex_toggle), FALSE);
     update_quick_buttons(tab);
-    set_status(tab, _("Connected"));
+    set_status(tab, _("Waiting for serial device…"));
+    observe_connection(tab);
     stop_session_timer(tab);
     tab->session_timer = g_timeout_add_seconds(1, on_session_tick, tab);
     update_session_label(tab);
@@ -1662,7 +1745,7 @@ static gchar **build_tio_argv(const TioSessionConfig *config,
     }
 
     tio_serial_options_append(arguments, config);
-    g_ptr_array_add(arguments, g_strdup(config->device));
+    if (config->auto_connect == 0) g_ptr_array_add(arguments, g_strdup(config->device));
     g_ptr_array_add(arguments, NULL);
     return (gchar **)g_ptr_array_free(arguments, FALSE);
 }
@@ -1689,7 +1772,7 @@ static void connect_tio(TioTab *tab)
     const char *device = selected_string(tab->device_dropdown);
     const char *baud = selected_baud(tab);
 
-    if (device == NULL || baud == NULL) {
+    if ((device == NULL && gtk_drop_down_get_selected(tab->auto_connect_dropdown) == 0) || baud == NULL) {
         set_status(tab, _("Select a serial device and baud rate first"));
         return;
     }
@@ -1759,6 +1842,12 @@ static void connect_tio(TioTab *tab)
     tab->rx_lines = 0;
     tab->rx_bytes_at_tick = 0;
     tab->rx_rate = 0;
+    tab->observed_connected = FALSE;
+    tab->ever_connected = FALSE;
+    tab->connection_checked = TRUE;
+    tab->reconnect_count = 0;
+    g_clear_pointer(&tab->observed_device, g_free);
+    g_clear_pointer(&tab->disconnect_reason, g_free);
 
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
     tab->spawn_argv = build_tio_argv(config, tab->log_path, tab->socket_path);
@@ -1864,7 +1953,7 @@ static void on_payload_written(GObject *source, GAsyncResult *result, gpointer d
 static gboolean send_payload(TioTab *tab, const GByteArray *bytes)
 {
     TioRawTap *tap = tab->raw;
-    if (tab->child_pid <= 0 || !tap) {
+    if (tab->child_pid <= 0 || !tap || (tab->connection_checked && !tab->observed_connected)) {
         set_status(tab, _("Serial data channel is not ready"));
         return FALSE;
     }
@@ -2473,6 +2562,7 @@ static void update_quick_buttons(TioTab *tab)
                                     tab->config.quick_payloads[index]);
         gtk_widget_set_sensitive(GTK_WIDGET(button),
                                  tab->child_pid > 0 &&
+                                     (!tab->connection_checked || tab->observed_connected) &&
                                      tab->config.quick_payloads[index][0] != '\0');
     }
 }
@@ -2776,7 +2866,8 @@ typedef struct {
 static TioSequenceSendResult sequence_send(const GByteArray *bytes, gpointer data)
 {
     TioTab *tab = data;
-    if (tab->child_pid <= 0 || !tab->raw || tab->raw->send_failed) return TIO_SEQUENCE_ERROR;
+    if (tab->child_pid <= 0 || !tab->raw || tab->raw->send_failed ||
+        (tab->connection_checked && !tab->observed_connected)) return TIO_SEQUENCE_ERROR;
     if (tab->raw->sending) return TIO_SEQUENCE_WAIT;
     if (!bytes->len) return TIO_SEQUENCE_ACCEPT;
     return send_payload(tab, bytes) ? TIO_SEQUENCE_ACCEPT : TIO_SEQUENCE_ERROR;
@@ -3154,6 +3245,41 @@ static void on_line_control(GtkButton *button, gpointer data)
     tab->line_command_timer = g_timeout_add(50, line_command_prompt, tab);
 }
 
+static GtkWidget *reconnect_controls_new(TioTab *tab)
+{
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    tab->reconnect_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Automatic reconnect")));
+    const char *strategies[] = {_("Same device"), _("Next new device"), _("Latest device"), NULL};
+    tab->auto_connect_dropdown = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(strategies));
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->reconnect_check));
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->auto_connect_dropdown));
+    gtk_box_append(GTK_BOX(box), row);
+    tab->exclude_devices_entry = GTK_ENTRY(gtk_entry_new());
+    tab->exclude_drivers_entry = GTK_ENTRY(gtk_entry_new());
+    tab->exclude_tids_entry = GTK_ENTRY(gtk_entry_new());
+    GtkEntry *entries[] = {tab->exclude_devices_entry, tab->exclude_drivers_entry, tab->exclude_tids_entry};
+    const char *labels[] = {_("Exclude devices"), _("Exclude drivers"), _("Exclude topology IDs")};
+    for (guint i = 0; i < 3; ++i) {
+        row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        gtk_box_append(GTK_BOX(row), make_label(labels[i]));
+        gtk_widget_set_hexpand(GTK_WIDGET(entries[i]), TRUE);
+        gtk_entry_set_placeholder_text(entries[i], _("Comma-separated patterns; * and ? supported"));
+        gtk_box_append(GTK_BOX(row), GTK_WIDGET(entries[i]));
+        gtk_box_append(GTK_BOX(box), row);
+    }
+    row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    tab->connection_notify_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Desktop notifications")));
+    tab->connection_sound_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Connection sound")));
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->connection_notify_check));
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->connection_sound_check));
+    gtk_box_append(GTK_BOX(box), row);
+    GtkWidget *hint = gtk_label_new(_("Strategy changes apply on the next connection. New/latest lets tio choose a port. Reconnect counts reflect observed transitions."));
+    gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+    gtk_box_append(GTK_BOX(box), hint);
+    return box;
+}
+
 static GtkWidget *line_controls_new(TioTab *tab)
 {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
@@ -3422,6 +3548,8 @@ static void tio_tab_free(TioTab *tab)
     g_clear_pointer(&tab->history_draft, g_free);
     g_clear_pointer(&tab->search_pattern, g_free);
     g_clear_pointer(&tab->pending_profile_delete, g_free);
+    g_clear_pointer(&tab->observed_device, g_free);
+    g_clear_pointer(&tab->disconnect_reason, g_free);
     tio_session_config_clear(&tab->config);
     g_free(tab);
 }
@@ -4467,6 +4595,9 @@ static TioTab *tio_tab_new(TioApp *app)
     GtkWidget *line_expander = gtk_expander_new(_("Serial lines / RS-485"));
     gtk_expander_set_child(GTK_EXPANDER(line_expander), line_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), line_expander);
+    GtkWidget *reconnect_expander = gtk_expander_new(_("Reconnect strategy"));
+    gtk_expander_set_child(GTK_EXPANDER(reconnect_expander), reconnect_controls_new(tab));
+    gtk_box_append(GTK_BOX(session_settings), reconnect_expander);
     gtk_expander_set_child(GTK_EXPANDER(tab->session_settings_expander), session_settings);
     gtk_expander_set_expanded(GTK_EXPANDER(tab->session_settings_expander),
                               app->settings.advanced_expanded);
@@ -4751,7 +4882,7 @@ static void update_tab_label(TioTab *tab)
     if (tab->tab_label == NULL) {
         return;
     }
-    const char *device = selected_string(tab->device_dropdown);
+    const char *device = tab->observed_device ? tab->observed_device : selected_string(tab->device_dropdown);
     const char *baud = selected_baud(tab);
     g_autofree gchar *text = NULL;
     if (device != NULL && device[0] != '\0') {
