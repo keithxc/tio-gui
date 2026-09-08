@@ -54,6 +54,7 @@
           vte-gtk4
           tio
           lrzsz
+          mosquitto
           bubblewrap
           quickjs
           lua5_4

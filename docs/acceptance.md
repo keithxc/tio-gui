@@ -268,3 +268,25 @@ and real-tio/PTY RTU responses and decode registers 0x1234/0xABCD. Additional pe
 exercise mismatched transactions, exception frames and silence/timeouts. Protocol
 references: [application specification](https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)
 and [TCP implementation guide](https://modbus.org/docs/Modbus_Messaging_Implementation_Guide_V1_0b.pdf).
+
+## MQTT debugging — 2026-09-08
+
+MQTT 3.1.1 tools provide a clean-session TCP client with optional username/password,
+subscription filters/unsubscribe, QoS 0/1 publication, retain, text/HEX payload preview,
+message topic/QoS/retain metadata and payload analysis. Credentials are not saved.
+This implementation uses plain TCP; TLS, QoS 2, persistent sessions and wills are
+not part of this tool. It does not claim QoS 0 delivery acknowledgement.
+
+The bounded codec uses the network backend, validates UTF-8/topics/flags/lengths,
+correlates acknowledgement IDs, answers incoming QoS 1 publications, handles
+keepalive and handshake timeout, and limits packets to 64 KiB, RX accumulation to
+128 KiB and pending acknowledgements to 64. It closes on malformed/oversized input
+instead of allocating the protocol's theoretical maximum packet size. Reference:
+[OASIS MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html).
+
+A temporary localhost Mosquitto broker verifies full binary publication at QoS 1,
+subscription acknowledgements, retained delivery after resubscription, unsubscribe
+and cancellation. Malformed lengths/CONNACK/PUBLISH frames are rejected. The GTK
+test separately drives actual connection, subscribe, HEX publish/preview, received
+message and analyzer controls. The broker is stopped and its temporary configuration
+removed after every test; no external broker or user credentials are used.

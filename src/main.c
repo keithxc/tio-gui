@@ -33,6 +33,7 @@
 #include "transfer.h"
 #include "network_ui.h"
 #include "modbus_ui.h"
+#include "mqtt_ui.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -3340,6 +3341,11 @@ static void highlight_rules_save(GtkButton *button, gpointer data)
     if (!tio_settings_save(&editor->app->settings, &error)) gtk_label_set_text(editor->status, error->message);
     else gtk_label_set_text(editor->status, _("Saved for all sessions; applies to incoming lines"));
 }
+static void on_mqtt_tools(GtkButton *button, gpointer data)
+{
+    (void)button; TioApp *app = data; tio_mqtt_window(GTK_WINDOW(app->window));
+}
+
 static void on_modbus_tcp(GtkButton *button, gpointer data)
 {
     (void)button; TioApp *app = data; tio_modbus_window(GTK_WINDOW(app->window), NULL);
@@ -4667,6 +4673,9 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
     gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
 
+    GtkWidget *mqtt_button = gtk_button_new_with_label(_("MQTT debugging…"));
+    g_signal_connect(mqtt_button, "clicked", G_CALLBACK(on_mqtt_tools), app);
+    gtk_box_append(GTK_BOX(root), mqtt_button);
     GtkWidget *modbus_button = gtk_button_new_with_label(_("Modbus TCP…"));
     g_signal_connect(modbus_button, "clicked", G_CALLBACK(on_modbus_tcp), app);
     gtk_box_append(GTK_BOX(root), modbus_button);
