@@ -68,6 +68,7 @@ typedef struct {
        reconnecting serial ports without being asked is not always wanted. */
     gboolean restore_tabs;
     GPtrArray *profiles;    /* TioProfile *, in display order */
+    gchar *highlight_rules;
     GPtrArray *sequences;  /* serialized named sequences */
     GPtrArray *history;     /* gchar *, oldest first */
     GPtrArray *tab_configs; /* TioSessionConfig *, in tab order */

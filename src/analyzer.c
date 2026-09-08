@@ -218,6 +218,7 @@ static void apply_filter(GtkWidget *widget, gpointer data)
 {
     (void)widget;
     Analyzer *view = data;
+    if (view->updating) return;
     guint mask = 0;
     for (guint i = 0; i < TIO_LOG_LEVELS; ++i) if (gtk_check_button_get_active(view->levels[i])) mask |= 1u << i;
     g_autoptr(GError) error = NULL;
@@ -240,6 +241,98 @@ static void apply_filter(GtkWidget *widget, gpointer data)
         gtk_check_button_set_label(view->curves[i], *view->field_names[i] ? view->field_names[i] : "—");
     }
     view->rebuild = TRUE;
+}
+
+/* A portable declarative parser preset, with no executable actions. */
+static gchar *rules_export(Analyzer *view)
+{
+    g_autoptr(GKeyFile) file = g_key_file_new();
+    g_key_file_set_integer(file, "parser", "version", 1);
+    g_key_file_set_string(file, "parser", "trigger", gtk_editable_get_text(GTK_EDITABLE(view->filter_entry)));
+    g_key_file_set_boolean(file, "parser", "regex", gtk_check_button_get_active(view->regex));
+    g_key_file_set_boolean(file, "parser", "case-sensitive", gtk_check_button_get_active(view->sensitive));
+    g_key_file_set_string(file, "parser", "extract", gtk_editable_get_text(GTK_EDITABLE(view->extract_entry)));
+    g_key_file_set_string(file, "parser", "fields", gtk_editable_get_text(GTK_EDITABLE(view->fields_entry)));
+    guint mask = 0;
+    for (guint i = 0; i < TIO_LOG_LEVELS; ++i) if (gtk_check_button_get_active(view->levels[i])) mask |= 1u << i;
+    g_key_file_set_integer(file, "parser", "levels", (gint)mask);
+    g_key_file_set_integer(file, "parser", "points", gtk_spin_button_get_value_as_int(view->point_limit));
+    return g_key_file_to_data(file, NULL, NULL);
+}
+static gboolean rules_import(Analyzer *view, const char *text, gsize length, GError **error)
+{
+    g_autoptr(GKeyFile) file = g_key_file_new();
+    if (length > 65536 || memchr(text, 0, length) || !g_key_file_load_from_data(file, text, length, G_KEY_FILE_NONE, error)) return FALSE;
+    g_autofree gchar *trigger = g_key_file_get_string(file, "parser", "trigger", NULL);
+    g_autofree gchar *extract = g_key_file_get_string(file, "parser", "extract", NULL);
+    g_autofree gchar *fields = g_key_file_get_string(file, "parser", "fields", NULL);
+    gint version = g_key_file_get_integer(file, "parser", "version", NULL);
+    gint levels = g_key_file_get_integer(file, "parser", "levels", NULL);
+    gint points = g_key_file_get_integer(file, "parser", "points", NULL);
+    gboolean regex = g_key_file_get_boolean(file, "parser", "regex", NULL);
+    gboolean sensitive = g_key_file_get_boolean(file, "parser", "case-sensitive", NULL);
+    if (version != 1 || !trigger || !extract || !fields || strlen(trigger) > 1024 || strlen(extract) > 1024 ||
+        strlen(fields) > 1024 || levels < 0 || levels > 127 || points < 10 || points > 5000) {
+        g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE, "Invalid parser rule fields or version"); return FALSE;
+    }
+    TioLogFilter *filter = tio_log_filter_new(trigger, regex, sensitive, (guint)levels, error);
+    if (!filter) return FALSE;
+    tio_log_filter_free(filter);
+    if (*extract) {
+        filter = tio_log_filter_new(extract, TRUE, TRUE, 127, error);
+        if (!filter) return FALSE;
+        tio_log_filter_free(filter);
+    }
+    view->updating = TRUE;
+    gtk_editable_set_text(GTK_EDITABLE(view->filter_entry), trigger);
+    gtk_editable_set_text(GTK_EDITABLE(view->extract_entry), extract);
+    gtk_editable_set_text(GTK_EDITABLE(view->fields_entry), fields);
+    gtk_check_button_set_active(view->regex, regex); gtk_check_button_set_active(view->sensitive, sensitive);
+    for (guint i = 0; i < TIO_LOG_LEVELS; ++i) gtk_check_button_set_active(view->levels[i], (levels & (1 << i)) != 0);
+    gtk_spin_button_set_value(view->point_limit, points);
+    view->updating = FALSE; apply_filter(NULL, view);
+    return TRUE;
+}
+typedef struct { GWeakRef window; gboolean save; gchar *snapshot; } RuleRequest;
+static void rules_file_selected(GObject *source, GAsyncResult *result, gpointer data)
+{
+    RuleRequest *request = data;
+    g_autoptr(GObject) window = g_weak_ref_get(&request->window);
+    gboolean save = request->save; g_autofree gchar *snapshot = request->snapshot;
+    g_weak_ref_clear(&request->window); g_free(request);
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = save ? gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error)
+                               : gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window)) || !file) return;
+    Analyzer *view = g_object_get_data(window, "analyzer");
+    gboolean ok = FALSE;
+    if (save) ok = g_file_replace_contents(file, snapshot, strlen(snapshot), NULL, FALSE, G_FILE_CREATE_PRIVATE, NULL, NULL, &error);
+    else {
+        g_autoptr(GFileInfo) info = g_file_query_info(file, G_FILE_ATTRIBUTE_STANDARD_TYPE, G_FILE_QUERY_INFO_NONE, NULL, &error);
+        if (info && g_file_info_get_file_type(info) == G_FILE_TYPE_REGULAR) {
+            g_autoptr(GFileInputStream) input = g_file_read(file, NULL, &error);
+            if (input) {
+                gchar text[65537]; gsize length = 0;
+                if (g_input_stream_read_all(G_INPUT_STREAM(input), text, sizeof text, &length, NULL, &error))
+                    ok = rules_import(view, text, length, &error);
+            }
+        }
+    }
+    gtk_label_set_text(view->status, ok ? (save ? _("Parser rules saved") : _("Parser rules loaded"))
+        : error ? error->message : _("Choose a valid parser rule file up to 64 KiB"));
+}
+static void rules_choose(GtkButton *button, gpointer data)
+{
+    Analyzer *view = data;
+    RuleRequest *request = g_new0(RuleRequest, 1);
+    g_weak_ref_init(&request->window, view->window);
+    request->save = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "save"));
+    request->snapshot = request->save ? rules_export(view) : NULL;
+    g_autoptr(GtkFileDialog) dialog = gtk_file_dialog_new();
+    if (request->save) {
+        gtk_file_dialog_set_initial_name(dialog, "board.tiorules");
+        gtk_file_dialog_save(dialog, GTK_WINDOW(view->window), NULL, rules_file_selected, request);
+    } else gtk_file_dialog_open(dialog, GTK_WINDOW(view->window), NULL, rules_file_selected, request);
 }
 
 static void curve_changed(GtkCheckButton *button, gpointer data)
@@ -429,6 +522,15 @@ GtkWidget *tio_analyzer_new(GtkWindow *parent, TioLogModel *model)
     gtk_box_append(GTK_BOX(filters), GTK_WIDGET(view->sensitive));
     gtk_box_append(GTK_BOX(filters), apply); gtk_box_append(GTK_BOX(filters), GTK_WIDGET(view->follow));
     gtk_box_append(GTK_BOX(filters), export); gtk_box_append(GTK_BOX(root), filters);
+    GtkWidget *rules_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    const char *rule_labels[] = {_("Load parser rules…"), _("Save parser rules…")};
+    for (guint i = 0; i < 2; ++i) {
+        GtkWidget *button = gtk_button_new_with_label(rule_labels[i]);
+        g_object_set_data(G_OBJECT(button), "save", GINT_TO_POINTER(i == 1));
+        g_signal_connect(button, "clicked", G_CALLBACK(rules_choose), view);
+        gtk_box_append(GTK_BOX(rules_row), button);
+    }
+    gtk_box_append(GTK_BOX(root), rules_row);
     GtkWidget *recording = gtk_button_new_with_label(_("Open recording…"));
     g_signal_connect(recording, "clicked", G_CALLBACK(open_replay), view);
     gtk_box_append(GTK_BOX(filters), recording);

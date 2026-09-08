@@ -35,6 +35,12 @@ static void exercise(void)
     apply_filter(NULL, view); tick(view);
     g_assert_cmpuint(view->points[0]->len, ==, 1);
     g_assert_cmpfloat(g_array_index(view->points[0], Point, 0).y, ==, 25);
+    g_autofree gchar *preset = rules_export(view);
+    gtk_editable_set_text(GTK_EDITABLE(view->fields_entry), "wrong");
+    g_assert_true(rules_import(view, preset, strlen(preset), NULL));
+    g_assert_cmpstr(gtk_editable_get_text(GTK_EDITABLE(view->fields_entry)), ==, "temp,voltage");
+    g_assert_false(rules_import(view, "[parser]\nversion=99\n", 20, NULL));
+    g_assert_cmpstr(gtk_editable_get_text(GTK_EDITABLE(view->filter_entry)), ==, "ERROR");
     gtk_editable_set_text(GTK_EDITABLE(view->filter_entry), "");
     gtk_editable_set_text(GTK_EDITABLE(view->extract_entry), "");
     apply_filter(NULL, view); tick(view);

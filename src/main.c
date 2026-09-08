@@ -3319,6 +3319,56 @@ static void on_line_control(GtkButton *button, gpointer data)
     tab->line_command_timer = g_timeout_add(50, line_command_prompt, tab);
 }
 
+/* ----------------------------------------------------- custom highlighting */
+typedef struct { TioApp *app; GtkTextView *text; GtkLabel *status; } HighlightEditor;
+static void highlight_rules_save(GtkButton *button, gpointer data)
+{
+    (void)button; HighlightEditor *editor = data;
+    GtkTextIter begin, end;
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(editor->text);
+    gtk_text_buffer_get_bounds(buffer, &begin, &end);
+    g_autofree gchar *ini = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+    g_autoptr(GError) error = NULL;
+    for (guint i = 0; i < editor->app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(editor->app->tabs, i);
+        if (!tio_highlighter_rules(tab->highlighter, ini, &error)) { gtk_label_set_text(editor->status, error->message); return; }
+    }
+    g_free(editor->app->settings.highlight_rules);
+    editor->app->settings.highlight_rules = g_strdup(ini);
+    if (!tio_settings_save(&editor->app->settings, &error)) gtk_label_set_text(editor->status, error->message);
+    else gtk_label_set_text(editor->status, _("Saved for all sessions; applies to incoming lines"));
+}
+static void on_highlight_rules(GtkButton *button, gpointer data)
+{
+    (void)button; TioApp *app = data;
+    GtkWidget *window = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(window), _("Custom highlight rules"));
+    gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(app->window));
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(window), 650, 460);
+    HighlightEditor *editor = g_new0(HighlightEditor, 1); editor->app = app;
+    g_object_set_data_full(G_OBJECT(window), "highlight-editor", editor, g_free);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_start(box, 12); gtk_widget_set_margin_end(box, 12);
+    gtk_widget_set_margin_top(box, 12); gtk_widget_set_margin_bottom(box, 12);
+    gtk_window_set_child(GTK_WINDOW(window), box);
+    GtkWidget *hint = gtk_label_new(_("Add up to 32 [rule:name] sections with pattern, color and optional bold=true. Rules are case-insensitive with bounded regex matching. Clear the text to reset. Included in configuration exports."));
+    gtk_label_set_wrap(GTK_LABEL(hint), TRUE); gtk_box_append(GTK_BOX(box), hint);
+    editor->text = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_text_view_set_monospace(editor->text, TRUE);
+    const char *text = app->settings.highlight_rules;
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(editor->text), text && *text ? text :
+        "[rule:board-alert]\npattern=OVERCURRENT|WATCHDOG\ncolor=#ff6699\nbold=true\n", -1);
+    GtkWidget *scroll = gtk_scrolled_window_new(); gtk_widget_set_vexpand(scroll, TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), GTK_WIDGET(editor->text));
+    gtk_box_append(GTK_BOX(box), scroll);
+    editor->status = GTK_LABEL(gtk_label_new("")); gtk_label_set_wrap(editor->status, TRUE);
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(editor->status));
+    GtkWidget *save = gtk_button_new_with_label(_("Validate and save"));
+    g_signal_connect(save, "clicked", G_CALLBACK(highlight_rules_save), editor);
+    gtk_box_append(GTK_BOX(box), save); gtk_window_present(GTK_WINDOW(window));
+}
+
 /* ----------------------------------------------------------- file transfer */
 typedef struct { GWeakRef window; guint64 tab_id; gboolean receive; } TransferRequest;
 static gboolean transfer_tick(gpointer data)
@@ -4277,6 +4327,7 @@ static void on_export_settings_clicked(GtkButton *button, gpointer user_data)
 
 static void apply_imported_settings(TioTab *tab)
 {
+    tio_highlighter_rules(tab->highlighter, tab->app->settings.highlight_rules, NULL);
     apply_theme(tab->app->settings.theme);
     gtk_drop_down_set_selected(tab->app->theme_dropdown,
                                value_index(theme_values, tab->app->settings.theme, 0));
@@ -4329,6 +4380,13 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
         tio_settings_clear(&imported);
         set_status(tab, error->message);
         return;
+    }
+    g_autoptr(GtkTextBuffer) rule_buffer = gtk_text_buffer_new(NULL);
+    TioHighlighter *rule_check = tio_highlighter_new(rule_buffer);
+    gboolean rules_valid = tio_highlighter_rules(rule_check, imported.highlight_rules, &error);
+    tio_highlighter_free(rule_check);
+    if (!rules_valid) {
+        tio_settings_clear(&imported); set_status(tab, error->message); return;
     }
     tio_settings_clear(&tab->app->settings);
     tab->app->settings = imported;
@@ -4588,6 +4646,9 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
     gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
 
+    GtkWidget *rules_button = gtk_button_new_with_label(_("Custom highlight rules…"));
+    g_signal_connect(rules_button, "clicked", G_CALLBACK(on_highlight_rules), app);
+    gtk_box_append(GTK_BOX(root), rules_button);
     app->appearance_section_label = GTK_LABEL(make_label(_("Appearance")));
     gtk_widget_add_css_class(GTK_WIDGET(app->appearance_section_label),
                              "settings-section-title");
@@ -5121,6 +5182,7 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_text_view_set_bottom_margin(tab->highlight_view, 6);
     tab->highlighter =
         tio_highlighter_new(gtk_text_view_get_buffer(tab->highlight_view));
+    tio_highlighter_rules(tab->highlighter, app->settings.highlight_rules ? app->settings.highlight_rules : "", NULL);
     GtkWidget *highlight_scroll = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(highlight_scroll),
                                    GTK_POLICY_AUTOMATIC,

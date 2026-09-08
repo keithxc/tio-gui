@@ -194,3 +194,19 @@ Transfer protocol TX goes directly through the transfer socket and is not part o
 the GUI's completed-command TX capture; incoming protocol bytes remain RX data.
 Protocol details and restricted-mode behavior were checked against the installed
 lrzsz help and [upstream lrzsz](https://www.ohse.de/uwe/software/lrzsz.html).
+
+## Declarative parser presets and custom highlighting — 2026-09-08
+
+Analyze can save/load versioned `.tiorules` files containing a substring or bounded
+regex trigger, named-capture extraction, numeric field paths, level selection and
+point retention. Loading validates the complete file before changing controls;
+files are bounded to 64 KiB. Rules have no executable actions or automatic sends.
+Built-in JSON/key/value/CSV parsing remains available without a preset.
+
+Global Custom Highlight Rules accepts up to 32 named INI sections with pattern,
+color and bold style. Rules are persisted, included in portable/full configuration
+exports, and applied to new lines in every session. Invalid replacement rules leave
+the old set intact. Built-in and custom GRegex rules now prepend explicit PCRE2
+match/depth/heap limits; previously the match-count limit alone did not constrain
+backtracking. Tests exercise an adversarial nested repetition, atomic rejection,
+custom tags/reset, and parser preset roundtrips through actual analyzer controls.

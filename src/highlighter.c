@@ -148,7 +148,8 @@ TioHighlighter *tio_highlighter_new(GtkTextBuffer *buffer) {
 
   for (guint index = 0; index < G_N_ELEMENTS(rules); ++index) {
     g_autoptr(GError) error = NULL;
-    GRegex *regex = g_regex_new(rules[index].pattern,
+    g_autofree gchar *bounded = g_strconcat("(*LIMIT_MATCH=1000)(*LIMIT_DEPTH=100)(*LIMIT_HEAP=1024)", rules[index].pattern, NULL);
+    GRegex *regex = g_regex_new(bounded,
                                 G_REGEX_CASELESS | G_REGEX_OPTIMIZE, 0, &error);
     if (regex == NULL) {
       g_warning("Could not compile highlight rule %s: %s", rules[index].name,
@@ -163,6 +164,48 @@ TioHighlighter *tio_highlighter_new(GtkTextBuffer *buffer) {
     g_array_append_val(highlighter->compiled, compiled);
   }
   return highlighter;
+}
+
+gboolean tio_highlighter_rules(TioHighlighter *highlighter, const char *ini, GError **error)
+{
+  if (!ini || strlen(ini) > 65536) {
+    g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE, "Rules must fit in 64 KiB"); return FALSE;
+  }
+  g_autoptr(GKeyFile) file = g_key_file_new();
+  if (*ini && !g_key_file_load_from_data(file, ini, strlen(ini), G_KEY_FILE_NONE, error)) return FALSE;
+  gsize count; g_auto(GStrv) groups = g_key_file_get_groups(file, &count);
+  if (count > 32) { g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE, "At most 32 highlight rules"); return FALSE; }
+  g_autoptr(GPtrArray) patterns = g_ptr_array_new_with_free_func((GDestroyNotify)g_regex_unref);
+  g_autoptr(GPtrArray) colors = g_ptr_array_new_with_free_func(g_free);
+  gboolean bold[32] = {FALSE};
+  for (guint i = 0; i < count; ++i) {
+    g_autofree gchar *pattern = g_key_file_get_string(file, groups[i], "pattern", error);
+    if (!pattern) return FALSE;
+    g_autofree gchar *color = g_key_file_get_string(file, groups[i], "color", error);
+    if (!color) return FALSE;
+    GdkRGBA rgba;
+    if (!g_str_has_prefix(groups[i], "rule:") || strlen(pattern) > 1024 || !*pattern || !gdk_rgba_parse(&rgba, color)) {
+      g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE, "Each [rule:name] needs a pattern up to 1024 bytes and a valid color"); return FALSE;
+    }
+    bold[i] = g_key_file_get_boolean(file, groups[i], "bold", NULL);
+    g_autofree gchar *bounded = g_strconcat("(*LIMIT_MATCH=1000)(*LIMIT_DEPTH=100)(*LIMIT_HEAP=1024)", pattern, NULL);
+    GRegex *regex = g_regex_new(bounded, G_REGEX_CASELESS | G_REGEX_OPTIMIZE, 0, error);
+    if (!regex) return FALSE;
+    g_ptr_array_add(patterns, regex); g_ptr_array_add(colors, g_steal_pointer(&color));
+  }
+  /* Validate the entire replacement before removing the previous custom rules. */
+  while (highlighter->compiled->len > G_N_ELEMENTS(rules)) {
+    CompiledRule *rule = &g_array_index(highlighter->compiled, CompiledRule, highlighter->compiled->len - 1);
+    gtk_text_tag_table_remove(gtk_text_buffer_get_tag_table(highlighter->buffer), rule->tag);
+    g_regex_unref(rule->regex); g_array_set_size(highlighter->compiled, highlighter->compiled->len - 1);
+  }
+  for (guint i = 0; i < count; ++i) {
+    GtkTextTag *tag = gtk_text_buffer_create_tag(highlighter->buffer, groups[i], "foreground", g_ptr_array_index(colors, i),
+        "weight", bold[i] ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL, NULL);
+    CompiledRule compiled = {g_regex_ref(g_ptr_array_index(patterns, i)), tag};
+    g_array_append_val(highlighter->compiled, compiled);
+  }
+  return TRUE;
 }
 
 void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,

@@ -44,8 +44,30 @@ static void test_serial_log_rules(void) {
   g_object_unref(buffer);
 }
 
+static void test_custom_rules(void)
+{
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *highlighter = tio_highlighter_new(buffer);
+  const char *ini = "[rule:board]\npattern=WATCHDOG\ncolor=#ff6699\nbold=true\n";
+  g_assert_true(tio_highlighter_rules(highlighter, ini, NULL));
+  g_assert_false(tio_highlighter_rules(highlighter, "[rule:bad]\npattern=(\ncolor=red\n", NULL));
+  const char *line = "WATCHDOG reboot\n";
+  tio_highlighter_feed(highlighter, (const guint8 *)line, strlen(line));
+  assert_tag_at(buffer, line, "WATCHDOG", "rule:board");
+  g_assert_true(tio_highlighter_rules(highlighter, "[rule:expensive]\npattern=(a+)+$\ncolor=red\n", NULL));
+  g_autofree gchar *long_line = g_strnfill(16000, 'a');
+  long_line[15998] = '!'; long_line[15999] = '\n';
+  gint64 before = g_get_monotonic_time();
+  tio_highlighter_feed(highlighter, (const guint8 *)long_line, 16000);
+  g_assert_cmpint(g_get_monotonic_time() - before, <, 1000000);
+  g_assert_true(tio_highlighter_rules(highlighter, "", NULL));
+  g_assert_null(gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(buffer), "rule:expensive"));
+  tio_highlighter_free(highlighter);
+}
+
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
   g_test_add_func("/highlighter/serial-log-rules", test_serial_log_rules);
+  g_test_add_func("/highlighter/custom-atomic-and-bounded", test_custom_rules);
   return g_test_run();
 }

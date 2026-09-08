@@ -401,6 +401,7 @@ void tio_settings_init(TioSettings *settings)
         .log_warning_mb = 256,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
+        .highlight_rules = g_strdup(""),
         .sequences = g_ptr_array_new_with_free_func(g_free),
         .tab_configs = g_ptr_array_new_with_free_func(session_config_free),
     };
@@ -440,6 +441,9 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
     replace_boolean_from_key(key_file, "serial", "show-all-ttys", &settings->show_all_ttys);
 
     gsize sequence_count = 0;
+    g_clear_pointer(&settings->highlight_rules, g_free);
+    settings->highlight_rules = g_key_file_get_string(key_file, "analysis", "highlight-rules", NULL);
+    if (!settings->highlight_rules) settings->highlight_rules = g_strdup("");
     g_auto(GStrv) sequences = g_key_file_get_string_list(key_file, "send", "sequences", &sequence_count, NULL);
     g_ptr_array_set_size(settings->sequences, 0);
     for (gsize i = 0; i < MIN(sequence_count, 100u); ++i)
@@ -515,6 +519,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     g_key_file_set_boolean(key_file, "general", "restore-tabs", settings->restore_tabs);
     session_config_write(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
 
+    g_key_file_set_string(key_file, "analysis", "highlight-rules", settings->highlight_rules ? settings->highlight_rules : "");
     if (settings->sequences->len)
         g_key_file_set_string_list(key_file, "send", "sequences",
             (const gchar *const *)settings->sequences->pdata, settings->sequences->len);
@@ -588,6 +593,7 @@ void tio_settings_clear(TioSettings *settings)
     g_clear_pointer(&settings->active_profile, g_free);
     g_clear_pointer(&settings->profiles, g_ptr_array_unref);
     g_clear_pointer(&settings->history, g_ptr_array_unref);
+    g_clear_pointer(&settings->highlight_rules, g_free);
     g_clear_pointer(&settings->sequences, g_ptr_array_unref);
     g_clear_pointer(&settings->tab_configs, g_ptr_array_unref);
 }
@@ -704,6 +710,7 @@ gboolean tio_settings_export_portable(const TioSettings *settings, const char *p
         tio_settings_store_profile(&portable, profile->name, &profile->session);
         make_session_portable(&tio_settings_find_profile(&portable, profile->name)->session);
     }
+    g_free(portable.highlight_rules); portable.highlight_rules = g_strdup(settings->highlight_rules);
     for (guint i = 0; i < settings->sequences->len; ++i)
         g_ptr_array_add(portable.sequences, g_strdup(g_ptr_array_index(settings->sequences, i)));
     gboolean ok = tio_settings_save_to_file(&portable, path, error);
