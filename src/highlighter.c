@@ -1,0 +1,245 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+
+#include "highlighter.h"
+
+#define TIO_HIGHLIGHT_MAX_LINES 10000
+#define TIO_HIGHLIGHT_MAX_LINE_BYTES 16384
+#define TIO_HIGHLIGHT_MAX_MATCHES_PER_RULE 512
+
+typedef struct {
+  const char *name;
+  const char *pattern;
+  const char *foreground;
+  gboolean bold;
+} HighlightRule;
+
+/* These are deliberately small, bounded semantic rules rather than copied
+   editor syntax. They cover the useful classes exposed by terminal tools such
+   as WindTerm while remaining predictable for an untrusted serial stream. */
+static const HighlightRule rules[] = {
+    {"punctuation", "[][(){}]", "#8b949e", FALSE},
+    {"bracketed", "\\[[^]\\r\\n]{1,64}\\]", "#d2a8ff", FALSE},
+    {"option", "(?<![[:alnum:]_])--?[[:alpha:]][[:alnum:]_-]*", "#d2a8ff",
+     FALSE},
+    {"path",
+     "(?<![[:alnum:]_])(?:[A-Za-z]:[\\\\/]|/)(?:[^[:space:]<>:|?*]+[\\\\/]?)+",
+     "#a5d6ff", FALSE},
+    {"url", "\\b(?:https?|ftps?|file)://[^[:space:]<>\\\"]+", "#58a6ff", FALSE},
+    {"email", "\\b[[:alnum:]._%+-]+@[[:alnum:].-]+\\.[[:alpha:]]{2,}\\b",
+     "#58a6ff", FALSE},
+    {"ipv4", "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?::[0-9]{1,5})?\\b", "#79c0ff",
+     FALSE},
+    {"ipv6",
+     "(?<![[:xdigit:]:])(?:[[:xdigit:]]{1,4}:){2,7}[[:xdigit:]]{0,4}(?![[:"
+     "xdigit:]:])",
+     "#79c0ff", FALSE},
+    {"datetime",
+     "\\b(?:[0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}(?:[T "
+     "]|\\s+))?[0-9]{1,2}:[0-9]{2}(?::[0-9]{2}(?:[.,][0-9]+)?)?(?:Z|[+-][0-9]{"
+     "2}:?[0-9]{2})?\\b",
+     "#ffa657", FALSE},
+    {"duration",
+     "\\b[0-9]+(?:\\.[0-9]+)?\\s*(?:ns|us|µs|ms|sec(?:ond)?s?|min(?:ute)?s?|"
+     "hours?|days?)\\b",
+     "#ffa657", FALSE},
+    {"key", "\\b[[:alpha:]_][[:alnum:]_.-]*(?=\\s*[:=])", "#7ee787", FALSE},
+    {"hex", "\\b(?:0[xX][[:xdigit:]]+|[[:xdigit:]]{4,8}[hH])\\b", "#f2cc60",
+     FALSE},
+    {"source-location",
+     "\\b[[:alnum:]_.+-]+\\.(?:c|cc|cpp|cxx|h|hh|hpp):[0-9]+\\b", "#76e3ea",
+     FALSE},
+    {"number",
+     "(?<![[:alnum:]_.])[-+]?[0-9]+(?:\\.[0-9]+)?(?:[eE][-+]?[0-9]+)?(?![[:"
+     "alnum:]_.])",
+     "#f2cc60", FALSE},
+    {"literal", "\\b(?:true|false|null|none|nil|yes|no|on|off)\\b", "#d2a8ff",
+     TRUE},
+    {"info", "\\b(?:INFO|NOTICE|DEBUG|TRACE)\\b", "#58a6ff", TRUE},
+    {"success", "\\b(?:PASS(?:ED)?|OK|SUCCESS|READY|DONE)\\b", "#3fb950", TRUE},
+    {"warning", "\\b(?:WARN(?:ING)?|TIMEOUT|RETRY|DEPRECATED)\\b", "#d29922",
+     TRUE},
+    {"error",
+     "\\b(?:ERROR|FAIL(?:ED|URE)?|FATAL|PANIC|CRITICAL|ASSERT(?:ION)?)\\b",
+     "#f85149", TRUE},
+};
+
+typedef struct {
+  GRegex *regex;
+  GtkTextTag *tag;
+} CompiledRule;
+
+struct _TioHighlighter {
+  GtkTextBuffer *buffer;
+  GArray *compiled;
+  GByteArray *line;
+  gboolean saw_cr;
+  gboolean in_escape;
+  gboolean in_csi;
+  gboolean in_osc;
+  gboolean osc_escape;
+};
+
+static void trim_scrollback(TioHighlighter *highlighter) {
+  gint lines = gtk_text_buffer_get_line_count(highlighter->buffer);
+  if (lines <= TIO_HIGHLIGHT_MAX_LINES) {
+    return;
+  }
+  GtkTextIter start;
+  GtkTextIter keep;
+  gtk_text_buffer_get_start_iter(highlighter->buffer, &start);
+  gtk_text_buffer_get_iter_at_line(highlighter->buffer, &keep,
+                                   lines - TIO_HIGHLIGHT_MAX_LINES);
+  gtk_text_buffer_delete(highlighter->buffer, &start, &keep);
+}
+
+static void apply_rules(TioHighlighter *highlighter, gint line_start,
+                        const char *text) {
+  for (guint rule_index = 0; rule_index < highlighter->compiled->len;
+       ++rule_index) {
+    CompiledRule *rule =
+        &g_array_index(highlighter->compiled, CompiledRule, rule_index);
+    g_autoptr(GMatchInfo) match = NULL;
+    g_regex_match(rule->regex, text, 0, &match);
+    guint matches = 0;
+    while (g_match_info_matches(match) &&
+           matches++ < TIO_HIGHLIGHT_MAX_MATCHES_PER_RULE) {
+      gint byte_start = 0;
+      gint byte_end = 0;
+      if (g_match_info_fetch_pos(match, 0, &byte_start, &byte_end) &&
+          byte_end > byte_start) {
+        gint char_start =
+            (gint)g_utf8_pointer_to_offset(text, text + byte_start);
+        gint char_end = (gint)g_utf8_pointer_to_offset(text, text + byte_end);
+        GtkTextIter start;
+        GtkTextIter end;
+        gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &start,
+                                           line_start + char_start);
+        gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &end,
+                                           line_start + char_end);
+        gtk_text_buffer_apply_tag(highlighter->buffer, rule->tag, &start, &end);
+      }
+      if (!g_match_info_next(match, NULL)) {
+        break;
+      }
+    }
+  }
+}
+
+static void flush_line(TioHighlighter *highlighter) {
+  g_autofree char *valid = g_utf8_make_valid(
+      (const char *)highlighter->line->data, highlighter->line->len);
+  GtkTextIter end;
+  gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
+  gint start = gtk_text_iter_get_offset(&end);
+  gtk_text_buffer_insert(highlighter->buffer, &end, valid, -1);
+  gtk_text_buffer_insert(highlighter->buffer, &end, "\n", 1);
+  apply_rules(highlighter, start, valid);
+  g_byte_array_set_size(highlighter->line, 0);
+  trim_scrollback(highlighter);
+}
+
+TioHighlighter *tio_highlighter_new(GtkTextBuffer *buffer) {
+  g_return_val_if_fail(GTK_IS_TEXT_BUFFER(buffer), NULL);
+  TioHighlighter *highlighter = g_new0(TioHighlighter, 1);
+  highlighter->buffer = g_object_ref(buffer);
+  highlighter->compiled = g_array_new(FALSE, FALSE, sizeof(CompiledRule));
+  highlighter->line = g_byte_array_sized_new(256);
+
+  for (guint index = 0; index < G_N_ELEMENTS(rules); ++index) {
+    g_autoptr(GError) error = NULL;
+    GRegex *regex = g_regex_new(rules[index].pattern,
+                                G_REGEX_CASELESS | G_REGEX_OPTIMIZE, 0, &error);
+    if (regex == NULL) {
+      g_warning("Could not compile highlight rule %s: %s", rules[index].name,
+                error->message);
+      continue;
+    }
+    GtkTextTag *tag = gtk_text_buffer_create_tag(
+        buffer, rules[index].name, "foreground", rules[index].foreground,
+        "weight", rules[index].bold ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL,
+        NULL);
+    CompiledRule compiled = {.regex = regex, .tag = tag};
+    g_array_append_val(highlighter->compiled, compiled);
+  }
+  return highlighter;
+}
+
+void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,
+                          gsize length) {
+  g_return_if_fail(highlighter != NULL);
+  for (gsize index = 0; index < length; ++index) {
+    guint8 byte = data[index];
+    if (highlighter->in_osc) {
+      if (byte == 0x07 || (highlighter->osc_escape && byte == '\\')) {
+        highlighter->in_osc = FALSE;
+        highlighter->osc_escape = FALSE;
+      } else {
+        highlighter->osc_escape = byte == 0x1b;
+      }
+      continue;
+    }
+    if (highlighter->in_csi) {
+      /* ECMA-48 CSI sequences end at a byte in the 0x40..0x7e range. */
+      if (byte >= 0x40 && byte <= 0x7e) {
+        highlighter->in_csi = FALSE;
+      }
+      continue;
+    }
+    if (highlighter->in_escape) {
+      highlighter->in_escape = FALSE;
+      if (byte == ']') {
+        highlighter->in_osc = TRUE;
+      } else if (byte == '[') {
+        highlighter->in_csi = TRUE;
+      }
+      continue;
+    }
+    if (byte == 0x1b) {
+      highlighter->in_escape = TRUE;
+      continue;
+    }
+    if (byte == '\r') {
+      flush_line(highlighter);
+      highlighter->saw_cr = TRUE;
+      continue;
+    }
+    if (byte == '\n') {
+      if (!highlighter->saw_cr) {
+        flush_line(highlighter);
+      }
+      highlighter->saw_cr = FALSE;
+      continue;
+    }
+    highlighter->saw_cr = FALSE;
+    if ((byte >= 0x20 || byte == '\t') &&
+        highlighter->line->len < TIO_HIGHLIGHT_MAX_LINE_BYTES) {
+      g_byte_array_append(highlighter->line, &byte, 1);
+    }
+  }
+}
+
+void tio_highlighter_clear(TioHighlighter *highlighter) {
+  g_return_if_fail(highlighter != NULL);
+  gtk_text_buffer_set_text(highlighter->buffer, "", 0);
+  g_byte_array_set_size(highlighter->line, 0);
+  highlighter->saw_cr = FALSE;
+  highlighter->in_escape = FALSE;
+  highlighter->in_csi = FALSE;
+  highlighter->in_osc = FALSE;
+  highlighter->osc_escape = FALSE;
+}
+
+void tio_highlighter_free(TioHighlighter *highlighter) {
+  if (highlighter == NULL) {
+    return;
+  }
+  for (guint index = 0; index < highlighter->compiled->len; ++index) {
+    CompiledRule *rule =
+        &g_array_index(highlighter->compiled, CompiledRule, index);
+    g_regex_unref(rule->regex);
+  }
+  g_array_unref(highlighter->compiled);
+  g_byte_array_unref(highlighter->line);
+  g_object_unref(highlighter->buffer);
+  g_free(highlighter);
+}

@@ -163,18 +163,23 @@ the file it started. `tio` 3.9 does not provide size-based log rotation; tio-gui
 when a log passes the configured size. A safe rotation policy is planned on top of the raw tap instead
 of being simulated with an unsafe file truncation workaround.
 
-## Planned highlighting
+## Semantic highlighting
 
-An optional line-oriented highlight view is planned with these conservative defaults:
+An optional line-oriented highlight view consumes the raw tap and uses these conservative defaults:
 
 - red: `ERROR`, `FAIL`, `FAILED`, `FATAL`, `PANIC`, `CRITICAL`, `ASSERT`
 - yellow: `WARN`, `WARNING`, `TIMEOUT`, `RETRY`
 - green: `PASS`, `PASSED`, `OK`, `SUCCESS`, `READY`
 - blue: `INFO`, `NOTICE`
 - grey: `DEBUG`, `TRACE`
-- accent colour: decimal numbers and hexadecimal values or addresses
+- accent colours: dates and durations, IP and email addresses, URLs, file paths, key/value
+  keys, command options, decimal numbers, hexadecimal values or addresses, literals and brackets
 
-Matching will be case-insensitive and word-boundary aware to avoid false positives such as highlighting `OK` inside another word. The renderer will consume the raw tap instead of modifying the terminal stream or `tio` log output. User-defined regular-expression rules can be layered on after the safe defaults.
+Matching is case-insensitive and word-boundary aware to avoid false positives such as highlighting
+`OK` inside another word. The renderer consumes the raw tap instead of modifying the terminal stream
+or `tio` log output. It strips terminal control sequences and bounds its scrollback, line length and
+matches per rule so malformed device output cannot grow memory without limit. User-defined
+regular-expression rules can be layered on after the safe defaults.
 
 ### Process isolation
 

@@ -25,9 +25,24 @@ pkg_check_modules(SOUP REQUIRED IMPORTED_TARGET libsoup-3.0>=3.0)
 pkg_check_modules(JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0>=1.6)
 
 add_executable(tio-gui
+  src/highlighter.c
   src/main.c
   src/settings.c
 )
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(highlighter-test
+    tests/highlighter_test.c
+    src/highlighter.c
+  )
+  target_include_directories(highlighter-test PRIVATE src)
+  target_link_libraries(highlighter-test PRIVATE PkgConfig::GTK4)
+  target_compile_options(highlighter-test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Wconversion>
+  )
+  add_test(NAME highlighter COMMAND highlighter-test)
+endif()
 target_link_libraries(tio-gui PRIVATE
   PkgConfig::GTK4
   PkgConfig::VTE

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.1\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:46+0800\n"
+"POT-Creation-Date: 2026-09-08 11:09+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -138,6 +138,12 @@ msgid "Timestamps"
 msgstr ""
 
 msgid "Log session"
+msgstr ""
+
+msgid "Highlight view"
+msgstr ""
+
+msgid "Show a semantic view of the raw serial log"
 msgstr ""
 
 msgid "Log directory"

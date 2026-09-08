@@ -22,6 +22,7 @@
 #include <vte/vte.h>
 
 #include "settings.h"
+#include "highlighter.h"
 
 #define _(message) gettext(message)
 
@@ -71,6 +72,10 @@ struct _TioTab {
 
     /* Terminal. */
     VteTerminal *terminal;
+    GtkStack *terminal_stack;
+    GtkTextView *highlight_view;
+    TioHighlighter *highlighter;
+    GtkCheckButton *highlight_toggle;
     GtkButton *scroll_bottom_button;
     gboolean follow_output;
     gboolean pending_output;
@@ -395,6 +400,9 @@ static void retranslate_ui(TioTab *tab)
                          tab->child_pid > 0 ? _("Disconnect") : _("Connect"));
     gtk_check_button_set_label(tab->timestamp_check, _("Timestamps"));
     gtk_check_button_set_label(tab->log_check, _("Log session"));
+    gtk_check_button_set_label(tab->highlight_toggle, _("Highlight view"));
+    gtk_widget_set_tooltip_text(GTK_WIDGET(tab->highlight_toggle),
+                                _("Show a semantic view of the raw serial log"));
     gtk_entry_set_placeholder_text(tab->log_directory_entry, _("Log directory"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->choose_log_directory_button),
                                 _("Choose log directory"));
@@ -1427,6 +1435,13 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
             tap->tab->rx_lines++;
         }
     }
+    tio_highlighter_feed(tap->tab->highlighter, tap->buffer, (gsize)count);
+    if (gtk_check_button_get_active(tap->tab->highlight_toggle)) {
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tap->tab->highlight_view);
+        GtkTextIter end;
+        gtk_text_buffer_get_end_iter(buffer, &end);
+        gtk_text_view_scroll_to_iter(tap->tab->highlight_view, &end, 0.0, FALSE, 0.0, 1.0);
+    }
     raw_tap_read(tap);
     raw_tap_unref(tap);
 }
@@ -1715,6 +1730,23 @@ static void on_clear_terminal_clicked(GtkButton *button, gpointer user_data)
     TioTab *tab = user_data;
 
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    tio_highlighter_clear(tab->highlighter);
+}
+
+static void on_highlight_toggled(GtkCheckButton *button, gpointer user_data)
+{
+    TioTab *tab = user_data;
+    gboolean active = gtk_check_button_get_active(button);
+    gtk_stack_set_visible_child_name(tab->terminal_stack,
+                                     active ? "highlight" : "terminal");
+    if (active) {
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+        GtkTextIter end;
+        gtk_text_buffer_get_end_iter(buffer, &end);
+        gtk_text_view_scroll_to_iter(tab->highlight_view, &end, 0.0, FALSE, 0.0, 1.0);
+    } else {
+        gtk_widget_grab_focus(GTK_WIDGET(tab->terminal));
+    }
 }
 
 static void on_show_all_ttys_toggled(GtkCheckButton *button, gpointer user_data)
@@ -2301,6 +2333,7 @@ static void action_clear_terminal(GSimpleAction *action, GVariant *parameter, gp
         return;
     }
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    tio_highlighter_clear(tab->highlighter);
 }
 
 static void action_copy(GSimpleAction *action, GVariant *parameter, gpointer user_data)
@@ -2467,6 +2500,7 @@ static void tio_tab_free(TioTab *tab)
     }
     stop_session_timer(tab);
     raw_tap_stop(tab);
+    g_clear_pointer(&tab->highlighter, tio_highlighter_free);
     g_clear_pointer(&tab->spawn_argv, g_strfreev);
     g_clear_pointer(&tab->log_path, g_free);
     g_clear_pointer(&tab->history_draft, g_free);
@@ -2558,6 +2592,10 @@ static void install_css(void)
         "  border-radius: 6px;"
         "  padding: 1px;"
         "  background-color: black;"
+        "}"
+        "textview.highlight-view, textview.highlight-view text {"
+        "  background-color: #0d1117;"
+        "  color: #c9d1d9;"
         "}"
         ".session-status { font-size: 0.9em; }"
         ".settings-title {"
@@ -3435,6 +3473,12 @@ static TioTab *tio_tab_new(TioApp *app)
 
     tab->log_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Log session")));
     gtk_box_append(GTK_BOX(options), GTK_WIDGET(tab->log_check));
+    tab->highlight_toggle =
+        GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Highlight view")));
+    gtk_check_button_set_active(tab->highlight_toggle, TRUE);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(tab->highlight_toggle),
+                                _("Show a semantic view of the raw serial log"));
+    gtk_box_append(GTK_BOX(options), GTK_WIDGET(tab->highlight_toggle));
     gtk_box_append(GTK_BOX(root), options);
 
     tab->log_directory_entry = GTK_ENTRY(gtk_entry_new());
@@ -3562,7 +3606,30 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_overlay_add_overlay(GTK_OVERLAY(terminal_overlay),
                             GTK_WIDGET(tab->scroll_bottom_button));
 
-    gtk_frame_set_child(GTK_FRAME(terminal_frame), terminal_overlay);
+    tab->highlight_view = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_widget_add_css_class(GTK_WIDGET(tab->highlight_view), "highlight-view");
+    gtk_text_view_set_editable(tab->highlight_view, FALSE);
+    gtk_text_view_set_cursor_visible(tab->highlight_view, FALSE);
+    gtk_text_view_set_monospace(tab->highlight_view, TRUE);
+    gtk_text_view_set_wrap_mode(tab->highlight_view, GTK_WRAP_WORD_CHAR);
+    gtk_text_view_set_left_margin(tab->highlight_view, 8);
+    gtk_text_view_set_right_margin(tab->highlight_view, 8);
+    gtk_text_view_set_top_margin(tab->highlight_view, 6);
+    gtk_text_view_set_bottom_margin(tab->highlight_view, 6);
+    tab->highlighter =
+        tio_highlighter_new(gtk_text_view_get_buffer(tab->highlight_view));
+    GtkWidget *highlight_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(highlight_scroll),
+                                   GTK_POLICY_AUTOMATIC,
+                                   GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(highlight_scroll),
+                                  GTK_WIDGET(tab->highlight_view));
+
+    tab->terminal_stack = GTK_STACK(gtk_stack_new());
+    gtk_stack_add_named(tab->terminal_stack, terminal_overlay, "terminal");
+    gtk_stack_add_named(tab->terminal_stack, highlight_scroll, "highlight");
+    gtk_stack_set_visible_child_name(tab->terminal_stack, "highlight");
+    gtk_frame_set_child(GTK_FRAME(terminal_frame), GTK_WIDGET(tab->terminal_stack));
     gtk_widget_set_hexpand(terminal_frame, TRUE);
     gtk_widget_set_vexpand(terminal_frame, TRUE);
     gtk_box_append(GTK_BOX(root), terminal_frame);
@@ -3661,6 +3728,10 @@ static TioTab *tio_tab_new(TioApp *app)
                      tab);
     g_signal_connect(tab->connect_button, "clicked", G_CALLBACK(on_connect_clicked), tab);
     g_signal_connect(tab->log_check, "toggled", G_CALLBACK(on_log_toggled), tab);
+    g_signal_connect(tab->highlight_toggle,
+                     "toggled",
+                     G_CALLBACK(on_highlight_toggled),
+                     tab);
     g_signal_connect(tab->open_log_directory_button,
                      "clicked",
                      G_CALLBACK(on_open_log_directory),

@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.2.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-07 13:45+0800\n"
+"POT-Creation-Date: 2026-09-08 11:09+0800\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -130,6 +130,13 @@ msgstr "時間戳記"
 
 msgid "Log session"
 msgstr "記錄工作階段"
+
+#, fuzzy
+msgid "Highlight view"
+msgstr "醒目提示檢視"
+
+msgid "Show a semantic view of the raw serial log"
+msgstr "顯示原始序列埠日誌的語意醒目提示檢視"
 
 msgid "Log directory"
 msgstr "記錄資料夾"
