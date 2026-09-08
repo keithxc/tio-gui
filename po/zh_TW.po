@@ -1,8 +1,11 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.2.0\n"
+"Project-Id-Version: tio-gui 0.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-08 11:09+0800\n"
+"POT-Creation-Date: 2026-09-08 16:26+0800\n"
+"PO-Revision-Date: 2026-09-08 17:00+0800\n"
+"Last-Translator: tio-gui contributors\n"
+"Language-Team: tio-gui contributors\n"
 "Language: zh_TW\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -13,7 +16,7 @@ msgid "Device"
 msgstr "裝置"
 
 msgid "Application settings"
-msgstr "應用程式設定"
+msgstr "應用設定"
 
 msgid "Settings"
 msgstr "設定"
@@ -25,10 +28,10 @@ msgid "General"
 msgstr "一般"
 
 msgid "Session"
-msgstr "工作階段"
+msgstr "會話"
 
 msgid "Connection and logging"
-msgstr "連線與記錄"
+msgstr "連線和日誌"
 
 msgid "Backup"
 msgstr "備份"
@@ -43,19 +46,19 @@ msgid "Follow system"
 msgstr "跟隨系統"
 
 msgid "Light"
-msgstr "亮色"
+msgstr "淺色"
 
 msgid "Dark"
 msgstr "深色"
 
 msgid "Timestamp format"
-msgstr "時間戳記格式"
+msgstr "時間戳格式"
 
 msgid "Applied when line timestamps are enabled"
-msgstr "啟用行時間戳記時套用此格式"
+msgstr "啟用行時間戳時應用"
 
 msgid "Log filename"
-msgstr "記錄檔名稱"
+msgstr "日誌檔名"
 
 msgid "tio-gui default"
 msgstr "tio-gui 預設"
@@ -73,16 +76,16 @@ msgid "24-hour"
 msgstr "24 小時制"
 
 msgid "Since start"
-msgstr "從啟動起"
+msgstr "自啟動以來"
 
 msgid "Since previous"
-msgstr "從上一筆起"
+msgstr "距上一條"
 
 msgid "ISO 8601"
 msgstr "ISO 8601"
 
 msgid "Unix epoch"
-msgstr "Unix 時間戳記"
+msgstr "Unix 時間"
 
 msgid "GitHub project"
 msgstr "GitHub 專案"
@@ -94,11 +97,11 @@ msgid "Import settings…"
 msgstr "匯入設定…"
 
 msgid "A lightweight, reliable GUI for tio"
-msgstr "輕量、可靠的 tio 圖形介面"
+msgstr "輕巧可靠的 tio 圖形介面"
 
 #, c-format
 msgid "Version %s is available"
-msgstr "發現新版本 %s"
+msgstr "有新版本 %s 可用"
 
 msgid "Download update"
 msgstr "下載更新"
@@ -131,9 +134,8 @@ msgstr "時間戳記"
 msgid "Log session"
 msgstr "記錄工作階段"
 
-#, fuzzy
 msgid "Highlight view"
-msgstr "醒目提示檢視"
+msgstr "高亮檢視"
 
 msgid "Show a semantic view of the raw serial log"
 msgstr "顯示原始序列埠日誌的語意醒目提示檢視"
@@ -142,7 +144,7 @@ msgid "Log directory"
 msgstr "記錄資料夾"
 
 msgid "Choose log directory"
-msgstr "選擇記錄資料夾"
+msgstr "選擇日誌目錄"
 
 msgid "Data bits"
 msgstr "資料位元"
@@ -184,7 +186,7 @@ msgid "Warn once the current log file passes this size; 0 disables it"
 msgstr "目前記錄檔超過此大小時提醒一次；0 表示停用"
 
 msgid "Example: {device}-{date}-{time}.log"
-msgstr "範例：{device}-{date}-{time}.log"
+msgstr "示例：{device}-{date}-{time}.log"
 
 msgid "Append"
 msgstr "附加"
@@ -232,7 +234,7 @@ msgid "Connection profiles"
 msgstr "連線設定檔"
 
 msgid "Profiles"
-msgstr "設定檔"
+msgstr "配置檔"
 
 msgid "Save as new profile…"
 msgstr "另存為新設定檔…"
@@ -347,8 +349,28 @@ msgstr "刪除設定檔「%s」？"
 msgid "Delete"
 msgstr "刪除"
 
+#, c-format
+msgid "Connected to %s"
+msgstr "已連線到 %s"
+
+msgid "tio no longer has the serial device open"
+msgstr "tio 已不再開啟該序列埠裝置"
+
+msgid "Device disconnected; waiting for tio to reconnect"
+msgstr "裝置已斷開；等待 tio 重連"
+
+msgid "Serial connection"
+msgstr "序列埠連線"
+
 msgid "no device"
 msgstr "未選擇裝置"
+
+msgid "waiting for device"
+msgstr "等待裝置"
+
+#, c-format
+msgid " · reconnects: %u"
+msgstr " · 重連：%u"
 
 msgid "rx"
 msgstr "接收"
@@ -370,12 +392,19 @@ msgid "The session log has reached %s: %s"
 msgstr "工作階段記錄檔已達到 %s：%s"
 
 #, c-format
+msgid "tio exited with status %d"
+msgstr "tio 已退出，狀態碼 %d"
+
+#, c-format
 msgid "Disconnected (tio exit status: %d)"
 msgstr "已中斷連線（tio 結束狀態：%d）"
 
 #, c-format
 msgid "Could not start tio: %s"
 msgstr "無法啟動 tio：%s"
+
+msgid "Waiting for serial device…"
+msgstr "等待序列埠裝置…"
 
 #, c-format
 msgid "Could not stop tio: %s"
@@ -407,6 +436,23 @@ msgstr "無法建立記錄資料夾：%s"
 msgid "Connecting…"
 msgstr "正在連線…"
 
+#, c-format
+msgid "Sent %zu bytes to tio"
+msgstr "已向 tio 傳送 %zu 位元組"
+
+#, c-format
+msgid "Send failed after %zu bytes: %s"
+msgstr "傳送 %zu 位元組後失敗：%s"
+
+msgid "Stop file transfer before sending commands"
+msgstr "傳送命令前請停止檔案傳輸"
+
+msgid "Serial data channel is not ready"
+msgstr "序列埠資料通道尚未就緒"
+
+msgid "A send is still in progress"
+msgstr "仍有傳送正在進行"
+
 msgid "Send history cleared"
 msgstr "傳送歷史已清除"
 
@@ -416,6 +462,24 @@ msgstr "搜尋樣式無效：%s"
 
 msgid "No matches"
 msgstr "沒有符合項目"
+
+msgid "Stop the sequence before sending a quick command"
+msgstr "傳送快捷命令前請停止序列"
+
+msgid "A delayed send is pending; disconnect to cancel"
+msgstr "有延遲傳送等待執行；斷開可取消"
+
+msgid "Send scheduled; disconnect to cancel"
+msgstr "已安排傳送；斷開可取消"
+
+msgid "Choose a local file"
+msgstr "選擇本地檔案"
+
+msgid "Button group exported"
+msgstr "按鈕組已匯出"
+
+msgid "Button group loaded; Save to apply"
+msgstr "按鈕組已載入；儲存後應用"
 
 msgid "Customize quick buttons"
 msgstr "自訂快捷按鈕"
@@ -432,36 +496,414 @@ msgstr "名稱"
 msgid "Payload"
 msgstr "傳送內容"
 
+msgid "Mode"
+msgstr "模式"
+
+msgid "Checksum"
+msgstr "校驗和"
+
+msgid "Text"
+msgstr "文本"
+
+msgid "None"
+msgstr "無"
+
+msgid "Delay (ms)"
+msgstr "延遲（毫秒）"
+
+msgid "Import button group…"
+msgstr "匯入按鈕組…"
+
+msgid "Export button group…"
+msgstr "匯出按鈕組…"
+
+msgid "Payload (text escapes or HEX)"
+msgstr "載荷（文本轉義或 HEX）"
+
+msgid "Delay after sending (ms)"
+msgstr "傳送後延遲（毫秒）"
+
+msgid "Move step up"
+msgstr "上移步驟"
+
+msgid "Move step down"
+msgstr "下移步驟"
+
+msgid "Remove step"
+msgstr "移除步驟"
+
+msgid "Invalid sequence"
+msgstr "序列無效"
+
+msgid "New sequence"
+msgstr "新序列"
+
+msgid "Stopped; bytes already sent cannot be recalled"
+msgstr "已停止；已傳送的位元組無法撤回"
+
+msgid "Resume"
+msgstr "繼續"
+
+msgid "Pause"
+msgstr "暫停"
+
+msgid "Stop the current send before starting another"
+msgstr "開始另一項傳送前請停止當前傳送"
+
+msgid "Connect this session before running a sequence"
+msgstr "執行序列前請連線此會話"
+
+msgid "At most 100 sequences can be saved"
+msgstr "最多可儲存 100 套序列"
+
+msgid "Sequences saved"
+msgstr "序列已儲存"
+
+msgid "Sequence stopped: transport failed"
+msgstr "序列已停止：傳輸失敗"
+
+msgid "Sequence completed"
+msgstr "序列已完成"
+
+#, c-format
+msgid "Paused after step %u"
+msgstr "已在第 %u 步後暫停"
+
+#, c-format
+msgid "Running: %u steps sent in this pass"
+msgstr "執行中：本輪已傳送 %u 步"
+
+msgid "Send sequences"
+msgstr "傳送序列"
+
+msgid "Load"
+msgstr "載入"
+
+msgid "New"
+msgstr "新建"
+
+msgid "Delete sequence"
+msgstr "刪除序列"
+
+msgid ""
+"Steps run top to bottom: payload, mode, line ending, CRC, delay after send "
+"(ms)."
+msgstr "步驟從上到下執行：載荷、模式、行尾、CRC、傳送後延遲（毫秒）。"
+
+msgid "Add step"
+msgstr "新增步驟"
+
+msgid "Remove last"
+msgstr "移除最後一步"
+
+msgid "Save sequence"
+msgstr "儲存序列"
+
+msgid "Loop"
+msgstr "迴圈"
+
+msgid "Run"
+msgstr "執行"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Disconnect stops the sequence. Closing this editor leaves it running."
+msgstr "斷開連線會停止序列；關閉此編輯器會繼續執行。"
+
+msgid "Line command submitted; inspect tio response"
+msgstr "線路命令已提交；請檢視 tio 響應"
+
+msgid "Could not recognize tio prompt; disconnect to cancel the command"
+msgstr "無法識別 tio 提示；斷開可取消命令"
+
+msgid "Connect before controlling serial lines"
+msgstr "控制序列埠線路前請連線"
+
+msgid "Stop pending sends before controlling serial lines"
+msgstr "控制序列埠線路前請停止待執行的傳送"
+
+msgid "Could not create runtime directory"
+msgstr "無法建立執行時目錄"
+
+msgid "Runtime path cannot be used in a tio command"
+msgstr "執行時路徑無法用於 tio 命令"
+
+msgid "Could not create line command"
+msgstr "無法建立線路命令"
+
+msgid "Reconnect before issuing more line commands"
+msgstr "傳送更多線路命令前請重新連線"
+
+msgid "Saved for all sessions; applies to incoming lines"
+msgstr "已為全部會話儲存；對新接收的行生效"
+
+msgid "Connect and stop pending sends before using Modbus RTU"
+msgstr "使用 Modbus RTU 前請連線並停止待執行的傳送"
+
+msgid "Custom highlight rules"
+msgstr "自定義高亮規則"
+
+msgid ""
+"Add up to 32 [rule:name] sections with pattern, color and optional "
+"bold=true. Rules are case-insensitive with bounded regex matching. Clear the "
+"text to reset. Included in configuration exports."
+msgstr "最多新增 32 個 [rule:name] 段，包含 pattern、color 和可選的 bold=true。規則不區分大小寫，正則匹配有複雜度限制。清空文本可重置。規則包含在配置匯出中。"
+
+msgid "Validate and save"
+msgstr "驗證並儲存"
+
+msgid "Connect and stop pending sends before transferring files"
+msgstr "傳輸檔案前請連線並停止待執行的傳送"
+
+msgid "Connect before transferring files"
+msgstr "傳輸檔案前請連線"
+
+msgid "Choose an empty receive directory"
+msgstr "選擇空的接收目錄"
+
+msgid "Choose a file to send"
+msgstr "選擇要傳送的檔案"
+
+msgid "Timeout (s)"
+msgstr "超時（秒）"
+
+msgid "Send file…"
+msgstr "傳送檔案…"
+
+msgid "Receive files…"
+msgstr "接收檔案…"
+
+msgid "Cancel transfer"
+msgstr "取消傳輸"
+
+msgid ""
+"Start the matching protocol on the peer. XMODEM receives as received.bin; "
+"its final block may contain padding."
+msgstr "在對端啟動對應協議。XMODEM 儲存為 received.bin；最後一塊可能包含填充位元組。"
+
+#, c-format
+msgid "Recording failed: %s"
+msgstr "錄製失敗：%s"
+
+#, c-format
+msgid "Recording saved: %s"
+msgstr "錄製已儲存：%s"
+
+#, c-format
+msgid "Recording: %s"
+msgstr "錄製中：%s"
+
+msgid "Start recording…"
+msgstr "開始錄製…"
+
+msgid "Connect before starting a recording"
+msgstr "開始錄製前請連線"
+
+msgid "A recording is already active"
+msgstr "已有錄製正在進行"
+
+msgid "Choose a local capture file"
+msgstr "選擇本地錄製檔案"
+
+msgid "Stop recording"
+msgstr "停止錄製"
+
+msgid "Finishing recording…"
+msgstr "正在完成錄製…"
+
+msgid "Part MiB"
+msgstr "分卷 MiB"
+
+msgid "Part seconds (0=off)"
+msgstr "分卷秒數（0=關閉）"
+
+msgid "Keep parts"
+msgstr "保留分卷數"
+
+msgid "Disk MiB"
+msgstr "磁碟 MiB"
+
+msgid ""
+"Records exact RX/TX bytes, terminal input, connection events and serial "
+"parameters. Old closed parts expire at the configured limits."
+msgstr "精確記錄 RX/TX 位元組、終端輸入、連線事件和序列埠引數。已關閉的舊分卷按配置限制清理。"
+
+msgid "Automatic reconnect"
+msgstr "自動重連"
+
+msgid "Same device"
+msgstr "同一裝置"
+
+msgid "Next new device"
+msgstr "下一個新裝置"
+
+msgid "Latest device"
+msgstr "最新裝置"
+
+msgid "Exclude devices"
+msgstr "排除裝置"
+
+msgid "Exclude drivers"
+msgstr "排除驅動"
+
+msgid "Exclude topology IDs"
+msgstr "排除拓撲 ID"
+
+msgid "Comma-separated patterns; * and ? supported"
+msgstr "逗號分隔的模式；支援 * 和 ?"
+
+msgid "Desktop notifications"
+msgstr "桌面通知"
+
+msgid "Connection sound"
+msgstr "連線提示音"
+
+msgid ""
+"Strategy changes apply on the next connection. New/latest lets tio choose a "
+"port. Reconnect counts reflect observed transitions."
+msgstr "策略變更在下次連線生效。新裝置/最新裝置由 tio 選擇序列埠。重連次數反映觀察到的狀態變化。"
+
+msgid "Unchanged"
+msgstr "保持不變"
+
+msgid "Low"
+msgstr "低電平"
+
+msgid "High"
+msgstr "高電平"
+
+msgid "DTR on connect"
+msgstr "連線時 DTR"
+
+msgid "RTS on connect"
+msgstr "連線時 RTS"
+
+msgid "Pulse (ms)"
+msgstr "脈衝（毫秒）"
+
+msgid "Send Break"
+msgstr "傳送 Break"
+
+msgid "DTR Low"
+msgstr "DTR 低電平"
+
+msgid "DTR High"
+msgstr "DTR 高電平"
+
+msgid "DTR Pulse"
+msgstr "DTR 脈衝"
+
+msgid "RTS Low"
+msgstr "RTS 低電平"
+
+msgid "RTS High"
+msgstr "RTS 高電平"
+
+msgid "RTS Pulse"
+msgstr "RTS 脈衝"
+
+msgid "RS-485"
+msgstr "RS-485"
+
+msgid ""
+"Defaults, pulse duration and RS-485 apply on the next connection. Hardware "
+"support varies by adapter."
+msgstr "預設電平、脈衝時長和 RS-485 在下次連線生效。硬體支援因介面卡而異。"
+
+msgid "Close all active sessions?"
+msgstr "關閉全部活動會話？"
+
+msgid "Connections will stop and pending recordings will finish writing."
+msgstr "連線將停止，待寫入的錄製會完成儲存。"
+
+msgid "Close"
+msgstr "關閉"
+
+msgid "tio version unavailable"
+msgstr "無法獲取 tio 版本"
+
+msgid "About tio-gui"
+msgstr "關於 tio-gui"
+
+msgid "Serial debugging for embedded development"
+msgstr "面向嵌入式開發的序列埠除錯"
+
+msgid "Copy diagnostics"
+msgstr "複製診斷資訊"
+
+msgid "Checking tio version…"
+msgstr "正在檢查 tio 版本…"
+
 msgid "Choose a local file for settings export"
-msgstr "請選擇本機檔案以匯出設定"
+msgstr "選擇本地檔案以匯出設定"
 
 msgid "Settings exported"
 msgstr "設定已匯出"
+
+msgid "Export portable settings"
+msgstr "匯出便攜設定"
 
 msgid "Export settings"
 msgstr "匯出設定"
 
 msgid "Choose a local settings file"
-msgstr "請選擇本機設定檔"
+msgstr "選擇本地設定檔案"
+
+msgid "Disconnect all sessions before importing settings"
+msgstr "匯入設定前請斷開全部會話"
 
 msgid "Settings imported"
 msgstr "設定已匯入"
-
-msgid "Disconnect before importing settings"
-msgstr "請先中斷連線再匯入設定"
 
 msgid "Import settings"
 msgstr "匯入設定"
 
 msgid "Choose a local log directory"
-msgstr "請選擇本機記錄資料夾"
+msgstr "選擇本地日誌目錄"
 
 msgid "Log directory selected"
-msgstr "已選擇記錄資料夾"
+msgstr "日誌目錄已選擇"
 
 #, c-format
 msgid "Preview: %s"
 msgstr "預覽：%s"
+
+msgid "Session closed. Reopen comparison to choose new sessions."
+msgstr "會話已關閉。重新開啟對照以選擇新會話。"
+
+msgid "Compare sessions"
+msgstr "會話對照"
+
+msgid "Read-only raw log comparison · latest 200 entries per session"
+msgstr "只讀原始日誌對照 · 每個會話最近 200 條"
+
+msgid "Follow"
+msgstr "跟隨"
+
+msgid "Shared substring filter"
+msgstr "共同子字串過濾"
+
+msgid "Compare sessions…"
+msgstr "會話對照…"
+
+msgid "BLE GATT debugging…"
+msgstr "BLE GATT 除錯…"
+
+msgid "CAN / DBC debugging…"
+msgstr "CAN / DBC 除錯…"
+
+msgid "MQTT debugging…"
+msgstr "MQTT 除錯…"
+
+msgid "Modbus TCP…"
+msgstr "Modbus TCP…"
+
+msgid "TCP / UDP debugging…"
+msgstr "TCP / UDP 除錯…"
+
+msgid "Custom highlight rules…"
+msgstr "自定義高亮規則…"
 
 msgid "Reopen sessions on startup"
 msgstr "啟動時恢復工作階段"
@@ -469,12 +911,50 @@ msgstr "啟動時恢復工作階段"
 msgid "Reopen the tabs that were open last time, without connecting"
 msgstr "重新開啟上次的分頁，但不自動連線"
 
+msgid "Export portable settings…"
+msgstr "匯出便攜設定…"
+
+msgid ""
+"Profiles, buttons and sequences; excludes local paths, device identities and "
+"send history"
+msgstr "配置檔、按鈕和序列；不包含本地路徑、裝置身份和傳送歷史"
+
+msgid "About / diagnostics…"
+msgstr "關於 / 診斷資訊…"
+
+msgid "Serial lines / RS-485"
+msgstr "序列埠線路 / RS-485"
+
+msgid "Reconnect strategy"
+msgstr "重連策略"
+
+msgid "Modbus RTU…"
+msgstr "Modbus RTU…"
+
+msgid "File transfer"
+msgstr "檔案傳輸"
+
+msgid "Recording / safe rotation"
+msgstr "錄製 / 安全輪轉"
+
 msgid "No line ending"
 msgstr "無行尾"
+
+msgid "Sequences…"
+msgstr "序列…"
+
+msgid "Analyze…"
+msgstr "分析…"
 
 #, c-format
 msgid "Session %u"
 msgstr "工作階段 %u"
+
+msgid "Rename session"
+msgstr "重新命名會話"
+
+msgid "Leave blank to use the device name."
+msgstr "留空使用裝置名稱。"
 
 msgid "Close this session"
 msgstr "關閉此工作階段"
@@ -492,14 +972,395 @@ msgstr "該序列埠裝置"
 msgid "The session log is still open."
 msgstr "工作階段記錄仍在寫入。"
 
-msgid "Close"
-msgstr "關閉"
-
 msgid "New session"
 msgstr "新增工作階段"
 
-#~ msgid "More settings"
-#~ msgstr "更多設定"
+msgid "Tools"
+msgstr "工具"
 
-#~ msgid "Automatic name"
-#~ msgstr "自動命名"
+msgid "Select numeric fields to plot"
+msgstr "選擇要繪製的數字欄位"
+
+msgid "Fields"
+msgstr "欄位"
+
+msgid "Select a retained log entry first"
+msgstr "請先選擇一條保留的日誌"
+
+#, c-format
+msgid "%u retained · %u matching · showing latest %u · regex limits: %llu"
+msgstr "保留 %u 條 · 匹配 %u 條 · 顯示最近 %u 條 · 正則限額觸發：%llu"
+
+#, c-format
+msgid "Replay complete: %u/%u events"
+msgstr "回放完成：%u/%u 個事件"
+
+#, c-format
+msgid "Replay: %u/%u events"
+msgstr "回放：%u/%u 個事件"
+
+msgid "Parser rules saved"
+msgstr "解析規則已儲存"
+
+msgid "Parser rules loaded"
+msgstr "解析規則已載入"
+
+msgid "Choose a valid parser rule file up to 64 KiB"
+msgstr "選擇有效的解析規則檔案，最大 64 KiB"
+
+msgid "Choose a local CSV file"
+msgstr "選擇本地 CSV 檔案"
+
+msgid "Filtered CSV exported"
+msgstr "過濾後的 CSV 已匯出"
+
+msgid "Loaded; uncheck Pause replay to play"
+msgstr "已載入；取消勾選“暫停回放”開始播放"
+
+msgid "Choose a local recording"
+msgstr "選擇本地錄製檔案"
+
+msgid "Loading recording…"
+msgstr "正在載入錄製…"
+
+msgid "Open recording or retained part"
+msgstr "開啟錄製或保留的分卷"
+
+msgid "Serial log analysis"
+msgstr "序列埠日誌分析"
+
+msgid "Filter received lines"
+msgstr "過濾接收的行"
+
+msgid "Regex"
+msgstr "正則"
+
+msgid "Case sensitive"
+msgstr "區分大小寫"
+
+msgid "Apply"
+msgstr "應用"
+
+msgid "Export filtered CSV…"
+msgstr "匯出過濾後的 CSV…"
+
+msgid "Load parser rules…"
+msgstr "載入解析規則…"
+
+msgid "Save parser rules…"
+msgstr "儲存解析規則…"
+
+msgid "Run analysis plugin…"
+msgstr "執行分析外掛…"
+
+msgid "Open recording…"
+msgstr "開啟錄製…"
+
+msgid "Pause replay"
+msgstr "暫停回放"
+
+msgid "RX as HEX"
+msgstr "RX 顯示為 HEX"
+
+msgid "Playback never sends data to a device"
+msgstr "回放不會向裝置傳送資料"
+
+msgid "Speed ×"
+msgstr "倍速 ×"
+
+msgid "Clear analysis"
+msgstr "清空分析"
+
+msgid "Click a log line to inspect and copy its fields"
+msgstr "點選日誌行檢視並複製欄位"
+
+msgid "Plot fields: temp,voltage or col1,col2"
+msgstr "曲線欄位：temp,voltage 或 col1,col2"
+
+msgid "Optional regex with named captures"
+msgstr "可選：帶命名捕獲組的正則"
+
+msgid "Maximum points per curve"
+msgstr "每條曲線的最大點數"
+
+msgid "Plot"
+msgstr "繪圖"
+
+msgid "Recording playback"
+msgstr "錄製回放"
+
+msgid "Running isolated plugin…"
+msgstr "正在執行隔離外掛…"
+
+msgid "Plugin saved"
+msgstr "外掛已儲存"
+
+msgid "Plugin loaded; review and run"
+msgstr "外掛已載入；請審閱後執行"
+
+msgid "Choose a UTF-8 plugin file up to 64 KiB"
+msgstr "選擇 UTF-8 外掛檔案，最大 64 KiB"
+
+msgid "Analysis plugin"
+msgstr "分析外掛"
+
+msgid ""
+"API 1: define transform(input). Lua returns text; JavaScript returns text or "
+"a JSON value. Runs on this entry snapshot with a 2-second deadline and 64 "
+"KiB output limit."
+msgstr "API 1：定義 transform(input)。Lua 返回文本；JavaScript 返回文本或 JSON 值。使用當前條目快照執行，限時 2 秒，輸出上限 64 KiB。"
+
+msgid "Load plugin…"
+msgstr "載入外掛…"
+
+msgid "Save plugin…"
+msgstr "儲存外掛…"
+
+msgid "Run on entry"
+msgstr "針對條目執行"
+
+msgid "Input snapshot"
+msgstr "輸入快照"
+
+msgid "Plugin source"
+msgstr "外掛原始碼"
+
+msgid "Result"
+msgstr "結果"
+
+#, c-format
+msgid "RX %llu bytes / %llu chunks · TX %llu bytes"
+msgstr "RX %llu 位元組 / %llu 塊 · TX %llu 位元組"
+
+msgid "Disconnected"
+msgstr "已斷開"
+
+msgid "TCP / UDP debugging"
+msgstr "TCP / UDP 除錯"
+
+msgid "Hostname or IP address"
+msgstr "主機名或 IP 地址"
+
+msgid "HEX display"
+msgstr "HEX 顯示"
+
+msgid "No ending"
+msgstr "不加行尾"
+
+msgid "No CRC"
+msgstr "不加 CRC"
+
+msgid "Waiting for Modbus response…"
+msgstr "等待 Modbus 響應…"
+
+msgid "Modbus RTU — current serial session"
+msgstr "Modbus RTU — 當前序列埠會話"
+
+msgid "Modbus TCP"
+msgstr "Modbus TCP"
+
+msgid ""
+"Addresses are zero-based protocol addresses. Functions 1–4 read; 5–6 write "
+"one coil/register. Coil write values are 0 or 1. No automatic retries."
+msgstr "地址為從零開始的協議地址。功能碼 1–4 讀取；5–6 寫單個線圈/暫存器。寫線圈值為 0 或 1。不自動重試。"
+
+msgid "TCP hostname or IP"
+msgstr "TCP 主機名或 IP"
+
+msgid "Port"
+msgstr "埠"
+
+msgid "Unit"
+msgstr "單元地址"
+
+msgid "01 Read coils"
+msgstr "01 讀線圈"
+
+msgid "02 Read discrete inputs"
+msgstr "02 讀離散輸入"
+
+msgid "03 Read holding registers"
+msgstr "03 讀保持暫存器"
+
+msgid "04 Read input registers"
+msgstr "04 讀輸入暫存器"
+
+msgid "05 Write single coil"
+msgstr "05 寫單個線圈"
+
+msgid "06 Write single register"
+msgstr "06 寫單個暫存器"
+
+msgid "Address"
+msgstr "地址"
+
+msgid "Read count"
+msgstr "讀取數量"
+
+msgid "Write value"
+msgstr "寫入值"
+
+msgid "Execute request"
+msgstr "執行請求"
+
+msgid "Publish queued; QoS 1 waits for broker acknowledgement"
+msgstr "釋出已排隊；QoS 1 等待代理確認"
+
+msgid "MQTT 3.1.1 / TCP debugging"
+msgstr "MQTT 3.1.1 / TCP 除錯"
+
+msgid "Broker hostname or IP"
+msgstr "代理主機名或 IP"
+
+msgid "Analyze payloads…"
+msgstr "分析載荷…"
+
+msgid "Optional username"
+msgstr "使用者名稱（可選）"
+
+msgid "Password"
+msgstr "密碼"
+
+msgid "Subscription filter, e.g. board/+/log"
+msgstr "訂閱過濾器，例如 board/+/log"
+
+msgid "Unsubscribe"
+msgstr "取消訂閱"
+
+msgid "Subscribe"
+msgstr "訂閱"
+
+msgid "Publish topic (no wildcards)"
+msgstr "釋出主題（不含萬用字元）"
+
+msgid "Retain"
+msgstr "保留訊息"
+
+msgid "Publish"
+msgstr "釋出"
+
+msgid "Ready — TCP transport, clean session, QoS 0/1"
+msgstr "就緒 — TCP 傳輸、清理會話、QoS 0/1"
+
+msgid "CAN error frame received; inspect interface/bus state"
+msgstr "收到 CAN 錯誤幀；請檢查介面/匯流排狀態"
+
+msgid "SocketCAN interface opened"
+msgstr "SocketCAN 介面已開啟"
+
+msgid "Enter a valid hexadecimal CAN identifier"
+msgstr "請輸入有效的十六進位制 CAN 識別符號"
+
+msgid "Frame accepted by SocketCAN"
+msgstr "SocketCAN 已接受幀"
+
+msgid "Choose a regular DBC file"
+msgstr "選擇普通 DBC 檔案"
+
+msgid "Could not load DBC"
+msgstr "無法載入 DBC"
+
+msgid "DBC loaded; matching frames produce numeric fields in Analyze"
+msgstr "DBC 已載入；匹配幀會在分析器中生成數字欄位"
+
+msgid "Load DBC definitions"
+msgstr "載入 DBC 定義"
+
+msgid "CAN / DBC debugging"
+msgstr "CAN / DBC 除錯"
+
+msgid ""
+"Use a configured SocketCAN interface. DBC supports integer signals, Intel/"
+"Motorola byte order, scaling and simple multiplexing. Analyze plots decoded "
+"fields."
+msgstr "使用已配置的 SocketCAN 介面。DBC 支援整數訊號、Intel/Motorola 位元組序、縮放和簡單多路複用。分析器可繪製解碼欄位。"
+
+msgid "Interface, e.g. can0"
+msgstr "介面，例如 can0"
+
+msgid "Open"
+msgstr "開啟"
+
+msgid "Load DBC…"
+msgstr "載入 DBC…"
+
+msgid "CAN ID (hex)"
+msgstr "CAN ID（十六進位制）"
+
+msgid "29-bit ID"
+msgstr "29 位 ID"
+
+msgid "HEX payload; RTR uses its length as requested DLC"
+msgstr "HEX 載荷；RTR 使用其長度作為請求 DLC"
+
+msgid "Send frame"
+msgstr "傳送幀"
+
+msgid "BLE value exceeds 512 bytes"
+msgstr "BLE 值超過 512 位元組"
+
+msgid "BLE scan finished"
+msgstr "BLE 掃描已完成"
+
+msgid "completed"
+msgstr "已完成"
+
+msgid "Wait for the current BLE operation"
+msgstr "請等待當前 BLE 操作完成"
+
+msgid "Notifications already active"
+msgstr "通知已啟用"
+
+msgid "Select an available BLE device or characteristic"
+msgstr "選擇可用的 BLE 裝置或特徵"
+
+msgid "BLE object is no longer available"
+msgstr "BLE 物件已不可用"
+
+msgid "BLE scan is already running"
+msgstr "BLE 掃描正在進行"
+
+msgid "No powered Bluetooth adapter; enable it in system settings"
+msgstr "沒有已開啟的藍牙介面卡；請在系統設定中啟用"
+
+msgid "BLE writes are limited to 512 bytes; the device may accept less"
+msgstr "BLE 寫入上限為 512 位元組；裝置可能接受更少"
+
+msgid "BlueZ ready; scan or select a known device"
+msgstr "BlueZ 就緒；掃描或選擇已知裝置"
+
+msgid "BlueZ service is unavailable"
+msgstr "BlueZ 服務不可用"
+
+msgid "BLE GATT debugging"
+msgstr "BLE GATT 除錯"
+
+msgid ""
+"Select a device, connect, then select its GATT characteristic. Pairing and "
+"adapter power are managed in system settings. Writes keep the device's "
+"characteristic boundaries."
+msgstr "選擇裝置並連線，再選擇其 GATT 特徵。配對和介面卡電源在系統設定中管理。每次寫入保持裝置特徵的資料邊界。"
+
+msgid "Scan (10 s)"
+msgstr "掃描（10 秒）"
+
+msgid "Refresh"
+msgstr "重新整理"
+
+msgid "Read"
+msgstr "讀取"
+
+msgid "Start notifications"
+msgstr "啟用通知"
+
+msgid "Stop notifications"
+msgstr "停用通知"
+
+msgid "Without response"
+msgstr "無響應寫入"
+
+msgid "Write"
+msgstr "寫入"
+
+msgid "Loading BlueZ…"
+msgstr "正在載入 BlueZ…"

@@ -205,8 +205,8 @@ static void rebuild(Analyzer *view)
         }
     }
     gtk_widget_queue_draw(GTK_WIDGET(view->plot));
-    g_autofree gchar *status = g_strdup_printf(_("%u retained · %u matching · showing latest %u · regex limits: %" G_GUINT64_FORMAT),
-        entries->length, matches->len, view->ids->len, tio_log_filter_limited(view->filter));
+    g_autofree gchar *status = g_strdup_printf(_("%u retained · %u matching · showing latest %u · regex limits: %llu"),
+        entries->length, matches->len, view->ids->len, (unsigned long long)tio_log_filter_limited(view->filter));
     gtk_label_set_text(view->status, status);
     view->revision = tio_log_model_revision(view->model);
     view->rebuild = FALSE;

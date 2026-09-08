@@ -1,8 +1,11 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.2.0\n"
+"Project-Id-Version: tio-gui 0.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-08 11:09+0800\n"
+"POT-Creation-Date: 2026-09-08 16:26+0800\n"
+"PO-Revision-Date: 2026-09-08 17:00+0800\n"
+"Last-Translator: tio-gui contributors\n"
+"Language-Team: tio-gui contributors\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -12,13 +15,11 @@ msgstr ""
 msgid "Device"
 msgstr "デバイス"
 
-#, fuzzy
 msgid "Application settings"
-msgstr "詳細設定"
+msgstr "アプリケーション設定"
 
-#, fuzzy
 msgid "Settings"
-msgstr "詳細設定"
+msgstr "設定"
 
 msgid "Appearance"
 msgstr "外観"
@@ -26,97 +27,88 @@ msgstr "外観"
 msgid "General"
 msgstr "全般"
 
-#, fuzzy
 msgid "Session"
-msgstr "セッションを記録"
+msgstr "セッション"
 
-#, fuzzy
 msgid "Connection and logging"
-msgstr "接続プロファイル"
+msgstr "接続とログ"
 
 msgid "Backup"
-msgstr ""
+msgstr "バックアップ"
 
 msgid "About"
-msgstr ""
+msgstr "情報"
 
 msgid "Theme"
-msgstr ""
+msgstr "テーマ"
 
 msgid "Follow system"
-msgstr ""
+msgstr "システムに従う"
 
 msgid "Light"
-msgstr ""
+msgstr "ライト"
 
 msgid "Dark"
-msgstr ""
+msgstr "ダーク"
 
-#, fuzzy
 msgid "Timestamp format"
-msgstr "タイムスタンプ"
+msgstr "タイムスタンプ形式"
 
 msgid "Applied when line timestamps are enabled"
-msgstr ""
+msgstr "行のタイムスタンプが有効な場合に適用"
 
-#, fuzzy
 msgid "Log filename"
-msgstr "ログファイル"
+msgstr "ログファイル名"
 
-#, fuzzy
 msgid "tio-gui default"
-msgstr "システム既定"
+msgstr "tio-gui の既定値"
 
 msgid "Date first"
-msgstr ""
+msgstr "日付を先頭に"
 
-#, fuzzy
 msgid "Device first"
-msgstr "デバイス"
+msgstr "デバイスを先頭に"
 
 msgid "Custom…"
 msgstr "カスタム…"
 
 msgid "24-hour"
-msgstr ""
+msgstr "24 時間表記"
 
 msgid "Since start"
-msgstr ""
+msgstr "開始からの経過時間"
 
-#, fuzzy
 msgid "Since previous"
-msgstr "前を検索"
+msgstr "前の行からの経過時間"
 
 msgid "ISO 8601"
-msgstr ""
+msgstr "ISO 8601"
 
 msgid "Unix epoch"
-msgstr ""
+msgstr "Unix 時刻"
 
 msgid "GitHub project"
-msgstr ""
+msgstr "GitHub プロジェクト"
 
-#, fuzzy
 msgid "Export settings…"
-msgstr "詳細設定"
+msgstr "設定をエクスポート…"
 
-#, fuzzy
 msgid "Import settings…"
-msgstr "詳細設定"
+msgstr "設定をインポート…"
 
 msgid "A lightweight, reliable GUI for tio"
-msgstr ""
+msgstr "軽量で信頼性の高い tio の GUI"
 
 #, c-format
 msgid "Version %s is available"
-msgstr ""
+msgstr "バージョン %s が利用可能です"
 
 msgid "Download update"
-msgstr ""
+msgstr "更新をダウンロード"
 
 #, c-format
 msgid "Version %s"
-msgstr ""
+msgstr "バージョン %s"
 
 msgid "Baud"
 msgstr "ボーレート"
@@ -142,9 +134,8 @@ msgstr "タイムスタンプ"
 msgid "Log session"
 msgstr "セッションを記録"
 
-#, fuzzy
 msgid "Highlight view"
-msgstr "ハイライト表示"
+msgstr "強調表示"
 
 msgid "Show a semantic view of the raw serial log"
 msgstr "生のシリアルログを意味的にハイライト表示します"
@@ -152,9 +143,8 @@ msgstr "生のシリアルログを意味的にハイライト表示します"
 msgid "Log directory"
 msgstr "ログディレクトリ"
 
-#, fuzzy
 msgid "Choose log directory"
-msgstr "先にログディレクトリを選択してください"
+msgstr "ログディレクトリを選択"
 
 msgid "Data bits"
 msgstr "データビット"
@@ -196,7 +186,7 @@ msgid "Warn once the current log file passes this size; 0 disables it"
 msgstr "現在のログファイルがこのサイズを超えたら一度だけ警告します。0 で無効"
 
 msgid "Example: {device}-{date}-{time}.log"
-msgstr ""
+msgstr "例: {device}-{date}-{time}.log"
 
 msgid "Append"
 msgstr "追記"
@@ -243,7 +233,6 @@ msgstr "受信バイトを1行16バイトの16進数で表示"
 msgid "Connection profiles"
 msgstr "接続プロファイル"
 
-#, fuzzy
 msgid "Profiles"
 msgstr "プロファイル"
 
@@ -362,8 +351,28 @@ msgstr "プロファイル「%s」を削除しますか?"
 msgid "Delete"
 msgstr "削除"
 
+#, c-format
+msgid "Connected to %s"
+msgstr "%s に接続しました"
+
+msgid "tio no longer has the serial device open"
+msgstr "tio はシリアルデバイスを開いていません"
+
+msgid "Device disconnected; waiting for tio to reconnect"
+msgstr "デバイス切断。tio の再接続を待機中"
+
+msgid "Serial connection"
+msgstr "シリアル接続"
+
 msgid "no device"
 msgstr "デバイス未選択"
+
+msgid "waiting for device"
+msgstr "デバイス待機中"
+
+#, c-format
+msgid " · reconnects: %u"
+msgstr " · 再接続: %u"
 
 msgid "rx"
 msgstr "受信"
@@ -385,12 +394,19 @@ msgid "The session log has reached %s: %s"
 msgstr "セッションログが %s に達しました: %s"
 
 #, c-format
+msgid "tio exited with status %d"
+msgstr "tio が終了しました。終了状態: %d"
+
+#, c-format
 msgid "Disconnected (tio exit status: %d)"
 msgstr "切断されました（tio 終了ステータス: %d）"
 
 #, c-format
 msgid "Could not start tio: %s"
 msgstr "tio を起動できませんでした: %s"
+
+msgid "Waiting for serial device…"
+msgstr "シリアルデバイス待機中…"
 
 #, c-format
 msgid "Could not stop tio: %s"
@@ -422,6 +438,23 @@ msgstr "ログディレクトリを作成できませんでした: %s"
 msgid "Connecting…"
 msgstr "接続中…"
 
+#, c-format
+msgid "Sent %zu bytes to tio"
+msgstr "tio に %zu バイト送信しました"
+
+#, c-format
+msgid "Send failed after %zu bytes: %s"
+msgstr "%zu バイト送信後に失敗: %s"
+
+msgid "Stop file transfer before sending commands"
+msgstr "コマンド送信前にファイル転送を停止してください"
+
+msgid "Serial data channel is not ready"
+msgstr "シリアルデータチャネルが未準備です"
+
+msgid "A send is still in progress"
+msgstr "送信が進行中です"
+
 msgid "Send history cleared"
 msgstr "送信履歴を消去しました"
 
@@ -431,6 +464,24 @@ msgstr "検索パターンが無効です: %s"
 
 msgid "No matches"
 msgstr "一致するものがありません"
+
+msgid "Stop the sequence before sending a quick command"
+msgstr "クイックコマンド送信前にシーケンスを停止してください"
+
+msgid "A delayed send is pending; disconnect to cancel"
+msgstr "遅延送信が待機中です。切断で取り消せます"
+
+msgid "Send scheduled; disconnect to cancel"
+msgstr "送信を予約しました。切断で取り消せます"
+
+msgid "Choose a local file"
+msgstr "ローカルファイルを選択"
+
+msgid "Button group exported"
+msgstr "ボタングループをエクスポートしました"
+
+msgid "Button group loaded; Save to apply"
+msgstr "ボタングループを読み込みました。保存して適用"
 
 msgid "Customize quick buttons"
 msgstr "クイックボタンをカスタマイズ"
@@ -447,41 +498,414 @@ msgstr "ラベル"
 msgid "Payload"
 msgstr "ペイロード"
 
+msgid "Mode"
+msgstr "モード"
+
+msgid "Checksum"
+msgstr "チェックサム"
+
+msgid "Text"
+msgstr "テキスト"
+
+msgid "None"
+msgstr "なし"
+
+msgid "Delay (ms)"
+msgstr "遅延 (ms)"
+
+msgid "Import button group…"
+msgstr "ボタングループをインポート…"
+
+msgid "Export button group…"
+msgstr "ボタングループをエクスポート…"
+
+msgid "Payload (text escapes or HEX)"
+msgstr "ペイロード (エスケープ文字列または HEX)"
+
+msgid "Delay after sending (ms)"
+msgstr "送信後の遅延 (ms)"
+
+msgid "Move step up"
+msgstr "ステップを上へ"
+
+msgid "Move step down"
+msgstr "ステップを下へ"
+
+msgid "Remove step"
+msgstr "ステップを削除"
+
+msgid "Invalid sequence"
+msgstr "無効なシーケンス"
+
+msgid "New sequence"
+msgstr "新しいシーケンス"
+
+msgid "Stopped; bytes already sent cannot be recalled"
+msgstr "停止しました。送信済みバイトは取り消せません"
+
+msgid "Resume"
+msgstr "再開"
+
+msgid "Pause"
+msgstr "一時停止"
+
+msgid "Stop the current send before starting another"
+msgstr "別の送信を開始する前に現在の送信を停止してください"
+
+msgid "Connect this session before running a sequence"
+msgstr "シーケンス実行前にこのセッションを接続してください"
+
+msgid "At most 100 sequences can be saved"
+msgstr "保存できるシーケンスは 100 個までです"
+
+msgid "Sequences saved"
+msgstr "シーケンスを保存しました"
+
+msgid "Sequence stopped: transport failed"
+msgstr "シーケンス停止: 転送失敗"
+
+msgid "Sequence completed"
+msgstr "シーケンス完了"
+
+#, c-format
+msgid "Paused after step %u"
+msgstr "ステップ %u の後で一時停止"
+
+#, c-format
+msgid "Running: %u steps sent in this pass"
+msgstr "実行中: 今回の反復で %u ステップ送信済み"
+
+msgid "Send sequences"
+msgstr "送信シーケンス"
+
+msgid "Load"
+msgstr "読み込み"
+
+msgid "New"
+msgstr "新規"
+
+msgid "Delete sequence"
+msgstr "シーケンスを削除"
+
+msgid ""
+"Steps run top to bottom: payload, mode, line ending, CRC, delay after send "
+"(ms)."
+msgstr "上から順に実行: ペイロード、モード、行末、CRC、送信後の遅延 (ms)。"
+
+msgid "Add step"
+msgstr "ステップを追加"
+
+msgid "Remove last"
+msgstr "最後を削除"
+
+msgid "Save sequence"
+msgstr "シーケンスを保存"
+
+msgid "Loop"
+msgstr "繰り返し"
+
+msgid "Run"
+msgstr "実行"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Disconnect stops the sequence. Closing this editor leaves it running."
+msgstr "切断するとシーケンスは停止します。このエディターを閉じても実行は続きます。"
+
+msgid "Line command submitted; inspect tio response"
+msgstr "制御線コマンドを送信しました。tio の応答を確認してください"
+
+msgid "Could not recognize tio prompt; disconnect to cancel the command"
+msgstr "tio のプロンプトを認識できません。切断でコマンドを取り消せます"
+
+msgid "Connect before controlling serial lines"
+msgstr "制御線の操作前に接続してください"
+
+msgid "Stop pending sends before controlling serial lines"
+msgstr "制御線の操作前に保留中の送信を停止してください"
+
+msgid "Could not create runtime directory"
+msgstr "実行時ディレクトリを作成できません"
+
+msgid "Runtime path cannot be used in a tio command"
+msgstr "実行時パスを tio コマンドに使用できません"
+
+msgid "Could not create line command"
+msgstr "制御線コマンドを作成できません"
+
+msgid "Reconnect before issuing more line commands"
+msgstr "次の制御線コマンドを送る前に再接続してください"
+
+msgid "Saved for all sessions; applies to incoming lines"
+msgstr "全セッション用に保存しました。新しい受信行に適用します"
+
+msgid "Connect and stop pending sends before using Modbus RTU"
+msgstr "Modbus RTU の使用前に接続し、保留中の送信を停止してください"
+
+msgid "Custom highlight rules"
+msgstr "カスタム強調表示ルール"
+
+msgid ""
+"Add up to 32 [rule:name] sections with pattern, color and optional "
+"bold=true. Rules are case-insensitive with bounded regex matching. Clear the "
+"text to reset. Included in configuration exports."
+msgstr "[rule:name] セクションを最大 32 個追加できます。pattern、color、任意の bold=true を指定します。大文字小文字を区別せず、正規表現の計算量を制限します。空にするとリセットされます。設定のエクスポートに含まれます。"
+
+msgid "Validate and save"
+msgstr "検証して保存"
+
+msgid "Connect and stop pending sends before transferring files"
+msgstr "ファイル転送前に接続し、保留中の送信を停止してください"
+
+msgid "Connect before transferring files"
+msgstr "ファイル転送前に接続してください"
+
+msgid "Choose an empty receive directory"
+msgstr "空の受信ディレクトリを選択"
+
+msgid "Choose a file to send"
+msgstr "送信するファイルを選択"
+
+msgid "Timeout (s)"
+msgstr "タイムアウト (秒)"
+
+msgid "Send file…"
+msgstr "ファイルを送信…"
+
+msgid "Receive files…"
+msgstr "ファイルを受信…"
+
+msgid "Cancel transfer"
+msgstr "転送を取り消す"
+
+msgid ""
+"Start the matching protocol on the peer. XMODEM receives as received.bin; "
+"its final block may contain padding."
+msgstr "相手側で同じプロトコルを開始してください。XMODEM は received.bin に保存します。最終ブロックにパディングが含まれる場合があります。"
+
+#, c-format
+msgid "Recording failed: %s"
+msgstr "記録失敗: %s"
+
+#, c-format
+msgid "Recording saved: %s"
+msgstr "記録を保存しました: %s"
+
+#, c-format
+msgid "Recording: %s"
+msgstr "記録中: %s"
+
+msgid "Start recording…"
+msgstr "記録を開始…"
+
+msgid "Connect before starting a recording"
+msgstr "記録開始前に接続してください"
+
+msgid "A recording is already active"
+msgstr "記録が進行中です"
+
+msgid "Choose a local capture file"
+msgstr "ローカル記録ファイルを選択"
+
+msgid "Stop recording"
+msgstr "記録を停止"
+
+msgid "Finishing recording…"
+msgstr "記録を終了中…"
+
+msgid "Part MiB"
+msgstr "分割サイズ MiB"
+
+msgid "Part seconds (0=off)"
+msgstr "分割秒数 (0=無効)"
+
+msgid "Keep parts"
+msgstr "保持する分割数"
+
+msgid "Disk MiB"
+msgstr "ディスク MiB"
+
+msgid ""
+"Records exact RX/TX bytes, terminal input, connection events and serial "
+"parameters. Old closed parts expire at the configured limits."
+msgstr "正確な RX/TX バイト、端末入力、接続イベント、シリアル設定を記録します。閉じた古い分割ファイルは設定上限に従って削除します。"
+
+msgid "Automatic reconnect"
+msgstr "自動再接続"
+
+msgid "Same device"
+msgstr "同じデバイス"
+
+msgid "Next new device"
+msgstr "次の新しいデバイス"
+
+msgid "Latest device"
+msgstr "最新のデバイス"
+
+msgid "Exclude devices"
+msgstr "除外するデバイス"
+
+msgid "Exclude drivers"
+msgstr "除外するドライバー"
+
+msgid "Exclude topology IDs"
+msgstr "除外するトポロジー ID"
+
+msgid "Comma-separated patterns; * and ? supported"
+msgstr "カンマ区切りパターン。* と ? に対応"
+
+msgid "Desktop notifications"
+msgstr "デスクトップ通知"
+
+msgid "Connection sound"
+msgstr "接続通知音"
+
+msgid ""
+"Strategy changes apply on the next connection. New/latest lets tio choose a "
+"port. Reconnect counts reflect observed transitions."
+msgstr "変更は次の接続から適用します。新規・最新では tio がポートを選択します。再接続回数は観測した状態変化に基づきます。"
+
+msgid "Unchanged"
+msgstr "変更なし"
+
+msgid "Low"
+msgstr "Low"
+
+msgid "High"
+msgstr "High"
+
+msgid "DTR on connect"
+msgstr "接続時の DTR"
+
+msgid "RTS on connect"
+msgstr "接続時の RTS"
+
+msgid "Pulse (ms)"
+msgstr "パルス (ms)"
+
+msgid "Send Break"
+msgstr "Break を送信"
+
+msgid "DTR Low"
+msgstr "DTR Low"
+
+msgid "DTR High"
+msgstr "DTR High"
+
+msgid "DTR Pulse"
+msgstr "DTR パルス"
+
+msgid "RTS Low"
+msgstr "RTS Low"
+
+msgid "RTS High"
+msgstr "RTS High"
+
+msgid "RTS Pulse"
+msgstr "RTS パルス"
+
+msgid "RS-485"
+msgstr "RS-485"
+
+msgid ""
+"Defaults, pulse duration and RS-485 apply on the next connection. Hardware "
+"support varies by adapter."
+msgstr "既定のレベル、パルス時間、RS-485 は次の接続から適用します。ハードウェア対応はアダプターによって異なります。"
+
+msgid "Close all active sessions?"
+msgstr "すべての動作中セッションを閉じますか？"
+
+msgid "Connections will stop and pending recordings will finish writing."
+msgstr "接続を停止し、保留中の記録の書き込みを完了します。"
+
+msgid "Close"
+msgstr "閉じる"
+
+msgid "tio version unavailable"
+msgstr "tio のバージョンを取得できません"
+
+msgid "About tio-gui"
+msgstr "tio-gui について"
+
+msgid "Serial debugging for embedded development"
+msgstr "組み込み開発向けシリアルデバッグ"
+
+msgid "Copy diagnostics"
+msgstr "診断情報をコピー"
+
+msgid "Checking tio version…"
+msgstr "tio のバージョンを確認中…"
+
 msgid "Choose a local file for settings export"
-msgstr ""
+msgstr "設定のエクスポート先のローカルファイルを選択"
 
 msgid "Settings exported"
-msgstr ""
+msgstr "設定をエクスポートしました"
 
-#, fuzzy
+msgid "Export portable settings"
+msgstr "ポータブル設定をエクスポート"
+
 msgid "Export settings"
-msgstr "詳細設定"
+msgstr "設定をエクスポート"
 
-#, fuzzy
 msgid "Choose a local settings file"
-msgstr "先にログディレクトリを選択してください"
+msgstr "ローカル設定ファイルを選択"
+
+msgid "Disconnect all sessions before importing settings"
+msgstr "設定のインポート前に全セッションを切断してください"
 
 msgid "Settings imported"
-msgstr ""
+msgstr "設定をインポートしました"
 
-msgid "Disconnect before importing settings"
-msgstr ""
-
-#, fuzzy
 msgid "Import settings"
-msgstr "詳細設定"
+msgstr "設定をインポート"
 
-#, fuzzy
 msgid "Choose a local log directory"
-msgstr "先にログディレクトリを選択してください"
+msgstr "ローカルログディレクトリを選択"
 
-#, fuzzy
 msgid "Log directory selected"
-msgstr "ログディレクトリ"
+msgstr "ログディレクトリを選択しました"
 
 #, c-format
 msgid "Preview: %s"
-msgstr ""
+msgstr "プレビュー: %s"
+
+msgid "Session closed. Reopen comparison to choose new sessions."
+msgstr "セッションは閉じられました。比較を開き直して新しいセッションを選択してください。"
+
+msgid "Compare sessions"
+msgstr "セッション比較"
+
+msgid "Read-only raw log comparison · latest 200 entries per session"
+msgstr "読み取り専用の生ログ比較 · 各セッションの最新 200 件"
+
+msgid "Follow"
+msgstr "追従"
+
+msgid "Shared substring filter"
+msgstr "共通の部分文字列フィルター"
+
+msgid "Compare sessions…"
+msgstr "セッションを比較…"
+
+msgid "BLE GATT debugging…"
+msgstr "BLE GATT デバッグ…"
+
+msgid "CAN / DBC debugging…"
+msgstr "CAN / DBC デバッグ…"
+
+msgid "MQTT debugging…"
+msgstr "MQTT デバッグ…"
+
+msgid "Modbus TCP…"
+msgstr "Modbus TCP…"
+
+msgid "TCP / UDP debugging…"
+msgstr "TCP / UDP デバッグ…"
+
+msgid "Custom highlight rules…"
+msgstr "カスタム強調表示ルール…"
 
 msgid "Reopen sessions on startup"
 msgstr "起動時にセッションを復元"
@@ -489,12 +913,50 @@ msgstr "起動時にセッションを復元"
 msgid "Reopen the tabs that were open last time, without connecting"
 msgstr "前回開いていたタブを復元します（接続はしません）"
 
+msgid "Export portable settings…"
+msgstr "ポータブル設定をエクスポート…"
+
+msgid ""
+"Profiles, buttons and sequences; excludes local paths, device identities and "
+"send history"
+msgstr "プロファイル、ボタン、シーケンス。ローカルパス、デバイス識別情報、送信履歴は除外"
+
+msgid "About / diagnostics…"
+msgstr "情報 / 診断…"
+
+msgid "Serial lines / RS-485"
+msgstr "シリアル制御線 / RS-485"
+
+msgid "Reconnect strategy"
+msgstr "再接続方針"
+
+msgid "Modbus RTU…"
+msgstr "Modbus RTU…"
+
+msgid "File transfer"
+msgstr "ファイル転送"
+
+msgid "Recording / safe rotation"
+msgstr "記録 / 安全なローテーション"
+
 msgid "No line ending"
 msgstr "改行なし"
+
+msgid "Sequences…"
+msgstr "シーケンス…"
+
+msgid "Analyze…"
+msgstr "解析…"
 
 #, c-format
 msgid "Session %u"
 msgstr "セッション %u"
+
+msgid "Rename session"
+msgstr "セッション名を変更"
+
+msgid "Leave blank to use the device name."
+msgstr "空欄の場合はデバイス名を使用します。"
 
 msgid "Close this session"
 msgstr "このセッションを閉じる"
@@ -512,14 +974,395 @@ msgstr "シリアルデバイス"
 msgid "The session log is still open."
 msgstr "セッションログはまだ開いています。"
 
-msgid "Close"
-msgstr "閉じる"
-
 msgid "New session"
 msgstr "新しいセッション"
 
-#~ msgid "More settings"
-#~ msgstr "詳細設定"
+msgid "Tools"
+msgstr "ツール"
 
-#~ msgid "Automatic name"
-#~ msgstr "自動命名"
+msgid "Select numeric fields to plot"
+msgstr "描画する数値フィールドを選択"
+
+msgid "Fields"
+msgstr "フィールド"
+
+msgid "Select a retained log entry first"
+msgstr "保持されたログ項目を先に選択してください"
+
+#, c-format
+msgid "%u retained · %u matching · showing latest %u · regex limits: %llu"
+msgstr "保持 %u 件 · 一致 %u 件 · 最新 %u 件を表示 · 正規表現上限: %llu"
+
+#, c-format
+msgid "Replay complete: %u/%u events"
+msgstr "再生完了: %u/%u イベント"
+
+#, c-format
+msgid "Replay: %u/%u events"
+msgstr "再生: %u/%u イベント"
+
+msgid "Parser rules saved"
+msgstr "解析ルールを保存しました"
+
+msgid "Parser rules loaded"
+msgstr "解析ルールを読み込みました"
+
+msgid "Choose a valid parser rule file up to 64 KiB"
+msgstr "64 KiB 以下の有効な解析ルールファイルを選択"
+
+msgid "Choose a local CSV file"
+msgstr "ローカル CSV ファイルを選択"
+
+msgid "Filtered CSV exported"
+msgstr "絞り込み済み CSV をエクスポートしました"
+
+msgid "Loaded; uncheck Pause replay to play"
+msgstr "読み込み完了。「再生を一時停止」を解除すると再生します"
+
+msgid "Choose a local recording"
+msgstr "ローカル記録を選択"
+
+msgid "Loading recording…"
+msgstr "記録を読み込み中…"
+
+msgid "Open recording or retained part"
+msgstr "記録または保持された分割ファイルを開く"
+
+msgid "Serial log analysis"
+msgstr "シリアルログ解析"
+
+msgid "Filter received lines"
+msgstr "受信行を絞り込む"
+
+msgid "Regex"
+msgstr "正規表現"
+
+msgid "Case sensitive"
+msgstr "大文字小文字を区別"
+
+msgid "Apply"
+msgstr "適用"
+
+msgid "Export filtered CSV…"
+msgstr "絞り込み済み CSV をエクスポート…"
+
+msgid "Load parser rules…"
+msgstr "解析ルールを読み込む…"
+
+msgid "Save parser rules…"
+msgstr "解析ルールを保存…"
+
+msgid "Run analysis plugin…"
+msgstr "解析プラグインを実行…"
+
+msgid "Open recording…"
+msgstr "記録を開く…"
+
+msgid "Pause replay"
+msgstr "再生を一時停止"
+
+msgid "RX as HEX"
+msgstr "RX を HEX で表示"
+
+msgid "Playback never sends data to a device"
+msgstr "再生でデバイスにデータを送信することはありません"
+
+msgid "Speed ×"
+msgstr "速度 ×"
+
+msgid "Clear analysis"
+msgstr "解析をクリア"
+
+msgid "Click a log line to inspect and copy its fields"
+msgstr "ログ行をクリックしてフィールドを確認・コピー"
+
+msgid "Plot fields: temp,voltage or col1,col2"
+msgstr "描画フィールド: temp,voltage または col1,col2"
+
+msgid "Optional regex with named captures"
+msgstr "任意: 名前付きキャプチャのある正規表現"
+
+msgid "Maximum points per curve"
+msgstr "曲線ごとの最大点数"
+
+msgid "Plot"
+msgstr "描画"
+
+msgid "Recording playback"
+msgstr "記録の再生"
+
+msgid "Running isolated plugin…"
+msgstr "隔離プラグインを実行中…"
+
+msgid "Plugin saved"
+msgstr "プラグインを保存しました"
+
+msgid "Plugin loaded; review and run"
+msgstr "プラグインを読み込みました。確認して実行してください"
+
+msgid "Choose a UTF-8 plugin file up to 64 KiB"
+msgstr "64 KiB 以下の UTF-8 プラグインファイルを選択"
+
+msgid "Analysis plugin"
+msgstr "解析プラグイン"
+
+msgid ""
+"API 1: define transform(input). Lua returns text; JavaScript returns text or "
+"a JSON value. Runs on this entry snapshot with a 2-second deadline and 64 "
+"KiB output limit."
+msgstr "API 1: transform(input) を定義します。Lua はテキスト、JavaScript はテキストまたは JSON 値を返します。この項目のスナップショットに対して実行し、制限は 2 秒、出力 64 KiB です。"
+
+msgid "Load plugin…"
+msgstr "プラグインを読み込む…"
+
+msgid "Save plugin…"
+msgstr "プラグインを保存…"
+
+msgid "Run on entry"
+msgstr "項目に対して実行"
+
+msgid "Input snapshot"
+msgstr "入力スナップショット"
+
+msgid "Plugin source"
+msgstr "プラグインソース"
+
+msgid "Result"
+msgstr "結果"
+
+#, c-format
+msgid "RX %llu bytes / %llu chunks · TX %llu bytes"
+msgstr "RX %llu バイト / %llu チャンク · TX %llu バイト"
+
+msgid "Disconnected"
+msgstr "切断済み"
+
+msgid "TCP / UDP debugging"
+msgstr "TCP / UDP デバッグ"
+
+msgid "Hostname or IP address"
+msgstr "ホスト名または IP アドレス"
+
+msgid "HEX display"
+msgstr "HEX 表示"
+
+msgid "No ending"
+msgstr "行末なし"
+
+msgid "No CRC"
+msgstr "CRC なし"
+
+msgid "Waiting for Modbus response…"
+msgstr "Modbus 応答を待機中…"
+
+msgid "Modbus RTU — current serial session"
+msgstr "Modbus RTU — 現在のシリアルセッション"
+
+msgid "Modbus TCP"
+msgstr "Modbus TCP"
+
+msgid ""
+"Addresses are zero-based protocol addresses. Functions 1–4 read; 5–6 write "
+"one coil/register. Coil write values are 0 or 1. No automatic retries."
+msgstr "アドレスはゼロ起点のプロトコルアドレスです。機能 1–4 は読み取り、5–6 は単一コイル/レジスター書き込みです。コイル値は 0 または 1。自動再試行はしません。"
+
+msgid "TCP hostname or IP"
+msgstr "TCP ホスト名または IP"
+
+msgid "Port"
+msgstr "ポート"
+
+msgid "Unit"
+msgstr "ユニット"
+
+msgid "01 Read coils"
+msgstr "01 コイル読み取り"
+
+msgid "02 Read discrete inputs"
+msgstr "02 ディスクリート入力読み取り"
+
+msgid "03 Read holding registers"
+msgstr "03 保持レジスター読み取り"
+
+msgid "04 Read input registers"
+msgstr "04 入力レジスター読み取り"
+
+msgid "05 Write single coil"
+msgstr "05 単一コイル書き込み"
+
+msgid "06 Write single register"
+msgstr "06 単一レジスター書き込み"
+
+msgid "Address"
+msgstr "アドレス"
+
+msgid "Read count"
+msgstr "読み取り数"
+
+msgid "Write value"
+msgstr "書き込み値"
+
+msgid "Execute request"
+msgstr "リクエストを実行"
+
+msgid "Publish queued; QoS 1 waits for broker acknowledgement"
+msgstr "配信をキューに追加。QoS 1 はブローカーの確認を待機"
+
+msgid "MQTT 3.1.1 / TCP debugging"
+msgstr "MQTT 3.1.1 / TCP デバッグ"
+
+msgid "Broker hostname or IP"
+msgstr "ブローカーのホスト名または IP"
+
+msgid "Analyze payloads…"
+msgstr "ペイロードを解析…"
+
+msgid "Optional username"
+msgstr "ユーザー名 (任意)"
+
+msgid "Password"
+msgstr "パスワード"
+
+msgid "Subscription filter, e.g. board/+/log"
+msgstr "購読フィルター、例: board/+/log"
+
+msgid "Unsubscribe"
+msgstr "購読解除"
+
+msgid "Subscribe"
+msgstr "購読"
+
+msgid "Publish topic (no wildcards)"
+msgstr "配信トピック (ワイルドカード不可)"
+
+msgid "Retain"
+msgstr "保持"
+
+msgid "Publish"
+msgstr "配信"
+
+msgid "Ready — TCP transport, clean session, QoS 0/1"
+msgstr "準備完了 — TCP 転送、クリーンセッション、QoS 0/1"
+
+msgid "CAN error frame received; inspect interface/bus state"
+msgstr "CAN エラーフレームを受信。インターフェース/バス状態を確認してください"
+
+msgid "SocketCAN interface opened"
+msgstr "SocketCAN インターフェースを開きました"
+
+msgid "Enter a valid hexadecimal CAN identifier"
+msgstr "有効な 16 進 CAN 識別子を入力してください"
+
+msgid "Frame accepted by SocketCAN"
+msgstr "SocketCAN がフレームを受理しました"
+
+msgid "Choose a regular DBC file"
+msgstr "通常の DBC ファイルを選択"
+
+msgid "Could not load DBC"
+msgstr "DBC を読み込めません"
+
+msgid "DBC loaded; matching frames produce numeric fields in Analyze"
+msgstr "DBC を読み込みました。一致するフレームから解析用の数値フィールドを生成します"
+
+msgid "Load DBC definitions"
+msgstr "DBC 定義を読み込む"
+
+msgid "CAN / DBC debugging"
+msgstr "CAN / DBC デバッグ"
+
+msgid ""
+"Use a configured SocketCAN interface. DBC supports integer signals, Intel/"
+"Motorola byte order, scaling and simple multiplexing. Analyze plots decoded "
+"fields."
+msgstr "設定済みの SocketCAN インターフェースを使用します。DBC は整数信号、Intel/Motorola バイト順、スケーリング、単純な多重化に対応します。解析でデコード済みフィールドを描画できます。"
+
+msgid "Interface, e.g. can0"
+msgstr "インターフェース、例: can0"
+
+msgid "Open"
+msgstr "開く"
+
+msgid "Load DBC…"
+msgstr "DBC を読み込む…"
+
+msgid "CAN ID (hex)"
+msgstr "CAN ID (16 進)"
+
+msgid "29-bit ID"
+msgstr "29 ビット ID"
+
+msgid "HEX payload; RTR uses its length as requested DLC"
+msgstr "HEX ペイロード。RTR は長さを要求 DLC として使用"
+
+msgid "Send frame"
+msgstr "フレームを送信"
+
+msgid "BLE value exceeds 512 bytes"
+msgstr "BLE 値が 512 バイトを超えています"
+
+msgid "BLE scan finished"
+msgstr "BLE スキャン完了"
+
+msgid "completed"
+msgstr "完了"
+
+msgid "Wait for the current BLE operation"
+msgstr "現在の BLE 操作の完了を待ってください"
+
+msgid "Notifications already active"
+msgstr "通知は既に有効です"
+
+msgid "Select an available BLE device or characteristic"
+msgstr "利用可能な BLE デバイスまたは特性を選択"
+
+msgid "BLE object is no longer available"
+msgstr "BLE オブジェクトは利用できなくなりました"
+
+msgid "BLE scan is already running"
+msgstr "BLE スキャンは実行中です"
+
+msgid "No powered Bluetooth adapter; enable it in system settings"
+msgstr "電源の入った Bluetooth アダプターがありません。システム設定で有効にしてください"
+
+msgid "BLE writes are limited to 512 bytes; the device may accept less"
+msgstr "BLE 書き込みは 512 バイトまでです。デバイスの上限はそれより小さい場合があります"
+
+msgid "BlueZ ready; scan or select a known device"
+msgstr "BlueZ 準備完了。スキャンするか既知のデバイスを選択してください"
+
+msgid "BlueZ service is unavailable"
+msgstr "BlueZ サービスを利用できません"
+
+msgid "BLE GATT debugging"
+msgstr "BLE GATT デバッグ"
+
+msgid ""
+"Select a device, connect, then select its GATT characteristic. Pairing and "
+"adapter power are managed in system settings. Writes keep the device's "
+"characteristic boundaries."
+msgstr "デバイスを選択して接続し、GATT 特性を選択してください。ペアリングとアダプター電源はシステム設定で管理します。書き込みはデバイス特性のデータ境界を維持します。"
+
+msgid "Scan (10 s)"
+msgstr "スキャン (10 秒)"
+
+msgid "Refresh"
+msgstr "更新"
+
+msgid "Read"
+msgstr "読み取り"
+
+msgid "Start notifications"
+msgstr "通知を開始"
+
+msgid "Stop notifications"
+msgstr "通知を停止"
+
+msgid "Without response"
+msgstr "応答なし"
+
+msgid "Write"
+msgstr "書き込み"
+
+msgid "Loading BlueZ…"
+msgstr "BlueZ を読み込み中…"

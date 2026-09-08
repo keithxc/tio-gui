@@ -57,7 +57,7 @@ static void event(TioNetworkEvent kind, const guint8 *bytes, gsize length, gpoin
     if (length > 512) g_string_append(line, "…");
     append(view, line->str);
     if (kind == TIO_NET_TX) tio_log_model_command(view->model, line->str, g_get_real_time());
-    g_autofree gchar *status = g_strdup_printf(_("RX %" G_GUINT64_FORMAT " bytes / %" G_GUINT64_FORMAT " chunks · TX %" G_GUINT64_FORMAT " bytes"), view->rx, view->packets, view->tx);
+    g_autofree gchar *status = g_strdup_printf(_("RX %llu bytes / %llu chunks · TX %llu bytes"), (unsigned long long)view->rx, (unsigned long long)view->packets, (unsigned long long)view->tx);
     gtk_label_set_text(view->status, status);
 }
 static void connect_clicked(GtkButton *button, gpointer data)

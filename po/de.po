@@ -1,8 +1,11 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.2.0\n"
+"Project-Id-Version: tio-gui 0.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-08 11:09+0800\n"
+"POT-Creation-Date: 2026-09-08 16:26+0800\n"
+"PO-Revision-Date: 2026-09-08 17:00+0800\n"
+"Last-Translator: tio-gui contributors\n"
+"Language-Team: tio-gui contributors\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -12,13 +15,11 @@ msgstr ""
 msgid "Device"
 msgstr "Gerät"
 
-#, fuzzy
 msgid "Application settings"
-msgstr "Weitere Einstellungen"
+msgstr "Anwendungseinstellungen"
 
-#, fuzzy
 msgid "Settings"
-msgstr "Weitere Einstellungen"
+msgstr "Einstellungen"
 
 msgid "Appearance"
 msgstr "Erscheinungsbild"
@@ -26,97 +27,88 @@ msgstr "Erscheinungsbild"
 msgid "General"
 msgstr "Allgemein"
 
-#, fuzzy
 msgid "Session"
-msgstr "Sitzung protokollieren"
+msgstr "Sitzung"
 
-#, fuzzy
 msgid "Connection and logging"
-msgstr "Verbindungsprofile"
+msgstr "Verbindung und Protokollierung"
 
 msgid "Backup"
-msgstr ""
+msgstr "Sicherung"
 
 msgid "About"
-msgstr ""
+msgstr "Info"
 
 msgid "Theme"
-msgstr ""
+msgstr "Design"
 
 msgid "Follow system"
-msgstr ""
+msgstr "Systemeinstellung"
 
 msgid "Light"
-msgstr ""
+msgstr "Hell"
 
 msgid "Dark"
-msgstr ""
+msgstr "Dunkel"
 
-#, fuzzy
 msgid "Timestamp format"
-msgstr "Zeitstempel"
+msgstr "Zeitstempelformat"
 
 msgid "Applied when line timestamps are enabled"
-msgstr ""
+msgstr "Gilt bei aktivierten Zeilenzeitstempeln"
 
-#, fuzzy
 msgid "Log filename"
-msgstr "Protokolldatei"
+msgstr "Protokolldateiname"
 
-#, fuzzy
 msgid "tio-gui default"
-msgstr "Systemstandard"
+msgstr "tio-gui-Standard"
 
 msgid "Date first"
-msgstr ""
+msgstr "Datum zuerst"
 
-#, fuzzy
 msgid "Device first"
-msgstr "Gerät"
+msgstr "Gerät zuerst"
 
 msgid "Custom…"
 msgstr "Benutzerdefiniert…"
 
 msgid "24-hour"
-msgstr ""
+msgstr "24-Stunden-Format"
 
 msgid "Since start"
-msgstr ""
+msgstr "Seit Beginn"
 
-#, fuzzy
 msgid "Since previous"
-msgstr "Rückwärts suchen"
+msgstr "Seit vorheriger Zeile"
 
 msgid "ISO 8601"
-msgstr ""
+msgstr "ISO 8601"
 
 msgid "Unix epoch"
-msgstr ""
+msgstr "Unix-Zeit"
 
 msgid "GitHub project"
-msgstr ""
+msgstr "GitHub-Projekt"
 
-#, fuzzy
 msgid "Export settings…"
-msgstr "Weitere Einstellungen"
+msgstr "Einstellungen exportieren…"
 
-#, fuzzy
 msgid "Import settings…"
-msgstr "Weitere Einstellungen"
+msgstr "Einstellungen importieren…"
 
 msgid "A lightweight, reliable GUI for tio"
-msgstr ""
+msgstr "Eine schlanke, zuverlässige GUI für tio"
 
 #, c-format
 msgid "Version %s is available"
-msgstr ""
+msgstr "Version %s ist verfügbar"
 
 msgid "Download update"
-msgstr ""
+msgstr "Update herunterladen"
 
 #, c-format
 msgid "Version %s"
-msgstr ""
+msgstr "Version %s"
 
 msgid "Baud"
 msgstr "Baudrate"
@@ -142,7 +134,6 @@ msgstr "Zeitstempel"
 msgid "Log session"
 msgstr "Sitzung protokollieren"
 
-#, fuzzy
 msgid "Highlight view"
 msgstr "Hervorgehobene Ansicht"
 
@@ -152,9 +143,8 @@ msgstr "Semantische Ansicht des seriellen Rohprotokolls anzeigen"
 msgid "Log directory"
 msgstr "Protokollverzeichnis"
 
-#, fuzzy
 msgid "Choose log directory"
-msgstr "Zuerst ein Protokollverzeichnis auswählen"
+msgstr "Protokollordner auswählen"
 
 msgid "Data bits"
 msgstr "Datenbits"
@@ -198,7 +188,7 @@ msgstr ""
 "0 deaktiviert die Warnung"
 
 msgid "Example: {device}-{date}-{time}.log"
-msgstr ""
+msgstr "Beispiel: {device}-{date}-{time}.log"
 
 msgid "Append"
 msgstr "Anhängen"
@@ -245,9 +235,8 @@ msgstr "Eingehende Bytes als Hexadezimalzeilen mit 16 Bytes anzeigen"
 msgid "Connection profiles"
 msgstr "Verbindungsprofile"
 
-#, fuzzy
 msgid "Profiles"
-msgstr "Profil"
+msgstr "Profile"
 
 msgid "Save as new profile…"
 msgstr "Als neues Profil speichern…"
@@ -365,8 +354,28 @@ msgstr "Profil „%s“ löschen?"
 msgid "Delete"
 msgstr "Löschen"
 
+#, c-format
+msgid "Connected to %s"
+msgstr "Mit %s verbunden"
+
+msgid "tio no longer has the serial device open"
+msgstr "tio hat das serielle Gerät nicht mehr geöffnet"
+
+msgid "Device disconnected; waiting for tio to reconnect"
+msgstr "Gerät getrennt; warte auf erneute Verbindung durch tio"
+
+msgid "Serial connection"
+msgstr "Serielle Verbindung"
+
 msgid "no device"
 msgstr "kein Gerät"
+
+msgid "waiting for device"
+msgstr "Warte auf Gerät"
+
+#, c-format
+msgid " · reconnects: %u"
+msgstr " · Wiederverbindungen: %u"
 
 msgid "rx"
 msgstr "RX"
@@ -388,12 +397,19 @@ msgid "The session log has reached %s: %s"
 msgstr "Das Sitzungsprotokoll hat %s erreicht: %s"
 
 #, c-format
+msgid "tio exited with status %d"
+msgstr "tio wurde mit Status %d beendet"
+
+#, c-format
 msgid "Disconnected (tio exit status: %d)"
 msgstr "Getrennt (tio-Beendigungsstatus: %d)"
 
 #, c-format
 msgid "Could not start tio: %s"
 msgstr "tio konnte nicht gestartet werden: %s"
+
+msgid "Waiting for serial device…"
+msgstr "Warte auf serielles Gerät…"
 
 #, c-format
 msgid "Could not stop tio: %s"
@@ -425,6 +441,23 @@ msgstr "Protokollverzeichnis konnte nicht erstellt werden: %s"
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt…"
 
+#, c-format
+msgid "Sent %zu bytes to tio"
+msgstr "%zu Bytes an tio gesendet"
+
+#, c-format
+msgid "Send failed after %zu bytes: %s"
+msgstr "Senden nach %zu Bytes fehlgeschlagen: %s"
+
+msgid "Stop file transfer before sending commands"
+msgstr "Vor dem Senden von Befehlen die Dateiübertragung stoppen"
+
+msgid "Serial data channel is not ready"
+msgstr "Serieller Datenkanal ist noch nicht bereit"
+
+msgid "A send is still in progress"
+msgstr "Ein Sendevorgang läuft noch"
+
 msgid "Send history cleared"
 msgstr "Sendeverlauf gelöscht"
 
@@ -434,6 +467,24 @@ msgstr "Ungültiges Suchmuster: %s"
 
 msgid "No matches"
 msgstr "Keine Treffer"
+
+msgid "Stop the sequence before sending a quick command"
+msgstr "Vor einem Schnellbefehl die Sequenz stoppen"
+
+msgid "A delayed send is pending; disconnect to cancel"
+msgstr "Verzögertes Senden steht aus; Trennen bricht es ab"
+
+msgid "Send scheduled; disconnect to cancel"
+msgstr "Senden geplant; Trennen bricht es ab"
+
+msgid "Choose a local file"
+msgstr "Lokale Datei auswählen"
+
+msgid "Button group exported"
+msgstr "Schaltflächengruppe exportiert"
+
+msgid "Button group loaded; Save to apply"
+msgstr "Schaltflächengruppe geladen; zum Anwenden speichern"
 
 msgid "Customize quick buttons"
 msgstr "Schnelltasten anpassen"
@@ -450,41 +501,414 @@ msgstr "Beschriftung"
 msgid "Payload"
 msgstr "Nutzlast"
 
+msgid "Mode"
+msgstr "Modus"
+
+msgid "Checksum"
+msgstr "Prüfsumme"
+
+msgid "Text"
+msgstr "Text"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "Delay (ms)"
+msgstr "Verzögerung (ms)"
+
+msgid "Import button group…"
+msgstr "Schaltflächengruppe importieren…"
+
+msgid "Export button group…"
+msgstr "Schaltflächengruppe exportieren…"
+
+msgid "Payload (text escapes or HEX)"
+msgstr "Nutzdaten (Text mit Escape-Sequenzen oder HEX)"
+
+msgid "Delay after sending (ms)"
+msgstr "Verzögerung nach dem Senden (ms)"
+
+msgid "Move step up"
+msgstr "Schritt nach oben"
+
+msgid "Move step down"
+msgstr "Schritt nach unten"
+
+msgid "Remove step"
+msgstr "Schritt entfernen"
+
+msgid "Invalid sequence"
+msgstr "Ungültige Sequenz"
+
+msgid "New sequence"
+msgstr "Neue Sequenz"
+
+msgid "Stopped; bytes already sent cannot be recalled"
+msgstr "Gestoppt; bereits gesendete Bytes lassen sich nicht zurücknehmen"
+
+msgid "Resume"
+msgstr "Fortsetzen"
+
+msgid "Pause"
+msgstr "Pause"
+
+msgid "Stop the current send before starting another"
+msgstr "Vor einem weiteren Sendevorgang den aktuellen stoppen"
+
+msgid "Connect this session before running a sequence"
+msgstr "Vor dem Ausführen einer Sequenz diese Sitzung verbinden"
+
+msgid "At most 100 sequences can be saved"
+msgstr "Höchstens 100 Sequenzen können gespeichert werden"
+
+msgid "Sequences saved"
+msgstr "Sequenzen gespeichert"
+
+msgid "Sequence stopped: transport failed"
+msgstr "Sequenz gestoppt: Übertragung fehlgeschlagen"
+
+msgid "Sequence completed"
+msgstr "Sequenz abgeschlossen"
+
+#, c-format
+msgid "Paused after step %u"
+msgstr "Nach Schritt %u pausiert"
+
+#, c-format
+msgid "Running: %u steps sent in this pass"
+msgstr "Läuft: %u Schritte in diesem Durchlauf gesendet"
+
+msgid "Send sequences"
+msgstr "Sendesequenzen"
+
+msgid "Load"
+msgstr "Laden"
+
+msgid "New"
+msgstr "Neu"
+
+msgid "Delete sequence"
+msgstr "Sequenz löschen"
+
+msgid ""
+"Steps run top to bottom: payload, mode, line ending, CRC, delay after send "
+"(ms)."
+msgstr "Schritte von oben nach unten: Nutzdaten, Modus, Zeilenende, CRC, Verzögerung nach dem Senden (ms)."
+
+msgid "Add step"
+msgstr "Schritt hinzufügen"
+
+msgid "Remove last"
+msgstr "Letzten Schritt entfernen"
+
+msgid "Save sequence"
+msgstr "Sequenz speichern"
+
+msgid "Loop"
+msgstr "Wiederholen"
+
+msgid "Run"
+msgstr "Ausführen"
+
+msgid "Stop"
+msgstr "Stoppen"
+
+msgid "Disconnect stops the sequence. Closing this editor leaves it running."
+msgstr "Trennen stoppt die Sequenz. Beim Schließen dieses Editors läuft sie weiter."
+
+msgid "Line command submitted; inspect tio response"
+msgstr "Leitungsbefehl übermittelt; tio-Antwort prüfen"
+
+msgid "Could not recognize tio prompt; disconnect to cancel the command"
+msgstr "tio-Eingabeaufforderung nicht erkannt; Trennen bricht den Befehl ab"
+
+msgid "Connect before controlling serial lines"
+msgstr "Vor der Leitungssteuerung verbinden"
+
+msgid "Stop pending sends before controlling serial lines"
+msgstr "Vor der Leitungssteuerung ausstehende Sendevorgänge stoppen"
+
+msgid "Could not create runtime directory"
+msgstr "Laufzeitverzeichnis konnte nicht erstellt werden"
+
+msgid "Runtime path cannot be used in a tio command"
+msgstr "Laufzeitpfad kann nicht in einem tio-Befehl verwendet werden"
+
+msgid "Could not create line command"
+msgstr "Leitungsbefehl konnte nicht erstellt werden"
+
+msgid "Reconnect before issuing more line commands"
+msgstr "Vor weiteren Leitungsbefehlen erneut verbinden"
+
+msgid "Saved for all sessions; applies to incoming lines"
+msgstr "Für alle Sitzungen gespeichert; gilt für neu empfangene Zeilen"
+
+msgid "Connect and stop pending sends before using Modbus RTU"
+msgstr "Vor Modbus RTU verbinden und ausstehende Sendevorgänge stoppen"
+
+msgid "Custom highlight rules"
+msgstr "Eigene Hervorhebungsregeln"
+
+msgid ""
+"Add up to 32 [rule:name] sections with pattern, color and optional "
+"bold=true. Rules are case-insensitive with bounded regex matching. Clear the "
+"text to reset. Included in configuration exports."
+msgstr "Bis zu 32 Abschnitte [rule:name] mit pattern, color und optional bold=true. Regeln ignorieren Groß-/Kleinschreibung und begrenzen Regex-Aufwand. Leerer Text setzt sie zurück. In Konfigurationsexporten enthalten."
+
+msgid "Validate and save"
+msgstr "Prüfen und speichern"
+
+msgid "Connect and stop pending sends before transferring files"
+msgstr "Vor der Dateiübertragung verbinden und ausstehende Sendevorgänge stoppen"
+
+msgid "Connect before transferring files"
+msgstr "Vor der Dateiübertragung verbinden"
+
+msgid "Choose an empty receive directory"
+msgstr "Leeren Empfangsordner auswählen"
+
+msgid "Choose a file to send"
+msgstr "Zu sendende Datei auswählen"
+
+msgid "Timeout (s)"
+msgstr "Zeitlimit (s)"
+
+msgid "Send file…"
+msgstr "Datei senden…"
+
+msgid "Receive files…"
+msgstr "Dateien empfangen…"
+
+msgid "Cancel transfer"
+msgstr "Übertragung abbrechen"
+
+msgid ""
+"Start the matching protocol on the peer. XMODEM receives as received.bin; "
+"its final block may contain padding."
+msgstr "Auf der Gegenstelle dasselbe Protokoll starten. XMODEM empfängt als received.bin; der letzte Block kann Füllbytes enthalten."
+
+#, c-format
+msgid "Recording failed: %s"
+msgstr "Aufzeichnung fehlgeschlagen: %s"
+
+#, c-format
+msgid "Recording saved: %s"
+msgstr "Aufzeichnung gespeichert: %s"
+
+#, c-format
+msgid "Recording: %s"
+msgstr "Aufzeichnung: %s"
+
+msgid "Start recording…"
+msgstr "Aufzeichnung starten…"
+
+msgid "Connect before starting a recording"
+msgstr "Vor Beginn einer Aufzeichnung verbinden"
+
+msgid "A recording is already active"
+msgstr "Eine Aufzeichnung läuft bereits"
+
+msgid "Choose a local capture file"
+msgstr "Lokale Aufzeichnungsdatei auswählen"
+
+msgid "Stop recording"
+msgstr "Aufzeichnung stoppen"
+
+msgid "Finishing recording…"
+msgstr "Aufzeichnung wird abgeschlossen…"
+
+msgid "Part MiB"
+msgstr "Teilgröße MiB"
+
+msgid "Part seconds (0=off)"
+msgstr "Teilsekunden (0=aus)"
+
+msgid "Keep parts"
+msgstr "Teile behalten"
+
+msgid "Disk MiB"
+msgstr "Speicherlimit MiB"
+
+msgid ""
+"Records exact RX/TX bytes, terminal input, connection events and serial "
+"parameters. Old closed parts expire at the configured limits."
+msgstr "Zeichnet exakte RX/TX-Bytes, Terminaleingaben, Verbindungsereignisse und serielle Parameter auf. Alte geschlossene Teile werden gemäß den Grenzen entfernt."
+
+msgid "Automatic reconnect"
+msgstr "Automatisch wiederverbinden"
+
+msgid "Same device"
+msgstr "Dasselbe Gerät"
+
+msgid "Next new device"
+msgstr "Nächstes neues Gerät"
+
+msgid "Latest device"
+msgstr "Neuestes Gerät"
+
+msgid "Exclude devices"
+msgstr "Geräte ausschließen"
+
+msgid "Exclude drivers"
+msgstr "Treiber ausschließen"
+
+msgid "Exclude topology IDs"
+msgstr "Topologie-IDs ausschließen"
+
+msgid "Comma-separated patterns; * and ? supported"
+msgstr "Kommagetrennte Muster; * und ? werden unterstützt"
+
+msgid "Desktop notifications"
+msgstr "Desktop-Benachrichtigungen"
+
+msgid "Connection sound"
+msgstr "Verbindungston"
+
+msgid ""
+"Strategy changes apply on the next connection. New/latest lets tio choose a "
+"port. Reconnect counts reflect observed transitions."
+msgstr "Strategieänderungen gelten ab der nächsten Verbindung. Bei Neu/Neuestes wählt tio den Port. Wiederverbindungen zählen beobachtete Zustandswechsel."
+
+msgid "Unchanged"
+msgstr "Unverändert"
+
+msgid "Low"
+msgstr "Low"
+
+msgid "High"
+msgstr "High"
+
+msgid "DTR on connect"
+msgstr "DTR beim Verbinden"
+
+msgid "RTS on connect"
+msgstr "RTS beim Verbinden"
+
+msgid "Pulse (ms)"
+msgstr "Impuls (ms)"
+
+msgid "Send Break"
+msgstr "Break senden"
+
+msgid "DTR Low"
+msgstr "DTR Low"
+
+msgid "DTR High"
+msgstr "DTR High"
+
+msgid "DTR Pulse"
+msgstr "DTR-Impuls"
+
+msgid "RTS Low"
+msgstr "RTS Low"
+
+msgid "RTS High"
+msgstr "RTS High"
+
+msgid "RTS Pulse"
+msgstr "RTS-Impuls"
+
+msgid "RS-485"
+msgstr "RS-485"
+
+msgid ""
+"Defaults, pulse duration and RS-485 apply on the next connection. Hardware "
+"support varies by adapter."
+msgstr "Standardpegel, Impulsdauer und RS-485 gelten ab der nächsten Verbindung. Hardware-Unterstützung hängt vom Adapter ab."
+
+msgid "Close all active sessions?"
+msgstr "Alle aktiven Sitzungen schließen?"
+
+msgid "Connections will stop and pending recordings will finish writing."
+msgstr "Verbindungen werden beendet und ausstehende Aufzeichnungen fertig geschrieben."
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "tio version unavailable"
+msgstr "tio-Version nicht verfügbar"
+
+msgid "About tio-gui"
+msgstr "Über tio-gui"
+
+msgid "Serial debugging for embedded development"
+msgstr "Serielles Debugging für die Embedded-Entwicklung"
+
+msgid "Copy diagnostics"
+msgstr "Diagnoseinformationen kopieren"
+
+msgid "Checking tio version…"
+msgstr "tio-Version wird ermittelt…"
+
 msgid "Choose a local file for settings export"
-msgstr ""
+msgstr "Lokale Datei für den Einstellungsexport auswählen"
 
 msgid "Settings exported"
-msgstr ""
+msgstr "Einstellungen exportiert"
 
-#, fuzzy
+msgid "Export portable settings"
+msgstr "Portable Einstellungen exportieren"
+
 msgid "Export settings"
-msgstr "Weitere Einstellungen"
+msgstr "Einstellungen exportieren"
 
-#, fuzzy
 msgid "Choose a local settings file"
-msgstr "Zuerst ein Protokollverzeichnis auswählen"
+msgstr "Lokale Einstellungsdatei auswählen"
+
+msgid "Disconnect all sessions before importing settings"
+msgstr "Vor dem Import alle Sitzungen trennen"
 
 msgid "Settings imported"
-msgstr ""
+msgstr "Einstellungen importiert"
 
-msgid "Disconnect before importing settings"
-msgstr ""
-
-#, fuzzy
 msgid "Import settings"
-msgstr "Weitere Einstellungen"
+msgstr "Einstellungen importieren"
 
-#, fuzzy
 msgid "Choose a local log directory"
-msgstr "Zuerst ein Protokollverzeichnis auswählen"
+msgstr "Lokalen Protokollordner auswählen"
 
-#, fuzzy
 msgid "Log directory selected"
-msgstr "Protokollverzeichnis"
+msgstr "Protokollordner ausgewählt"
 
 #, c-format
 msgid "Preview: %s"
-msgstr ""
+msgstr "Vorschau: %s"
+
+msgid "Session closed. Reopen comparison to choose new sessions."
+msgstr "Sitzung geschlossen. Vergleich erneut öffnen, um neue Sitzungen auszuwählen."
+
+msgid "Compare sessions"
+msgstr "Sitzungen vergleichen"
+
+msgid "Read-only raw log comparison · latest 200 entries per session"
+msgstr "Schreibgeschützter Rohprotokollvergleich · letzte 200 Einträge je Sitzung"
+
+msgid "Follow"
+msgstr "Folgen"
+
+msgid "Shared substring filter"
+msgstr "Gemeinsamer Teilstringfilter"
+
+msgid "Compare sessions…"
+msgstr "Sitzungen vergleichen…"
+
+msgid "BLE GATT debugging…"
+msgstr "BLE-GATT-Debugging…"
+
+msgid "CAN / DBC debugging…"
+msgstr "CAN-/DBC-Debugging…"
+
+msgid "MQTT debugging…"
+msgstr "MQTT-Debugging…"
+
+msgid "Modbus TCP…"
+msgstr "Modbus TCP…"
+
+msgid "TCP / UDP debugging…"
+msgstr "TCP-/UDP-Debugging…"
+
+msgid "Custom highlight rules…"
+msgstr "Eigene Hervorhebungsregeln…"
 
 msgid "Reopen sessions on startup"
 msgstr "Sitzungen beim Start wiederherstellen"
@@ -492,12 +916,50 @@ msgstr "Sitzungen beim Start wiederherstellen"
 msgid "Reopen the tabs that were open last time, without connecting"
 msgstr "Öffnet die zuletzt geöffneten Tabs erneut, ohne zu verbinden"
 
+msgid "Export portable settings…"
+msgstr "Portable Einstellungen exportieren…"
+
+msgid ""
+"Profiles, buttons and sequences; excludes local paths, device identities and "
+"send history"
+msgstr "Profile, Schaltflächen und Sequenzen; ohne lokale Pfade, Geräteidentitäten und Sendeverlauf"
+
+msgid "About / diagnostics…"
+msgstr "Info / Diagnose…"
+
+msgid "Serial lines / RS-485"
+msgstr "Serielle Leitungen / RS-485"
+
+msgid "Reconnect strategy"
+msgstr "Wiederverbindungsstrategie"
+
+msgid "Modbus RTU…"
+msgstr "Modbus RTU…"
+
+msgid "File transfer"
+msgstr "Dateiübertragung"
+
+msgid "Recording / safe rotation"
+msgstr "Aufzeichnung / sichere Rotation"
+
 msgid "No line ending"
 msgstr "Kein Zeilenende"
+
+msgid "Sequences…"
+msgstr "Sequenzen…"
+
+msgid "Analyze…"
+msgstr "Analysieren…"
 
 #, c-format
 msgid "Session %u"
 msgstr "Sitzung %u"
+
+msgid "Rename session"
+msgstr "Sitzung umbenennen"
+
+msgid "Leave blank to use the device name."
+msgstr "Leer lassen, um den Gerätenamen zu verwenden."
 
 msgid "Close this session"
 msgstr "Diese Sitzung schließen"
@@ -515,14 +977,395 @@ msgstr "dem seriellen Gerät"
 msgid "The session log is still open."
 msgstr "Das Sitzungsprotokoll ist noch geöffnet."
 
-msgid "Close"
-msgstr "Schließen"
-
 msgid "New session"
 msgstr "Neue Sitzung"
 
-#~ msgid "More settings"
-#~ msgstr "Weitere Einstellungen"
+msgid "Tools"
+msgstr "Werkzeuge"
 
-#~ msgid "Automatic name"
-#~ msgstr "Automatischer Name"
+msgid "Select numeric fields to plot"
+msgstr "Numerische Felder zum Zeichnen auswählen"
+
+msgid "Fields"
+msgstr "Felder"
+
+msgid "Select a retained log entry first"
+msgstr "Zuerst einen gespeicherten Protokolleintrag auswählen"
+
+#, c-format
+msgid "%u retained · %u matching · showing latest %u · regex limits: %llu"
+msgstr "%u gespeichert · %u passend · letzte %u angezeigt · Regex-Begrenzungen: %llu"
+
+#, c-format
+msgid "Replay complete: %u/%u events"
+msgstr "Wiedergabe abgeschlossen: %u/%u Ereignisse"
+
+#, c-format
+msgid "Replay: %u/%u events"
+msgstr "Wiedergabe: %u/%u Ereignisse"
+
+msgid "Parser rules saved"
+msgstr "Parserregeln gespeichert"
+
+msgid "Parser rules loaded"
+msgstr "Parserregeln geladen"
+
+msgid "Choose a valid parser rule file up to 64 KiB"
+msgstr "Gültige Parserregeldatei bis 64 KiB auswählen"
+
+msgid "Choose a local CSV file"
+msgstr "Lokale CSV-Datei auswählen"
+
+msgid "Filtered CSV exported"
+msgstr "Gefilterte CSV exportiert"
+
+msgid "Loaded; uncheck Pause replay to play"
+msgstr "Geladen; zum Abspielen „Wiedergabe pausieren“ deaktivieren"
+
+msgid "Choose a local recording"
+msgstr "Lokale Aufzeichnung auswählen"
+
+msgid "Loading recording…"
+msgstr "Aufzeichnung wird geladen…"
+
+msgid "Open recording or retained part"
+msgstr "Aufzeichnung oder aufbewahrten Teil öffnen"
+
+msgid "Serial log analysis"
+msgstr "Serielle Protokollanalyse"
+
+msgid "Filter received lines"
+msgstr "Empfangene Zeilen filtern"
+
+msgid "Regex"
+msgstr "Regex"
+
+msgid "Case sensitive"
+msgstr "Groß-/Kleinschreibung beachten"
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "Export filtered CSV…"
+msgstr "Gefilterte CSV exportieren…"
+
+msgid "Load parser rules…"
+msgstr "Parserregeln laden…"
+
+msgid "Save parser rules…"
+msgstr "Parserregeln speichern…"
+
+msgid "Run analysis plugin…"
+msgstr "Analyseplugin ausführen…"
+
+msgid "Open recording…"
+msgstr "Aufzeichnung öffnen…"
+
+msgid "Pause replay"
+msgstr "Wiedergabe pausieren"
+
+msgid "RX as HEX"
+msgstr "RX als HEX"
+
+msgid "Playback never sends data to a device"
+msgstr "Die Wiedergabe sendet keine Daten an ein Gerät"
+
+msgid "Speed ×"
+msgstr "Geschwindigkeit ×"
+
+msgid "Clear analysis"
+msgstr "Analyse leeren"
+
+msgid "Click a log line to inspect and copy its fields"
+msgstr "Protokollzeile anklicken, um Felder anzusehen und zu kopieren"
+
+msgid "Plot fields: temp,voltage or col1,col2"
+msgstr "Kurvenfelder: temp,voltage oder col1,col2"
+
+msgid "Optional regex with named captures"
+msgstr "Optionaler Regex mit benannten Gruppen"
+
+msgid "Maximum points per curve"
+msgstr "Maximale Punkte je Kurve"
+
+msgid "Plot"
+msgstr "Zeichnen"
+
+msgid "Recording playback"
+msgstr "Aufzeichnungswiedergabe"
+
+msgid "Running isolated plugin…"
+msgstr "Isoliertes Plugin wird ausgeführt…"
+
+msgid "Plugin saved"
+msgstr "Plugin gespeichert"
+
+msgid "Plugin loaded; review and run"
+msgstr "Plugin geladen; prüfen und ausführen"
+
+msgid "Choose a UTF-8 plugin file up to 64 KiB"
+msgstr "UTF-8-Plugindatei bis 64 KiB auswählen"
+
+msgid "Analysis plugin"
+msgstr "Analyseplugin"
+
+msgid ""
+"API 1: define transform(input). Lua returns text; JavaScript returns text or "
+"a JSON value. Runs on this entry snapshot with a 2-second deadline and 64 "
+"KiB output limit."
+msgstr "API 1: transform(input) definieren. Lua gibt Text zurück, JavaScript Text oder einen JSON-Wert. Läuft auf diesem Eintragssnapshot mit 2 Sekunden Zeitlimit und 64 KiB Ausgabelimit."
+
+msgid "Load plugin…"
+msgstr "Plugin laden…"
+
+msgid "Save plugin…"
+msgstr "Plugin speichern…"
+
+msgid "Run on entry"
+msgstr "Auf Eintrag ausführen"
+
+msgid "Input snapshot"
+msgstr "Eingabesnapshot"
+
+msgid "Plugin source"
+msgstr "Plugin-Quelltext"
+
+msgid "Result"
+msgstr "Ergebnis"
+
+#, c-format
+msgid "RX %llu bytes / %llu chunks · TX %llu bytes"
+msgstr "RX %llu Bytes / %llu Blöcke · TX %llu Bytes"
+
+msgid "Disconnected"
+msgstr "Getrennt"
+
+msgid "TCP / UDP debugging"
+msgstr "TCP-/UDP-Debugging"
+
+msgid "Hostname or IP address"
+msgstr "Hostname oder IP-Adresse"
+
+msgid "HEX display"
+msgstr "HEX-Anzeige"
+
+msgid "No ending"
+msgstr "Kein Zeilenende"
+
+msgid "No CRC"
+msgstr "Keine CRC"
+
+msgid "Waiting for Modbus response…"
+msgstr "Warte auf Modbus-Antwort…"
+
+msgid "Modbus RTU — current serial session"
+msgstr "Modbus RTU — aktuelle serielle Sitzung"
+
+msgid "Modbus TCP"
+msgstr "Modbus TCP"
+
+msgid ""
+"Addresses are zero-based protocol addresses. Functions 1–4 read; 5–6 write "
+"one coil/register. Coil write values are 0 or 1. No automatic retries."
+msgstr "Adressen sind nullbasierte Protokolladressen. Funktionen 1–4 lesen; 5–6 schreiben eine Spule/ein Register. Spulenwerte sind 0 oder 1. Keine automatischen Wiederholungen."
+
+msgid "TCP hostname or IP"
+msgstr "TCP-Hostname oder IP"
+
+msgid "Port"
+msgstr "Port"
+
+msgid "Unit"
+msgstr "Einheit"
+
+msgid "01 Read coils"
+msgstr "01 Spulen lesen"
+
+msgid "02 Read discrete inputs"
+msgstr "02 Diskrete Eingänge lesen"
+
+msgid "03 Read holding registers"
+msgstr "03 Halteregister lesen"
+
+msgid "04 Read input registers"
+msgstr "04 Eingangsregister lesen"
+
+msgid "05 Write single coil"
+msgstr "05 Einzelne Spule schreiben"
+
+msgid "06 Write single register"
+msgstr "06 Einzelnes Register schreiben"
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Read count"
+msgstr "Leseanzahl"
+
+msgid "Write value"
+msgstr "Schreibwert"
+
+msgid "Execute request"
+msgstr "Anfrage ausführen"
+
+msgid "Publish queued; QoS 1 waits for broker acknowledgement"
+msgstr "Veröffentlichung eingereiht; QoS 1 wartet auf Brokerbestätigung"
+
+msgid "MQTT 3.1.1 / TCP debugging"
+msgstr "MQTT-3.1.1-/TCP-Debugging"
+
+msgid "Broker hostname or IP"
+msgstr "Broker-Hostname oder IP"
+
+msgid "Analyze payloads…"
+msgstr "Nutzdaten analysieren…"
+
+msgid "Optional username"
+msgstr "Benutzername (optional)"
+
+msgid "Password"
+msgstr "Passwort"
+
+msgid "Subscription filter, e.g. board/+/log"
+msgstr "Abonnementfilter, z. B. board/+/log"
+
+msgid "Unsubscribe"
+msgstr "Abbestellen"
+
+msgid "Subscribe"
+msgstr "Abonnieren"
+
+msgid "Publish topic (no wildcards)"
+msgstr "Veröffentlichungsthema (ohne Platzhalter)"
+
+msgid "Retain"
+msgstr "Beibehalten"
+
+msgid "Publish"
+msgstr "Veröffentlichen"
+
+msgid "Ready — TCP transport, clean session, QoS 0/1"
+msgstr "Bereit — TCP-Transport, Clean Session, QoS 0/1"
+
+msgid "CAN error frame received; inspect interface/bus state"
+msgstr "CAN-Fehlerrahmen empfangen; Schnittstellen-/Buszustand prüfen"
+
+msgid "SocketCAN interface opened"
+msgstr "SocketCAN-Schnittstelle geöffnet"
+
+msgid "Enter a valid hexadecimal CAN identifier"
+msgstr "Gültige hexadezimale CAN-Kennung eingeben"
+
+msgid "Frame accepted by SocketCAN"
+msgstr "Rahmen von SocketCAN angenommen"
+
+msgid "Choose a regular DBC file"
+msgstr "Reguläre DBC-Datei auswählen"
+
+msgid "Could not load DBC"
+msgstr "DBC konnte nicht geladen werden"
+
+msgid "DBC loaded; matching frames produce numeric fields in Analyze"
+msgstr "DBC geladen; passende Rahmen erzeugen numerische Felder in der Analyse"
+
+msgid "Load DBC definitions"
+msgstr "DBC-Definitionen laden"
+
+msgid "CAN / DBC debugging"
+msgstr "CAN-/DBC-Debugging"
+
+msgid ""
+"Use a configured SocketCAN interface. DBC supports integer signals, Intel/"
+"Motorola byte order, scaling and simple multiplexing. Analyze plots decoded "
+"fields."
+msgstr "Eine konfigurierte SocketCAN-Schnittstelle verwenden. DBC unterstützt Ganzzahlsignale, Intel-/Motorola-Bytefolge, Skalierung und einfaches Multiplexing. Die Analyse zeichnet dekodierte Felder."
+
+msgid "Interface, e.g. can0"
+msgstr "Schnittstelle, z. B. can0"
+
+msgid "Open"
+msgstr "Öffnen"
+
+msgid "Load DBC…"
+msgstr "DBC laden…"
+
+msgid "CAN ID (hex)"
+msgstr "CAN-ID (hex)"
+
+msgid "29-bit ID"
+msgstr "29-Bit-ID"
+
+msgid "HEX payload; RTR uses its length as requested DLC"
+msgstr "HEX-Nutzdaten; RTR verwendet deren Länge als angeforderten DLC"
+
+msgid "Send frame"
+msgstr "Rahmen senden"
+
+msgid "BLE value exceeds 512 bytes"
+msgstr "BLE-Wert überschreitet 512 Bytes"
+
+msgid "BLE scan finished"
+msgstr "BLE-Suche abgeschlossen"
+
+msgid "completed"
+msgstr "abgeschlossen"
+
+msgid "Wait for the current BLE operation"
+msgstr "Aktuellen BLE-Vorgang abwarten"
+
+msgid "Notifications already active"
+msgstr "Benachrichtigungen bereits aktiv"
+
+msgid "Select an available BLE device or characteristic"
+msgstr "Verfügbares BLE-Gerät oder Merkmal auswählen"
+
+msgid "BLE object is no longer available"
+msgstr "BLE-Objekt ist nicht mehr verfügbar"
+
+msgid "BLE scan is already running"
+msgstr "BLE-Suche läuft bereits"
+
+msgid "No powered Bluetooth adapter; enable it in system settings"
+msgstr "Kein eingeschalteter Bluetooth-Adapter; in den Systemeinstellungen aktivieren"
+
+msgid "BLE writes are limited to 512 bytes; the device may accept less"
+msgstr "BLE-Schreibzugriffe sind auf 512 Bytes begrenzt; das Gerät akzeptiert eventuell weniger"
+
+msgid "BlueZ ready; scan or select a known device"
+msgstr "BlueZ bereit; suchen oder bekanntes Gerät auswählen"
+
+msgid "BlueZ service is unavailable"
+msgstr "BlueZ-Dienst nicht verfügbar"
+
+msgid "BLE GATT debugging"
+msgstr "BLE-GATT-Debugging"
+
+msgid ""
+"Select a device, connect, then select its GATT characteristic. Pairing and "
+"adapter power are managed in system settings. Writes keep the device's "
+"characteristic boundaries."
+msgstr "Gerät auswählen und verbinden, dann dessen GATT-Merkmal wählen. Kopplung und Adapterstrom werden in den Systemeinstellungen verwaltet. Schreibzugriffe bewahren die Datengrenzen des Merkmals."
+
+msgid "Scan (10 s)"
+msgstr "Suchen (10 s)"
+
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+msgid "Read"
+msgstr "Lesen"
+
+msgid "Start notifications"
+msgstr "Benachrichtigungen starten"
+
+msgid "Stop notifications"
+msgstr "Benachrichtigungen stoppen"
+
+msgid "Without response"
+msgstr "Ohne Antwort"
+
+msgid "Write"
+msgstr "Schreiben"
+
+msgid "Loading BlueZ…"
+msgstr "BlueZ wird geladen…"

@@ -1,8 +1,11 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.2.0\n"
+"Project-Id-Version: tio-gui 0.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-08 11:09+0800\n"
+"POT-Creation-Date: 2026-09-08 16:26+0800\n"
+"PO-Revision-Date: 2026-09-08 17:00+0800\n"
+"Last-Translator: tio-gui contributors\n"
+"Language-Team: tio-gui contributors\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -28,7 +31,7 @@ msgid "Session"
 msgstr "会话"
 
 msgid "Connection and logging"
-msgstr "连接与日志"
+msgstr "连接和日志"
 
 msgid "Backup"
 msgstr "备份"
@@ -43,7 +46,7 @@ msgid "Follow system"
 msgstr "跟随系统"
 
 msgid "Light"
-msgstr "亮色"
+msgstr "浅色"
 
 msgid "Dark"
 msgstr "深色"
@@ -52,7 +55,7 @@ msgid "Timestamp format"
 msgstr "时间戳格式"
 
 msgid "Applied when line timestamps are enabled"
-msgstr "启用行时间戳时应用此格式"
+msgstr "启用行时间戳时应用"
 
 msgid "Log filename"
 msgstr "日志文件名"
@@ -73,16 +76,16 @@ msgid "24-hour"
 msgstr "24 小时制"
 
 msgid "Since start"
-msgstr "从启动起"
+msgstr "自启动以来"
 
 msgid "Since previous"
-msgstr "从上一条起"
+msgstr "距上一条"
 
 msgid "ISO 8601"
 msgstr "ISO 8601"
 
 msgid "Unix epoch"
-msgstr "Unix 时间戳"
+msgstr "Unix 时间"
 
 msgid "GitHub project"
 msgstr "GitHub 项目"
@@ -94,11 +97,11 @@ msgid "Import settings…"
 msgstr "导入设置…"
 
 msgid "A lightweight, reliable GUI for tio"
-msgstr "轻量、可靠的 tio 图形界面"
+msgstr "轻巧可靠的 tio 图形界面"
 
 #, c-format
 msgid "Version %s is available"
-msgstr "发现新版本 %s"
+msgstr "有新版本 %s 可用"
 
 msgid "Download update"
 msgstr "下载更新"
@@ -131,7 +134,6 @@ msgstr "时间戳"
 msgid "Log session"
 msgstr "记录日志"
 
-#, fuzzy
 msgid "Highlight view"
 msgstr "高亮视图"
 
@@ -232,7 +234,7 @@ msgid "Connection profiles"
 msgstr "连接配置"
 
 msgid "Profiles"
-msgstr "连接配置"
+msgstr "配置档"
 
 msgid "Save as new profile…"
 msgstr "另存为新配置…"
@@ -347,8 +349,28 @@ msgstr "删除配置“%s”？"
 msgid "Delete"
 msgstr "删除"
 
+#, c-format
+msgid "Connected to %s"
+msgstr "已连接到 %s"
+
+msgid "tio no longer has the serial device open"
+msgstr "tio 已不再打开该串口设备"
+
+msgid "Device disconnected; waiting for tio to reconnect"
+msgstr "设备已断开；等待 tio 重连"
+
+msgid "Serial connection"
+msgstr "串口连接"
+
 msgid "no device"
 msgstr "未选择设备"
+
+msgid "waiting for device"
+msgstr "等待设备"
+
+#, c-format
+msgid " · reconnects: %u"
+msgstr " · 重连：%u"
 
 msgid "rx"
 msgstr "接收"
@@ -370,12 +392,19 @@ msgid "The session log has reached %s: %s"
 msgstr "会话日志已达到 %s：%s"
 
 #, c-format
+msgid "tio exited with status %d"
+msgstr "tio 已退出，状态码 %d"
+
+#, c-format
 msgid "Disconnected (tio exit status: %d)"
 msgstr "已断开（tio 退出状态：%d）"
 
 #, c-format
 msgid "Could not start tio: %s"
 msgstr "无法启动 tio：%s"
+
+msgid "Waiting for serial device…"
+msgstr "等待串口设备…"
 
 #, c-format
 msgid "Could not stop tio: %s"
@@ -407,6 +436,23 @@ msgstr "无法创建日志目录：%s"
 msgid "Connecting…"
 msgstr "正在连接…"
 
+#, c-format
+msgid "Sent %zu bytes to tio"
+msgstr "已向 tio 发送 %zu 字节"
+
+#, c-format
+msgid "Send failed after %zu bytes: %s"
+msgstr "发送 %zu 字节后失败：%s"
+
+msgid "Stop file transfer before sending commands"
+msgstr "发送命令前请停止文件传输"
+
+msgid "Serial data channel is not ready"
+msgstr "串口数据通道尚未就绪"
+
+msgid "A send is still in progress"
+msgstr "仍有发送正在进行"
+
 msgid "Send history cleared"
 msgstr "发送历史已清空"
 
@@ -416,6 +462,24 @@ msgstr "搜索表达式无效：%s"
 
 msgid "No matches"
 msgstr "没有匹配项"
+
+msgid "Stop the sequence before sending a quick command"
+msgstr "发送快捷命令前请停止序列"
+
+msgid "A delayed send is pending; disconnect to cancel"
+msgstr "有延迟发送等待执行；断开可取消"
+
+msgid "Send scheduled; disconnect to cancel"
+msgstr "已安排发送；断开可取消"
+
+msgid "Choose a local file"
+msgstr "选择本地文件"
+
+msgid "Button group exported"
+msgstr "按钮组已导出"
+
+msgid "Button group loaded; Save to apply"
+msgstr "按钮组已加载；保存后应用"
 
 msgid "Customize quick buttons"
 msgstr "自定义快捷按钮"
@@ -432,36 +496,414 @@ msgstr "名称"
 msgid "Payload"
 msgstr "发送内容"
 
+msgid "Mode"
+msgstr "模式"
+
+msgid "Checksum"
+msgstr "校验和"
+
+msgid "Text"
+msgstr "文本"
+
+msgid "None"
+msgstr "无"
+
+msgid "Delay (ms)"
+msgstr "延迟（毫秒）"
+
+msgid "Import button group…"
+msgstr "导入按钮组…"
+
+msgid "Export button group…"
+msgstr "导出按钮组…"
+
+msgid "Payload (text escapes or HEX)"
+msgstr "载荷（文本转义或 HEX）"
+
+msgid "Delay after sending (ms)"
+msgstr "发送后延迟（毫秒）"
+
+msgid "Move step up"
+msgstr "上移步骤"
+
+msgid "Move step down"
+msgstr "下移步骤"
+
+msgid "Remove step"
+msgstr "移除步骤"
+
+msgid "Invalid sequence"
+msgstr "序列无效"
+
+msgid "New sequence"
+msgstr "新序列"
+
+msgid "Stopped; bytes already sent cannot be recalled"
+msgstr "已停止；已发送的字节无法撤回"
+
+msgid "Resume"
+msgstr "继续"
+
+msgid "Pause"
+msgstr "暂停"
+
+msgid "Stop the current send before starting another"
+msgstr "开始另一项发送前请停止当前发送"
+
+msgid "Connect this session before running a sequence"
+msgstr "运行序列前请连接此会话"
+
+msgid "At most 100 sequences can be saved"
+msgstr "最多可保存 100 套序列"
+
+msgid "Sequences saved"
+msgstr "序列已保存"
+
+msgid "Sequence stopped: transport failed"
+msgstr "序列已停止：传输失败"
+
+msgid "Sequence completed"
+msgstr "序列已完成"
+
+#, c-format
+msgid "Paused after step %u"
+msgstr "已在第 %u 步后暂停"
+
+#, c-format
+msgid "Running: %u steps sent in this pass"
+msgstr "运行中：本轮已发送 %u 步"
+
+msgid "Send sequences"
+msgstr "发送序列"
+
+msgid "Load"
+msgstr "加载"
+
+msgid "New"
+msgstr "新建"
+
+msgid "Delete sequence"
+msgstr "删除序列"
+
+msgid ""
+"Steps run top to bottom: payload, mode, line ending, CRC, delay after send "
+"(ms)."
+msgstr "步骤从上到下执行：载荷、模式、行尾、CRC、发送后延迟（毫秒）。"
+
+msgid "Add step"
+msgstr "添加步骤"
+
+msgid "Remove last"
+msgstr "移除最后一步"
+
+msgid "Save sequence"
+msgstr "保存序列"
+
+msgid "Loop"
+msgstr "循环"
+
+msgid "Run"
+msgstr "运行"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Disconnect stops the sequence. Closing this editor leaves it running."
+msgstr "断开连接会停止序列；关闭此编辑器会继续运行。"
+
+msgid "Line command submitted; inspect tio response"
+msgstr "线路命令已提交；请查看 tio 响应"
+
+msgid "Could not recognize tio prompt; disconnect to cancel the command"
+msgstr "无法识别 tio 提示；断开可取消命令"
+
+msgid "Connect before controlling serial lines"
+msgstr "控制串口线路前请连接"
+
+msgid "Stop pending sends before controlling serial lines"
+msgstr "控制串口线路前请停止待执行的发送"
+
+msgid "Could not create runtime directory"
+msgstr "无法创建运行时目录"
+
+msgid "Runtime path cannot be used in a tio command"
+msgstr "运行时路径无法用于 tio 命令"
+
+msgid "Could not create line command"
+msgstr "无法创建线路命令"
+
+msgid "Reconnect before issuing more line commands"
+msgstr "发送更多线路命令前请重新连接"
+
+msgid "Saved for all sessions; applies to incoming lines"
+msgstr "已为全部会话保存；对新接收的行生效"
+
+msgid "Connect and stop pending sends before using Modbus RTU"
+msgstr "使用 Modbus RTU 前请连接并停止待执行的发送"
+
+msgid "Custom highlight rules"
+msgstr "自定义高亮规则"
+
+msgid ""
+"Add up to 32 [rule:name] sections with pattern, color and optional "
+"bold=true. Rules are case-insensitive with bounded regex matching. Clear the "
+"text to reset. Included in configuration exports."
+msgstr "最多添加 32 个 [rule:name] 段，包含 pattern、color 和可选的 bold=true。规则不区分大小写，正则匹配有复杂度限制。清空文本可重置。规则包含在配置导出中。"
+
+msgid "Validate and save"
+msgstr "验证并保存"
+
+msgid "Connect and stop pending sends before transferring files"
+msgstr "传输文件前请连接并停止待执行的发送"
+
+msgid "Connect before transferring files"
+msgstr "传输文件前请连接"
+
+msgid "Choose an empty receive directory"
+msgstr "选择空的接收目录"
+
+msgid "Choose a file to send"
+msgstr "选择要发送的文件"
+
+msgid "Timeout (s)"
+msgstr "超时（秒）"
+
+msgid "Send file…"
+msgstr "发送文件…"
+
+msgid "Receive files…"
+msgstr "接收文件…"
+
+msgid "Cancel transfer"
+msgstr "取消传输"
+
+msgid ""
+"Start the matching protocol on the peer. XMODEM receives as received.bin; "
+"its final block may contain padding."
+msgstr "在对端启动对应协议。XMODEM 保存为 received.bin；最后一块可能包含填充字节。"
+
+#, c-format
+msgid "Recording failed: %s"
+msgstr "录制失败：%s"
+
+#, c-format
+msgid "Recording saved: %s"
+msgstr "录制已保存：%s"
+
+#, c-format
+msgid "Recording: %s"
+msgstr "录制中：%s"
+
+msgid "Start recording…"
+msgstr "开始录制…"
+
+msgid "Connect before starting a recording"
+msgstr "开始录制前请连接"
+
+msgid "A recording is already active"
+msgstr "已有录制正在进行"
+
+msgid "Choose a local capture file"
+msgstr "选择本地录制文件"
+
+msgid "Stop recording"
+msgstr "停止录制"
+
+msgid "Finishing recording…"
+msgstr "正在完成录制…"
+
+msgid "Part MiB"
+msgstr "分卷 MiB"
+
+msgid "Part seconds (0=off)"
+msgstr "分卷秒数（0=关闭）"
+
+msgid "Keep parts"
+msgstr "保留分卷数"
+
+msgid "Disk MiB"
+msgstr "磁盘 MiB"
+
+msgid ""
+"Records exact RX/TX bytes, terminal input, connection events and serial "
+"parameters. Old closed parts expire at the configured limits."
+msgstr "精确记录 RX/TX 字节、终端输入、连接事件和串口参数。已关闭的旧分卷按配置限制清理。"
+
+msgid "Automatic reconnect"
+msgstr "自动重连"
+
+msgid "Same device"
+msgstr "同一设备"
+
+msgid "Next new device"
+msgstr "下一个新设备"
+
+msgid "Latest device"
+msgstr "最新设备"
+
+msgid "Exclude devices"
+msgstr "排除设备"
+
+msgid "Exclude drivers"
+msgstr "排除驱动"
+
+msgid "Exclude topology IDs"
+msgstr "排除拓扑 ID"
+
+msgid "Comma-separated patterns; * and ? supported"
+msgstr "逗号分隔的模式；支持 * 和 ?"
+
+msgid "Desktop notifications"
+msgstr "桌面通知"
+
+msgid "Connection sound"
+msgstr "连接提示音"
+
+msgid ""
+"Strategy changes apply on the next connection. New/latest lets tio choose a "
+"port. Reconnect counts reflect observed transitions."
+msgstr "策略变更在下次连接生效。新设备/最新设备由 tio 选择串口。重连次数反映观察到的状态变化。"
+
+msgid "Unchanged"
+msgstr "保持不变"
+
+msgid "Low"
+msgstr "低电平"
+
+msgid "High"
+msgstr "高电平"
+
+msgid "DTR on connect"
+msgstr "连接时 DTR"
+
+msgid "RTS on connect"
+msgstr "连接时 RTS"
+
+msgid "Pulse (ms)"
+msgstr "脉冲（毫秒）"
+
+msgid "Send Break"
+msgstr "发送 Break"
+
+msgid "DTR Low"
+msgstr "DTR 低电平"
+
+msgid "DTR High"
+msgstr "DTR 高电平"
+
+msgid "DTR Pulse"
+msgstr "DTR 脉冲"
+
+msgid "RTS Low"
+msgstr "RTS 低电平"
+
+msgid "RTS High"
+msgstr "RTS 高电平"
+
+msgid "RTS Pulse"
+msgstr "RTS 脉冲"
+
+msgid "RS-485"
+msgstr "RS-485"
+
+msgid ""
+"Defaults, pulse duration and RS-485 apply on the next connection. Hardware "
+"support varies by adapter."
+msgstr "默认电平、脉冲时长和 RS-485 在下次连接生效。硬件支持因适配器而异。"
+
+msgid "Close all active sessions?"
+msgstr "关闭全部活动会话？"
+
+msgid "Connections will stop and pending recordings will finish writing."
+msgstr "连接将停止，待写入的录制会完成保存。"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "tio version unavailable"
+msgstr "无法获取 tio 版本"
+
+msgid "About tio-gui"
+msgstr "关于 tio-gui"
+
+msgid "Serial debugging for embedded development"
+msgstr "面向嵌入式开发的串口调试"
+
+msgid "Copy diagnostics"
+msgstr "复制诊断信息"
+
+msgid "Checking tio version…"
+msgstr "正在检查 tio 版本…"
+
 msgid "Choose a local file for settings export"
-msgstr "请选择本地文件以导出设置"
+msgstr "选择本地文件以导出设置"
 
 msgid "Settings exported"
 msgstr "设置已导出"
+
+msgid "Export portable settings"
+msgstr "导出便携设置"
 
 msgid "Export settings"
 msgstr "导出设置"
 
 msgid "Choose a local settings file"
-msgstr "请选择本地设置文件"
+msgstr "选择本地设置文件"
+
+msgid "Disconnect all sessions before importing settings"
+msgstr "导入设置前请断开全部会话"
 
 msgid "Settings imported"
 msgstr "设置已导入"
-
-msgid "Disconnect before importing settings"
-msgstr "请先断开连接再导入设置"
 
 msgid "Import settings"
 msgstr "导入设置"
 
 msgid "Choose a local log directory"
-msgstr "请选择本地日志目录"
+msgstr "选择本地日志目录"
 
 msgid "Log directory selected"
-msgstr "已选择日志目录"
+msgstr "日志目录已选择"
 
 #, c-format
 msgid "Preview: %s"
 msgstr "预览：%s"
+
+msgid "Session closed. Reopen comparison to choose new sessions."
+msgstr "会话已关闭。重新打开对照以选择新会话。"
+
+msgid "Compare sessions"
+msgstr "会话对照"
+
+msgid "Read-only raw log comparison · latest 200 entries per session"
+msgstr "只读原始日志对照 · 每个会话最近 200 条"
+
+msgid "Follow"
+msgstr "跟随"
+
+msgid "Shared substring filter"
+msgstr "共同子字符串过滤"
+
+msgid "Compare sessions…"
+msgstr "会话对照…"
+
+msgid "BLE GATT debugging…"
+msgstr "BLE GATT 调试…"
+
+msgid "CAN / DBC debugging…"
+msgstr "CAN / DBC 调试…"
+
+msgid "MQTT debugging…"
+msgstr "MQTT 调试…"
+
+msgid "Modbus TCP…"
+msgstr "Modbus TCP…"
+
+msgid "TCP / UDP debugging…"
+msgstr "TCP / UDP 调试…"
+
+msgid "Custom highlight rules…"
+msgstr "自定义高亮规则…"
 
 msgid "Reopen sessions on startup"
 msgstr "启动时恢复会话"
@@ -469,12 +911,50 @@ msgstr "启动时恢复会话"
 msgid "Reopen the tabs that were open last time, without connecting"
 msgstr "重新打开上次的标签，但不自动连接"
 
+msgid "Export portable settings…"
+msgstr "导出便携设置…"
+
+msgid ""
+"Profiles, buttons and sequences; excludes local paths, device identities and "
+"send history"
+msgstr "配置档、按钮和序列；不包含本地路径、设备身份和发送历史"
+
+msgid "About / diagnostics…"
+msgstr "关于 / 诊断信息…"
+
+msgid "Serial lines / RS-485"
+msgstr "串口线路 / RS-485"
+
+msgid "Reconnect strategy"
+msgstr "重连策略"
+
+msgid "Modbus RTU…"
+msgstr "Modbus RTU…"
+
+msgid "File transfer"
+msgstr "文件传输"
+
+msgid "Recording / safe rotation"
+msgstr "录制 / 安全轮转"
+
 msgid "No line ending"
 msgstr "无行尾"
+
+msgid "Sequences…"
+msgstr "序列…"
+
+msgid "Analyze…"
+msgstr "分析…"
 
 #, c-format
 msgid "Session %u"
 msgstr "会话 %u"
+
+msgid "Rename session"
+msgstr "重命名会话"
+
+msgid "Leave blank to use the device name."
+msgstr "留空使用设备名称。"
 
 msgid "Close this session"
 msgstr "关闭此会话"
@@ -492,14 +972,395 @@ msgstr "该串口设备"
 msgid "The session log is still open."
 msgstr "会话日志仍在写入。"
 
-msgid "Close"
-msgstr "关闭"
-
 msgid "New session"
 msgstr "新建会话"
 
-#~ msgid "More settings"
-#~ msgstr "更多设置"
+msgid "Tools"
+msgstr "工具"
 
-#~ msgid "Automatic name"
-#~ msgstr "自动命名"
+msgid "Select numeric fields to plot"
+msgstr "选择要绘制的数字字段"
+
+msgid "Fields"
+msgstr "字段"
+
+msgid "Select a retained log entry first"
+msgstr "请先选择一条保留的日志"
+
+#, c-format
+msgid "%u retained · %u matching · showing latest %u · regex limits: %llu"
+msgstr "保留 %u 条 · 匹配 %u 条 · 显示最近 %u 条 · 正则限额触发：%llu"
+
+#, c-format
+msgid "Replay complete: %u/%u events"
+msgstr "回放完成：%u/%u 个事件"
+
+#, c-format
+msgid "Replay: %u/%u events"
+msgstr "回放：%u/%u 个事件"
+
+msgid "Parser rules saved"
+msgstr "解析规则已保存"
+
+msgid "Parser rules loaded"
+msgstr "解析规则已加载"
+
+msgid "Choose a valid parser rule file up to 64 KiB"
+msgstr "选择有效的解析规则文件，最大 64 KiB"
+
+msgid "Choose a local CSV file"
+msgstr "选择本地 CSV 文件"
+
+msgid "Filtered CSV exported"
+msgstr "过滤后的 CSV 已导出"
+
+msgid "Loaded; uncheck Pause replay to play"
+msgstr "已加载；取消勾选“暂停回放”开始播放"
+
+msgid "Choose a local recording"
+msgstr "选择本地录制文件"
+
+msgid "Loading recording…"
+msgstr "正在加载录制…"
+
+msgid "Open recording or retained part"
+msgstr "打开录制或保留的分卷"
+
+msgid "Serial log analysis"
+msgstr "串口日志分析"
+
+msgid "Filter received lines"
+msgstr "过滤接收的行"
+
+msgid "Regex"
+msgstr "正则"
+
+msgid "Case sensitive"
+msgstr "区分大小写"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Export filtered CSV…"
+msgstr "导出过滤后的 CSV…"
+
+msgid "Load parser rules…"
+msgstr "加载解析规则…"
+
+msgid "Save parser rules…"
+msgstr "保存解析规则…"
+
+msgid "Run analysis plugin…"
+msgstr "运行分析插件…"
+
+msgid "Open recording…"
+msgstr "打开录制…"
+
+msgid "Pause replay"
+msgstr "暂停回放"
+
+msgid "RX as HEX"
+msgstr "RX 显示为 HEX"
+
+msgid "Playback never sends data to a device"
+msgstr "回放不会向设备发送数据"
+
+msgid "Speed ×"
+msgstr "倍速 ×"
+
+msgid "Clear analysis"
+msgstr "清空分析"
+
+msgid "Click a log line to inspect and copy its fields"
+msgstr "点击日志行查看并复制字段"
+
+msgid "Plot fields: temp,voltage or col1,col2"
+msgstr "曲线字段：temp,voltage 或 col1,col2"
+
+msgid "Optional regex with named captures"
+msgstr "可选：带命名捕获组的正则"
+
+msgid "Maximum points per curve"
+msgstr "每条曲线的最大点数"
+
+msgid "Plot"
+msgstr "绘图"
+
+msgid "Recording playback"
+msgstr "录制回放"
+
+msgid "Running isolated plugin…"
+msgstr "正在运行隔离插件…"
+
+msgid "Plugin saved"
+msgstr "插件已保存"
+
+msgid "Plugin loaded; review and run"
+msgstr "插件已加载；请审阅后运行"
+
+msgid "Choose a UTF-8 plugin file up to 64 KiB"
+msgstr "选择 UTF-8 插件文件，最大 64 KiB"
+
+msgid "Analysis plugin"
+msgstr "分析插件"
+
+msgid ""
+"API 1: define transform(input). Lua returns text; JavaScript returns text or "
+"a JSON value. Runs on this entry snapshot with a 2-second deadline and 64 "
+"KiB output limit."
+msgstr "API 1：定义 transform(input)。Lua 返回文本；JavaScript 返回文本或 JSON 值。使用当前条目快照运行，限时 2 秒，输出上限 64 KiB。"
+
+msgid "Load plugin…"
+msgstr "加载插件…"
+
+msgid "Save plugin…"
+msgstr "保存插件…"
+
+msgid "Run on entry"
+msgstr "针对条目运行"
+
+msgid "Input snapshot"
+msgstr "输入快照"
+
+msgid "Plugin source"
+msgstr "插件源码"
+
+msgid "Result"
+msgstr "结果"
+
+#, c-format
+msgid "RX %llu bytes / %llu chunks · TX %llu bytes"
+msgstr "RX %llu 字节 / %llu 块 · TX %llu 字节"
+
+msgid "Disconnected"
+msgstr "已断开"
+
+msgid "TCP / UDP debugging"
+msgstr "TCP / UDP 调试"
+
+msgid "Hostname or IP address"
+msgstr "主机名或 IP 地址"
+
+msgid "HEX display"
+msgstr "HEX 显示"
+
+msgid "No ending"
+msgstr "不加行尾"
+
+msgid "No CRC"
+msgstr "不加 CRC"
+
+msgid "Waiting for Modbus response…"
+msgstr "等待 Modbus 响应…"
+
+msgid "Modbus RTU — current serial session"
+msgstr "Modbus RTU — 当前串口会话"
+
+msgid "Modbus TCP"
+msgstr "Modbus TCP"
+
+msgid ""
+"Addresses are zero-based protocol addresses. Functions 1–4 read; 5–6 write "
+"one coil/register. Coil write values are 0 or 1. No automatic retries."
+msgstr "地址为从零开始的协议地址。功能码 1–4 读取；5–6 写单个线圈/寄存器。写线圈值为 0 或 1。不自动重试。"
+
+msgid "TCP hostname or IP"
+msgstr "TCP 主机名或 IP"
+
+msgid "Port"
+msgstr "端口"
+
+msgid "Unit"
+msgstr "单元地址"
+
+msgid "01 Read coils"
+msgstr "01 读线圈"
+
+msgid "02 Read discrete inputs"
+msgstr "02 读离散输入"
+
+msgid "03 Read holding registers"
+msgstr "03 读保持寄存器"
+
+msgid "04 Read input registers"
+msgstr "04 读输入寄存器"
+
+msgid "05 Write single coil"
+msgstr "05 写单个线圈"
+
+msgid "06 Write single register"
+msgstr "06 写单个寄存器"
+
+msgid "Address"
+msgstr "地址"
+
+msgid "Read count"
+msgstr "读取数量"
+
+msgid "Write value"
+msgstr "写入值"
+
+msgid "Execute request"
+msgstr "执行请求"
+
+msgid "Publish queued; QoS 1 waits for broker acknowledgement"
+msgstr "发布已排队；QoS 1 等待代理确认"
+
+msgid "MQTT 3.1.1 / TCP debugging"
+msgstr "MQTT 3.1.1 / TCP 调试"
+
+msgid "Broker hostname or IP"
+msgstr "代理主机名或 IP"
+
+msgid "Analyze payloads…"
+msgstr "分析载荷…"
+
+msgid "Optional username"
+msgstr "用户名（可选）"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Subscription filter, e.g. board/+/log"
+msgstr "订阅过滤器，例如 board/+/log"
+
+msgid "Unsubscribe"
+msgstr "取消订阅"
+
+msgid "Subscribe"
+msgstr "订阅"
+
+msgid "Publish topic (no wildcards)"
+msgstr "发布主题（不含通配符）"
+
+msgid "Retain"
+msgstr "保留消息"
+
+msgid "Publish"
+msgstr "发布"
+
+msgid "Ready — TCP transport, clean session, QoS 0/1"
+msgstr "就绪 — TCP 传输、清理会话、QoS 0/1"
+
+msgid "CAN error frame received; inspect interface/bus state"
+msgstr "收到 CAN 错误帧；请检查接口/总线状态"
+
+msgid "SocketCAN interface opened"
+msgstr "SocketCAN 接口已打开"
+
+msgid "Enter a valid hexadecimal CAN identifier"
+msgstr "请输入有效的十六进制 CAN 标识符"
+
+msgid "Frame accepted by SocketCAN"
+msgstr "SocketCAN 已接受帧"
+
+msgid "Choose a regular DBC file"
+msgstr "选择普通 DBC 文件"
+
+msgid "Could not load DBC"
+msgstr "无法加载 DBC"
+
+msgid "DBC loaded; matching frames produce numeric fields in Analyze"
+msgstr "DBC 已加载；匹配帧会在分析器中生成数字字段"
+
+msgid "Load DBC definitions"
+msgstr "加载 DBC 定义"
+
+msgid "CAN / DBC debugging"
+msgstr "CAN / DBC 调试"
+
+msgid ""
+"Use a configured SocketCAN interface. DBC supports integer signals, Intel/"
+"Motorola byte order, scaling and simple multiplexing. Analyze plots decoded "
+"fields."
+msgstr "使用已配置的 SocketCAN 接口。DBC 支持整数信号、Intel/Motorola 字节序、缩放和简单多路复用。分析器可绘制解码字段。"
+
+msgid "Interface, e.g. can0"
+msgstr "接口，例如 can0"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Load DBC…"
+msgstr "加载 DBC…"
+
+msgid "CAN ID (hex)"
+msgstr "CAN ID（十六进制）"
+
+msgid "29-bit ID"
+msgstr "29 位 ID"
+
+msgid "HEX payload; RTR uses its length as requested DLC"
+msgstr "HEX 载荷；RTR 使用其长度作为请求 DLC"
+
+msgid "Send frame"
+msgstr "发送帧"
+
+msgid "BLE value exceeds 512 bytes"
+msgstr "BLE 值超过 512 字节"
+
+msgid "BLE scan finished"
+msgstr "BLE 扫描已完成"
+
+msgid "completed"
+msgstr "已完成"
+
+msgid "Wait for the current BLE operation"
+msgstr "请等待当前 BLE 操作完成"
+
+msgid "Notifications already active"
+msgstr "通知已启用"
+
+msgid "Select an available BLE device or characteristic"
+msgstr "选择可用的 BLE 设备或特征"
+
+msgid "BLE object is no longer available"
+msgstr "BLE 对象已不可用"
+
+msgid "BLE scan is already running"
+msgstr "BLE 扫描正在进行"
+
+msgid "No powered Bluetooth adapter; enable it in system settings"
+msgstr "没有已开启的蓝牙适配器；请在系统设置中启用"
+
+msgid "BLE writes are limited to 512 bytes; the device may accept less"
+msgstr "BLE 写入上限为 512 字节；设备可能接受更少"
+
+msgid "BlueZ ready; scan or select a known device"
+msgstr "BlueZ 就绪；扫描或选择已知设备"
+
+msgid "BlueZ service is unavailable"
+msgstr "BlueZ 服务不可用"
+
+msgid "BLE GATT debugging"
+msgstr "BLE GATT 调试"
+
+msgid ""
+"Select a device, connect, then select its GATT characteristic. Pairing and "
+"adapter power are managed in system settings. Writes keep the device's "
+"characteristic boundaries."
+msgstr "选择设备并连接，再选择其 GATT 特征。配对和适配器电源在系统设置中管理。每次写入保持设备特征的数据边界。"
+
+msgid "Scan (10 s)"
+msgstr "扫描（10 秒）"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Read"
+msgstr "读取"
+
+msgid "Start notifications"
+msgstr "启用通知"
+
+msgid "Stop notifications"
+msgstr "停用通知"
+
+msgid "Without response"
+msgstr "无响应写入"
+
+msgid "Write"
+msgstr "写入"
+
+msgid "Loading BlueZ…"
+msgstr "正在加载 BlueZ…"
