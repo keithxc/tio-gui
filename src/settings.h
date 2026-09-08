@@ -20,6 +20,10 @@ typedef struct {
     gchar *stop_bits;
     gchar *parity;
     gchar *flow;
+    guint dtr_default, rts_default; /* 0 unchanged, 1 low, 2 high */
+    guint line_pulse_ms;
+    gboolean rs485;
+    gchar *rs485_config;
     gboolean local_echo;
     gboolean hex_output;
     gboolean timestamps;

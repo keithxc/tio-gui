@@ -25,6 +25,7 @@
 #include "payload.h"
 #include "quick_presets.h"
 #include "sequence.h"
+#include "serial_options.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -158,6 +159,14 @@ struct _TioTab {
     GtkLabel *flow_label;
     GtkLabel *output_delay_label;
     GtkLabel *output_line_delay_label;
+    GtkDropDown *dtr_default, *rts_default;
+    GtkSpinButton *line_pulse_spin;
+    GtkCheckButton *rs485_check;
+    GtkEntry *rs485_entry;
+    guint line_command_timer;
+    guint line_command_attempts;
+    gchar *line_command_path;
+    GPtrArray *line_script_paths;
     GtkSpinButton *output_delay_spin;
     GtkSpinButton *output_line_delay_spin;
     GtkCheckButton *local_echo_check;
@@ -857,6 +866,12 @@ static void capture_session_config(TioTab *tab, TioSessionConfig *config)
     g_free(config->log_file);
     config->log_file = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->log_file_entry)));
 
+    config->dtr_default = gtk_drop_down_get_selected(tab->dtr_default);
+    config->rts_default = gtk_drop_down_get_selected(tab->rts_default);
+    config->line_pulse_ms = (guint)gtk_spin_button_get_value_as_int(tab->line_pulse_spin);
+    config->rs485 = gtk_check_button_get_active(tab->rs485_check);
+    g_free(config->rs485_config);
+    config->rs485_config = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->rs485_entry)));
     config->local_echo = gtk_check_button_get_active(tab->local_echo_check);
     config->hex_output = gtk_toggle_button_get_active(tab->hex_toggle);
     config->timestamps = gtk_check_button_get_active(tab->timestamp_check);
@@ -908,6 +923,11 @@ static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
                               : log_filename_templates[filename_index]);
     gtk_widget_set_visible(GTK_WIDGET(tab->log_file_entry),
                            filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gtk_drop_down_set_selected(tab->dtr_default, config->dtr_default);
+    gtk_drop_down_set_selected(tab->rts_default, config->rts_default);
+    gtk_spin_button_set_value(tab->line_pulse_spin, config->line_pulse_ms);
+    gtk_check_button_set_active(tab->rs485_check, config->rs485);
+    gtk_editable_set_text(GTK_EDITABLE(tab->rs485_entry), config->rs485_config);
     gtk_spin_button_set_value(tab->output_delay_spin, config->output_delay);
     gtk_spin_button_set_value(tab->output_line_delay_spin, config->output_line_delay);
     update_session_label(tab);
@@ -1426,6 +1446,13 @@ static void raw_tap_unref(TioRawTap *tap)
    releases its own reference when the callback runs. */
 static void raw_tap_stop(TioTab *tab)
 {
+    if (tab->line_command_timer) { g_source_remove(tab->line_command_timer); tab->line_command_timer = 0; }
+    g_clear_pointer(&tab->line_command_path, g_free);
+    if (tab->line_script_paths) {
+        for (guint i = 0; i < tab->line_script_paths->len; ++i)
+            g_unlink(g_ptr_array_index(tab->line_script_paths, i));
+        g_clear_pointer(&tab->line_script_paths, g_ptr_array_unref);
+    }
     g_clear_pointer(&tab->sequence_runner, tio_sequence_runner_free);
     if (tab->quick_send_timer) {
         g_source_remove(tab->quick_send_timer);
@@ -1634,6 +1661,7 @@ static gchar **build_tio_argv(const TioSessionConfig *config,
         g_ptr_array_add(arguments, g_strdup_printf("unix:%s", socket_path));
     }
 
+    tio_serial_options_append(arguments, config);
     g_ptr_array_add(arguments, g_strdup(config->device));
     g_ptr_array_add(arguments, NULL);
     return (gchar **)g_ptr_array_free(arguments, FALSE);
@@ -1685,6 +1713,11 @@ static void connect_tio(TioTab *tab)
     }
 
     capture_session_config(tab, &tab->config);
+    g_autoptr(GError) options_error = NULL;
+    if (!tio_serial_options_validate(&tab->config, &options_error)) {
+        set_status(tab, options_error->message);
+        return;
+    }
     /* The last connection seeds whatever session is opened next. */
     tio_session_config_copy(&tab->app->settings.defaults, &tab->config);
     const TioSessionConfig *config = &tab->config;
@@ -3046,6 +3079,121 @@ static void on_sequences_clicked(GtkButton *button, gpointer data)
     gtk_window_present(GTK_WINDOW(editor->window));
 }
 
+/* --------------------------------------------------------- serial lines */
+static gboolean line_command_prompt(gpointer data)
+{
+    TioTab *tab = data;
+    glong column, row;
+    vte_terminal_get_cursor_position(tab->terminal, &column, &row);
+#if VTE_CHECK_VERSION(0, 78, 0)
+    g_autofree gchar *text = vte_terminal_get_text_range_format(tab->terminal,
+        VTE_FORMAT_TEXT, MAX(0, row - 1), 0, row, column, NULL);
+#else
+    g_autofree gchar *text = vte_terminal_get_text_range(tab->terminal,
+        MAX(0, row - 1), 0, row, column, NULL, NULL, NULL);
+#endif
+    if (text && strstr(text, "Enter file name:")) {
+        g_autofree gchar *response = g_strconcat(tab->line_command_path, "\r", NULL);
+        send_bytes(tab, response, strlen(response));
+        g_clear_pointer(&tab->line_command_path, g_free);
+        tab->line_command_timer = 0;
+        set_status(tab, _("Line command submitted; inspect tio response"));
+        return G_SOURCE_REMOVE;
+    }
+    if (++tab->line_command_attempts >= 100 || tab->child_pid <= 0) {
+        g_clear_pointer(&tab->line_command_path, g_free);
+        tab->line_command_timer = 0;
+        set_status(tab, _("Could not recognize tio prompt; disconnect to cancel the command"));
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+static void on_line_control(GtkButton *button, gpointer data)
+{
+    TioTab *tab = data;
+    if (tab->child_pid <= 0) { set_status(tab, _("Connect before controlling serial lines")); return; }
+    if (tab->line_command_timer || tio_sequence_runner_active(tab->sequence_runner) ||
+        tab->quick_send_timer || (tab->raw && tab->raw->sending)) {
+        set_status(tab, _("Stop pending sends before controlling serial lines"));
+        return;
+    }
+    const char *action = g_object_get_data(G_OBJECT(button), "line-action");
+    if (g_str_equal(action, "break")) { send_bytes(tab, "\x14" "b", 2); return; }
+    if (g_str_equal(action, "dtr-pulse")) { send_bytes(tab, "\x14" "p0", 3); return; }
+    if (g_str_equal(action, "rts-pulse")) { send_bytes(tab, "\x14" "p1", 3); return; }
+    guint line = g_str_has_prefix(action, "dtr") ? 0u : 1u;
+    gboolean high = g_str_has_suffix(action, "high");
+    g_autofree gchar *script = tio_line_script(line, high);
+    g_autofree gchar *directory = g_build_filename(g_get_user_runtime_dir(), "tio-gui", NULL);
+    if (g_mkdir_with_parents(directory, 0700) != 0) {
+        set_status(tab, _("Could not create runtime directory")); return;
+    }
+    g_autofree gchar *path = g_build_filename(directory, "line-XXXXXX.lua", NULL);
+    /* mkstemp requires the random suffix at the end. tio does not need .lua. */
+    path[strlen(path) - 4] = '\0';
+    if (strpbrk(path, "\r\n") || strlen(path) >= 4000) {
+        set_status(tab, _("Runtime path cannot be used in a tio command")); return;
+    }
+    int fd = g_mkstemp(path);
+    if (fd < 0) { set_status(tab, _("Could not create line command")); return; }
+    close(fd);
+    g_autoptr(GError) error = NULL;
+    if (!g_file_set_contents(path, script, -1, &error)) {
+        g_unlink(path); set_status(tab, error->message); return;
+    }
+    if (!tab->line_script_paths) tab->line_script_paths = g_ptr_array_new_with_free_func(g_free);
+    /* These tiny files remain until disconnect so tio can open them after its prompt. */
+    if (tab->line_script_paths->len >= 1024) {
+        g_unlink(path); set_status(tab, _("Reconnect before issuing more line commands")); return;
+    }
+    g_ptr_array_add(tab->line_script_paths, g_strdup(path));
+    tab->line_command_path = g_steal_pointer(&path);
+    tab->line_command_attempts = 0;
+    send_bytes(tab, "\x14" "r", 2);
+    tab->line_command_timer = g_timeout_add(50, line_command_prompt, tab);
+}
+
+static GtkWidget *line_controls_new(TioTab *tab)
+{
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    GtkWidget *defaults = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    const char *states[] = {_("Unchanged"), _("Low"), _("High"), NULL};
+    tab->dtr_default = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(states));
+    tab->rts_default = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(states));
+    tab->line_pulse_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(1, 10000, 10));
+    gtk_box_append(GTK_BOX(defaults), make_label(_("DTR on connect")));
+    gtk_box_append(GTK_BOX(defaults), GTK_WIDGET(tab->dtr_default));
+    gtk_box_append(GTK_BOX(defaults), make_label(_("RTS on connect")));
+    gtk_box_append(GTK_BOX(defaults), GTK_WIDGET(tab->rts_default));
+    gtk_box_append(GTK_BOX(defaults), make_label(_("Pulse (ms)")));
+    gtk_box_append(GTK_BOX(defaults), GTK_WIDGET(tab->line_pulse_spin));
+    gtk_box_append(GTK_BOX(box), defaults);
+    GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    const char *names[] = {_("Send Break"), _("DTR Low"), _("DTR High"), _("DTR Pulse"),
+                           _("RTS Low"), _("RTS High"), _("RTS Pulse")};
+    const char *ids[] = {"break", "dtr-low", "dtr-high", "dtr-pulse", "rts-low", "rts-high", "rts-pulse"};
+    for (guint i = 0; i < G_N_ELEMENTS(ids); ++i) {
+        GtkWidget *button = gtk_button_new_with_label(names[i]);
+        g_object_set_data(G_OBJECT(button), "line-action", (gpointer)ids[i]);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_line_control), tab);
+        gtk_box_append(GTK_BOX(actions), button);
+    }
+    gtk_box_append(GTK_BOX(box), actions);
+    GtkWidget *rs485 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    tab->rs485_check = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("RS-485")));
+    tab->rs485_entry = GTK_ENTRY(gtk_entry_new());
+    gtk_entry_set_placeholder_text(tab->rs485_entry, "RTS_ON_SEND=1,RTS_AFTER_SEND=0,RX_DURING_TX");
+    gtk_widget_set_hexpand(GTK_WIDGET(tab->rs485_entry), TRUE);
+    gtk_box_append(GTK_BOX(rs485), GTK_WIDGET(tab->rs485_check));
+    gtk_box_append(GTK_BOX(rs485), GTK_WIDGET(tab->rs485_entry));
+    gtk_box_append(GTK_BOX(box), rs485);
+    GtkWidget *hint = gtk_label_new(_("Defaults, pulse duration and RS-485 apply on the next connection. Hardware support varies by adapter."));
+    gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+    gtk_box_append(GTK_BOX(box), hint);
+    return box;
+}
+
 /* ---------------------------------------------------------------- logging */
 
 static void on_log_toggled(GtkCheckButton *button, gpointer user_data)
@@ -4316,6 +4464,9 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_box_append(GTK_BOX(session_settings), GTK_WIDGET(tab->session_section_label));
     gtk_box_append(GTK_BOX(session_settings), tab->session_settings_card);
     gtk_box_append(GTK_BOX(session_settings), GTK_WIDGET(tab->connection_settings_box));
+    GtkWidget *line_expander = gtk_expander_new(_("Serial lines / RS-485"));
+    gtk_expander_set_child(GTK_EXPANDER(line_expander), line_controls_new(tab));
+    gtk_box_append(GTK_BOX(session_settings), line_expander);
     gtk_expander_set_child(GTK_EXPANDER(tab->session_settings_expander), session_settings);
     gtk_expander_set_expanded(GTK_EXPANDER(tab->session_settings_expander),
                               app->settings.advanced_expanded);

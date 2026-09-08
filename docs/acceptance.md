@@ -63,3 +63,24 @@ multiple-step drafts, persistence, rejection of invalid HEX, and window reopen.
 application's actual sequence runner and send callback through real tio 3.9 and
 an isolated PTY: binary `00 14 FF`, then Modbus request
 `01 03 00 00 00 0A C5 CD`, with a measured 118 ms gap for a configured 100 ms delay.
+
+## Serial lines and RS-485 — 2026-09-08
+
+Connection settings expose unchanged/low/high defaults for DTR and RTS, pulse
+duration, RS-485 and validated configuration. Live controls provide Break,
+DTR/RTS low/high and pulses. Pulse uses tio's native control command. Explicit
+levels use a private generated Lua file and wait for tio's filename prompt
+before submitting its path with CR. A single combined write was experimentally
+shown to stall the prompt; LF also does not terminate it. The implemented
+handshake was tested through actual VTE and tio. Runtime files are removed on
+disconnect. GUI reports submission, not confirmation of a physical voltage.
+
+`serial-options` CTest checks CLI construction and rejects invalid RS-485 tokens
+and values. `python3 tests/serial_line_acceptance.py .cache/build` launches real
+tio on an isolated PTY with a **test-only** ioctl shim. Actual GUI handlers and
+VTE exercise high/low/pulse commands; the shim checks the resulting modem bits,
+RS-485 flags and pre/post delays. No command data reaches the serial peer.
+The shim is never installed or loaded into the application. It verifies software
+behavior and is not an electrical test. tio uses electrical HIGH/LOW terminology:
+HIGH clears the active-low modem-control bit. Break submission is exercised but
+its electrical waveform is not measured.

@@ -95,6 +95,8 @@ void tio_session_config_init(TioSessionConfig *config)
 
     *config = (TioSessionConfig){
         .baud = g_strdup("115200"),
+        .line_pulse_ms = 100,
+        .rs485_config = g_strdup(""),
         .data_bits = g_strdup("8"),
         .stop_bits = g_strdup("1"),
         .parity = g_strdup("none"),
@@ -138,6 +140,11 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
     replace_string(&destination->timestamp_format, source->timestamp_format);
     replace_string(&destination->log_directory, source->log_directory);
     replace_string(&destination->log_file, source->log_file);
+    replace_string(&destination->rs485_config, source->rs485_config);
+    destination->rs485 = source->rs485;
+    destination->dtr_default = source->dtr_default;
+    destination->rts_default = source->rts_default;
+    destination->line_pulse_ms = source->line_pulse_ms;
     destination->local_echo = source->local_echo;
     destination->hex_output = source->hex_output;
     destination->timestamps = source->timestamps;
@@ -163,6 +170,7 @@ void tio_session_config_clear(TioSessionConfig *config)
         return;
     }
 
+    g_clear_pointer(&config->rs485_config, g_free);
     g_clear_pointer(&config->device, g_free);
     g_clear_pointer(&config->device_id, g_free);
     g_clear_pointer(&config->baud, g_free);
@@ -213,6 +221,11 @@ static void session_config_read(GKeyFile *key_file,
     replace_string_from_key(key_file, group, "parity", &config->parity);
     replace_string_from_key(key_file, group, "flow", &config->flow);
     replace_string_from_key(key_file, group, "line-ending", &config->line_ending);
+    replace_uint_from_key(key_file, group, "dtr-default", &config->dtr_default, 2);
+    replace_uint_from_key(key_file, group, "rts-default", &config->rts_default, 2);
+    replace_uint_from_key(key_file, group, "line-pulse-ms", &config->line_pulse_ms, 10000);
+    replace_boolean_from_key(key_file, group, "rs485", &config->rs485);
+    replace_optional_string_from_key(key_file, group, "rs485-config", &config->rs485_config);
     replace_boolean_from_key(key_file, group, "local-echo", &config->local_echo);
     replace_boolean_from_key(key_file, group, "hex-output", &config->hex_output);
     replace_boolean_from_key(key_file, group, "timestamps", &config->timestamps);
@@ -267,6 +280,11 @@ static void session_config_write(GKeyFile *key_file,
     g_key_file_set_string(key_file, group, "parity", config->parity);
     g_key_file_set_string(key_file, group, "flow", config->flow);
     g_key_file_set_string(key_file, group, "line-ending", config->line_ending);
+    g_key_file_set_integer(key_file, group, "dtr-default", (gint)config->dtr_default);
+    g_key_file_set_integer(key_file, group, "rts-default", (gint)config->rts_default);
+    g_key_file_set_integer(key_file, group, "line-pulse-ms", (gint)config->line_pulse_ms);
+    g_key_file_set_boolean(key_file, group, "rs485", config->rs485);
+    g_key_file_set_string(key_file, group, "rs485-config", config->rs485_config);
     g_key_file_set_boolean(key_file, group, "local-echo", config->local_echo);
     g_key_file_set_boolean(key_file, group, "hex-output", config->hex_output);
     g_key_file_set_boolean(key_file, group, "timestamps", config->timestamps);

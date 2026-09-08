@@ -180,6 +180,44 @@ static void check_sequence_real_tio(void)
     g_object_unref(tab.status_label);
 }
 
+static void check_line_controls_real_tio(void)
+{
+    const char *fd_text = g_getenv("TIO_TEST_CONTROL_FD");
+    if (!fd_text) { g_test_skip("Run serial_line_acceptance.py for the isolated tio PTY"); return; }
+    TioTab tab = {0};
+    tab.child_pid = 1;
+    tab.status_label = GTK_LABEL(g_object_ref_sink(gtk_label_new("")));
+    tab.terminal = VTE_TERMINAL(vte_terminal_new());
+    g_autoptr(VtePty) pty = vte_pty_new_foreign_sync(dup(atoi(fd_text)), NULL, NULL);
+    g_assert_nonnull(pty);
+    vte_terminal_set_pty(tab.terminal, pty);
+    GtkWidget *window = gtk_window_new();
+    gtk_window_set_child(GTK_WINDOW(window), GTK_WIDGET(tab.terminal));
+    gtk_window_set_default_size(GTK_WINDOW(window), 800, 400);
+    gtk_window_present(GTK_WINDOW(window));
+    const char *actions[] = {"dtr-high", "dtr-low", "rts-high", "rts-low", "dtr-pulse", "rts-pulse", "break"};
+    for (guint i = 0; i < G_N_ELEMENTS(actions); ++i) {
+        GtkWidget *button = g_object_ref_sink(gtk_button_new());
+        g_object_set_data(G_OBJECT(button), "line-action", (gpointer)actions[i]);
+        on_line_control(GTK_BUTTON(button), &tab);
+        gint64 until = g_get_monotonic_time() + 6 * G_TIME_SPAN_SECOND;
+        while (tab.line_command_timer && g_get_monotonic_time() < until) {
+            g_main_context_iteration(NULL, FALSE); g_usleep(1000);
+        }
+        g_assert_cmpuint(tab.line_command_timer, ==, 0);
+        if (i < 4) g_assert_cmpstr(gtk_label_get_text(tab.status_label), ==,
+                                  "Line command submitted; inspect tio response");
+        until = g_get_monotonic_time() + 200000;
+        while (g_get_monotonic_time() < until) {
+            g_main_context_iteration(NULL, FALSE); g_usleep(1000);
+        }
+        g_object_unref(button);
+    }
+    raw_tap_stop(&tab);
+    gtk_window_destroy(GTK_WINDOW(window));
+    g_object_unref(tab.status_label);
+}
+
 int main(int argc, char **argv)
 {
     g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
@@ -190,6 +228,7 @@ int main(int argc, char **argv)
     g_test_add_func("/quick-editor/binary-send-and-cancel", check_send);
     g_test_add_func("/sequences/editor-persistence", check_sequence_editor);
     g_test_add_func("/sequences/real-tio", check_sequence_real_tio);
+    g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
     int result = g_test_run();
     g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);
     g_autofree gchar *directory = g_path_get_dirname(file);

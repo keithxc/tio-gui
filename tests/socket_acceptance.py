@@ -51,6 +51,24 @@ def main():
                     assert time.monotonic() < until, repr(output)
                     if select.select([control], [], [], .1)[0]:
                         output += os.read(control, 8192)
+                script = root + "/line-control-test.lua"
+                with open(script, "w") as handle:
+                    handle.write('print("TIO_GUI_SCRIPT_ACCEPTED")\n')
+                os.write(control, b"\x14r")
+                output = b""
+                until = time.monotonic() + 5
+                while b"Enter file name:" not in output:
+                    assert time.monotonic() < until, repr(output)
+                    if select.select([control], [], [], .1)[0]:
+                        output += os.read(control, 8192)
+                os.write(control, script.encode() + b"\r")
+                output = b""
+                while b"TIO_GUI_SCRIPT_ACCEPTED" not in output:
+                    assert time.monotonic() < until, repr(output)
+                    if select.select([control], [], [], .1)[0]:
+                        output += os.read(control, 8192)
+                assert not select.select([serial], [], [], .05)[0], "Command prompt leaked onto serial"
+                print("PASS: tio runtime script prompt accepts request/response handshake without serial leakage")
                 payload = bytes(range(256))
                 client.sendall(payload)
                 actual = read_exact(serial, len(payload))

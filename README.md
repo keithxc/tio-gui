@@ -17,6 +17,9 @@ Early development. The first release targets x86-64 Linux.
 - Select common baud rates, including 1,500,000 baud, or enter a custom rate
 - Configure data bits, stop bits, parity, flow control, and local echo per session, in that
   session's own settings expander
+- Control DTR/RTS low, high or pulse and send Break through tio. Configure initial
+  line levels, pulse duration and RS-485 in the session settings. Hardware and
+  driver support determine whether an adapter can apply these options.
 - Set the `tio` output character delay and output line delay for slow or fragile receivers
 - Start and stop a `tio` session inside an embedded terminal
 - Preserve `tio` automatic reconnection behavior
