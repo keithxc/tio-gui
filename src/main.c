@@ -22,6 +22,8 @@
 #include <vte/vte.h>
 
 #include "settings.h"
+#include "payload.h"
+#include "quick_presets.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -111,6 +113,8 @@ struct _TioTab {
 
     /* Raw data tap: the bytes tio received, before any display formatting. */
     gchar *socket_path;
+    guint quick_send_timer;
+    GByteArray *quick_pending;
     TioRawTap *raw;
     guint raw_connect_timer;
     guint raw_connect_attempts;
@@ -224,6 +228,14 @@ typedef struct {
     GtkWidget *window;
     GtkEntry *label_entries[TIO_GUI_QUICK_BUTTON_COUNT];
     GtkEntry *payload_entries[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkSpinButton *delays[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkDropDown *modes[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkDropDown *endings[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkDropDown *crcs[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkLabel *previews[TIO_GUI_QUICK_BUTTON_COUNT];
+    GtkWidget *save;
+    GtkLabel *file_status;
+    GtkWidget *export_button;
 } QuickButtonEditor;
 
 typedef enum {
@@ -808,6 +820,8 @@ static void select_baud(TioTab *tab, const char *baud)
 
 static void capture_session_config(TioTab *tab, TioSessionConfig *config)
 {
+    /* Preserve non-widget settings such as quick buttons in profile/tab snapshots. */
+    if (config != &tab->config) tio_session_config_copy(config, &tab->config);
     const char *device = selected_string(tab->device_dropdown);
     if (device != NULL) {
         g_free(config->device);
@@ -1381,6 +1395,7 @@ struct _TioRawTap {
     GSocketConnection *connection;
     GCancellable *cancellable;
     guint8 buffer[TIO_GUI_RAW_BUFFER_SIZE];
+    GBytes *sending;
 };
 
 static void raw_tap_read(TioRawTap *tap);
@@ -1396,6 +1411,7 @@ static void raw_tap_unref(TioRawTap *tap)
     if (--tap->reference_count > 0) {
         return;
     }
+    g_clear_pointer(&tap->sending, g_bytes_unref);
     g_clear_object(&tap->cancellable);
     g_clear_object(&tap->connection);
     g_free(tap);
@@ -1405,6 +1421,11 @@ static void raw_tap_unref(TioRawTap *tap)
    releases its own reference when the callback runs. */
 static void raw_tap_stop(TioTab *tab)
 {
+    if (tab->quick_send_timer) {
+        g_source_remove(tab->quick_send_timer);
+        tab->quick_send_timer = 0;
+    }
+    g_clear_pointer(&tab->quick_pending, g_byte_array_unref);
     if (tab->raw_connect_timer != 0) {
         g_source_remove(tab->raw_connect_timer);
         tab->raw_connect_timer = 0;
@@ -1437,7 +1458,9 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
            cancellation ends the tap too; the session itself is unaffected. */
         tap->tab->raw = NULL;
         tap->tab = NULL;
-        raw_tap_unref(tap);
+        g_cancellable_cancel(tap->cancellable);
+        raw_tap_unref(tap); /* session ownership */
+        raw_tap_unref(tap); /* read callback ownership */
         return;
     }
 
@@ -1775,6 +1798,45 @@ static void send_bytes(TioTab *tab, const char *data, gsize length)
         return;
     }
     vte_terminal_feed_child(tab->terminal, data, (gssize)length);
+}
+
+/* Binary payloads use the socket: the pty interprets Ctrl-T as a command. */
+static void on_payload_written(GObject *source, GAsyncResult *result, gpointer data)
+{
+    TioRawTap *tap = data;
+    g_autoptr(GError) error = NULL;
+    gsize written = 0;
+    gboolean ok = g_output_stream_write_all_finish(G_OUTPUT_STREAM(source), result, &written, &error);
+    g_clear_pointer(&tap->sending, g_bytes_unref);
+    if (tap->tab) {
+        if (ok) {
+            g_autofree gchar *message = g_strdup_printf(_("Sent %zu bytes to tio"), written);
+            set_status(tap->tab, message);
+        } else {
+            g_autofree gchar *message = g_strdup_printf(_("Send failed after %zu bytes: %s"), written, error->message);
+            set_status(tap->tab, message);
+        }
+    }
+    raw_tap_unref(tap);
+}
+
+static gboolean send_payload(TioTab *tab, const GByteArray *bytes)
+{
+    TioRawTap *tap = tab->raw;
+    if (tab->child_pid <= 0 || !tap) {
+        set_status(tab, _("Serial data channel is not ready"));
+        return FALSE;
+    }
+    if (tap->sending) {
+        set_status(tab, _("A send is still in progress"));
+        return FALSE;
+    }
+    if (!bytes->len) return TRUE;
+    tap->sending = g_bytes_new(bytes->data, bytes->len);
+    g_output_stream_write_all_async(g_io_stream_get_output_stream(G_IO_STREAM(tap->connection)),
+        g_bytes_get_data(tap->sending, NULL), bytes->len, G_PRIORITY_DEFAULT,
+        tap->cancellable, on_payload_written, raw_tap_ref(tap));
+    return TRUE;
 }
 
 static void send_entry_contents(TioTab *tab)
@@ -2317,36 +2379,13 @@ static void on_highlight_key_released(GtkEventControllerKey *controller, guint k
 
 /* ---------------------------------------------------------- quick buttons */
 
-static GByteArray *decode_quick_payload(const char *payload)
+static gboolean quick_send_delayed(gpointer data)
 {
-    GByteArray *bytes = g_byte_array_new();
-
-    for (gsize index = 0; payload[index] != '\0'; ++index) {
-        guint8 value = (guint8)payload[index];
-        if (payload[index] == '\\' && payload[index + 1] != '\0') {
-            char escaped = payload[++index];
-            switch (escaped) {
-            case 'r': value = '\r'; break;
-            case 'n': value = '\n'; break;
-            case 't': value = '\t'; break;
-            case 'e': value = 0x1b; break;
-            case '\\': value = '\\'; break;
-            case 'x':
-                if (g_ascii_isxdigit(payload[index + 1]) &&
-                    g_ascii_isxdigit(payload[index + 2])) {
-                    value = (guint8)((g_ascii_xdigit_value(payload[index + 1]) << 4) |
-                                     g_ascii_xdigit_value(payload[index + 2]));
-                    index += 2;
-                } else {
-                    value = (guint8)'x';
-                }
-                break;
-            default: value = (guint8)escaped; break;
-            }
-        }
-        g_byte_array_append(bytes, &value, 1);
-    }
-    return bytes;
+    TioTab *tab = data;
+    tab->quick_send_timer = 0;
+    send_payload(tab, tab->quick_pending);
+    g_clear_pointer(&tab->quick_pending, g_byte_array_unref);
+    return G_SOURCE_REMOVE;
 }
 
 static void on_quick_button_clicked(GtkButton *button, gpointer user_data)
@@ -2359,9 +2398,22 @@ static void on_quick_button_clicked(GtkButton *button, gpointer user_data)
     }
 
     guint index = stored_index - 1;
-    g_autoptr(GByteArray) bytes =
-        decode_quick_payload(tab->config.quick_payloads[index]);
-    send_bytes(tab, (const char *)bytes->data, bytes->len);
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GByteArray) bytes = tio_payload_build(tab->config.quick_payloads[index],
+        tab->config.quick_modes[index] != 0, tab->config.quick_endings[index],
+        tab->config.quick_crcs[index], &error);
+    if (!bytes) { set_status(tab, error->message); return; }
+    if (tab->quick_send_timer) {
+        set_status(tab, _("A delayed send is pending; disconnect to cancel"));
+        return;
+    }
+    if (tab->config.quick_delays[index]) {
+        tab->quick_pending = g_byte_array_ref(bytes);
+        tab->quick_send_timer = g_timeout_add(tab->config.quick_delays[index], quick_send_delayed, tab);
+        set_status(tab, _("Send scheduled; disconnect to cancel"));
+    } else {
+        send_payload(tab, bytes);
+    }
 }
 
 static void update_quick_buttons(TioTab *tab)
@@ -2380,25 +2432,144 @@ static void update_quick_buttons(TioTab *tab)
     }
 }
 
+static void quick_editor_preview(QuickButtonEditor *editor)
+{
+    gboolean valid = TRUE;
+    for (guint i = 0; i < TIO_GUI_QUICK_BUTTON_COUNT; ++i) {
+        g_autoptr(GError) error = NULL;
+        g_autoptr(GByteArray) bytes = tio_payload_build(
+            gtk_editable_get_text(GTK_EDITABLE(editor->payload_entries[i])),
+            gtk_drop_down_get_selected(editor->modes[i]) == 1,
+            gtk_drop_down_get_selected(editor->endings[i]),
+            gtk_drop_down_get_selected(editor->crcs[i]), &error);
+        g_autofree gchar *preview = bytes ? tio_payload_preview(bytes) : g_strdup(error->message);
+        gtk_label_set_text(editor->previews[i], preview);
+        if (!bytes) valid = FALSE;
+    }
+    gtk_widget_set_sensitive(editor->save, valid);
+    if (editor->export_button) gtk_widget_set_sensitive(editor->export_button, valid);
+}
+
+static void quick_text_changed(GtkEditable *entry, gpointer data)
+{
+    (void)entry;
+    quick_editor_preview(data);
+}
+
+static void quick_option_changed(GObject *object, GParamSpec *spec, gpointer data)
+{
+    (void)object; (void)spec;
+    quick_editor_preview(data);
+}
+
+static void quick_insert_control(GtkButton *button, gpointer data)
+{
+    QuickButtonEditor *editor = data;
+    guint row = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(button), "row"));
+    const char *escaped = g_object_get_data(G_OBJECT(button), "escaped");
+    const char *hex = g_object_get_data(G_OBJECT(button), "hex");
+    GtkEditable *entry = GTK_EDITABLE(editor->payload_entries[row]);
+    int start, end;
+    if (gtk_editable_get_selection_bounds(entry, &start, &end))
+        gtk_editable_delete_text(entry, start, end);
+    int position = gtk_editable_get_position(entry);
+    const char *insert = gtk_drop_down_get_selected(editor->modes[row]) ? hex : escaped;
+    gtk_editable_insert_text(entry, insert, -1, &position);
+    gtk_editable_set_position(entry, position);
+    gtk_widget_grab_focus(GTK_WIDGET(entry));
+}
+
+static void quick_editor_capture(QuickButtonEditor *editor, TioSessionConfig *config)
+{
+    for (guint i = 0; i < TIO_GUI_QUICK_BUTTON_COUNT; ++i) {
+        g_free(config->quick_labels[i]);
+        g_free(config->quick_payloads[i]);
+        config->quick_labels[i] = g_strdup(gtk_editable_get_text(GTK_EDITABLE(editor->label_entries[i])));
+        config->quick_payloads[i] = g_strdup(gtk_editable_get_text(GTK_EDITABLE(editor->payload_entries[i])));
+        config->quick_modes[i] = gtk_drop_down_get_selected(editor->modes[i]);
+        config->quick_endings[i] = gtk_drop_down_get_selected(editor->endings[i]);
+        config->quick_crcs[i] = gtk_drop_down_get_selected(editor->crcs[i]);
+        config->quick_delays[i] = (guint)gtk_spin_button_get_value_as_int(editor->delays[i]);
+    }
+}
+
+static void quick_file_finished(GObject *source, GAsyncResult *result, gpointer data)
+{
+    g_autoptr(GtkWindow) window = data;
+    QuickButtonEditor *editor = g_object_get_data(G_OBJECT(window), "quick-editor");
+    gboolean exporting = GPOINTER_TO_INT(g_object_get_data(source, "exporting"));
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = exporting ? gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error)
+                                    : gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!gtk_widget_get_visible(GTK_WIDGET(window))) return;
+    if (!file) {
+        if (error && !g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED))
+            gtk_label_set_text(editor->file_status, error->message);
+        return;
+    }
+    g_autofree gchar *path = g_file_get_path(file);
+    if (!path) { gtk_label_set_text(editor->file_status, _("Choose a local file")); return; }
+    TioSessionConfig config;
+    tio_session_config_init(&config);
+    if (exporting) {
+        quick_editor_capture(editor, &config);
+        gsize length = 0;
+        g_autofree gchar *text = tio_quick_presets_encode(&config, &length);
+        if (g_file_set_contents(path, text, (gssize)length, &error))
+            gtk_label_set_text(editor->file_status, _("Button group exported"));
+    } else {
+        /* Bound the read before parsing even when the selected file is huge. */
+        g_autoptr(GFileInputStream) stream = g_file_read(file, NULL, &error);
+        g_autofree gchar *text = g_malloc(1024 * 1024 + 1);
+        gsize length = 0;
+        if (stream && g_input_stream_read_all(G_INPUT_STREAM(stream), text, 1024 * 1024 + 1,
+                                             &length, NULL, &error) &&
+            tio_quick_presets_decode(&config, text, length, &error)) {
+            for (guint i = 0; i < TIO_GUI_QUICK_BUTTON_COUNT; ++i) {
+                gtk_editable_set_text(GTK_EDITABLE(editor->label_entries[i]), config.quick_labels[i]);
+                gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[i]), config.quick_payloads[i]);
+                gtk_drop_down_set_selected(editor->modes[i], config.quick_modes[i]);
+                gtk_drop_down_set_selected(editor->endings[i], config.quick_endings[i]);
+                gtk_drop_down_set_selected(editor->crcs[i], config.quick_crcs[i]);
+                gtk_spin_button_set_value(editor->delays[i], config.quick_delays[i]);
+            }
+            gtk_label_set_text(editor->file_status, _("Button group loaded; Save to apply"));
+        }
+    }
+    if (error) gtk_label_set_text(editor->file_status, error->message);
+    tio_session_config_clear(&config);
+}
+
+static void quick_file_clicked(GtkButton *button, gpointer data)
+{
+    QuickButtonEditor *editor = data;
+    gboolean exporting = GTK_WIDGET(button) == editor->export_button;
+    g_autoptr(GtkFileDialog) dialog = gtk_file_dialog_new();
+    g_object_set_data(G_OBJECT(dialog), "exporting", GINT_TO_POINTER(exporting));
+    if (exporting) {
+        gtk_file_dialog_set_initial_name(dialog, "quick-buttons.ini");
+        gtk_file_dialog_save(dialog, GTK_WINDOW(editor->window), NULL, quick_file_finished,
+                             g_object_ref(editor->window));
+    } else {
+        gtk_file_dialog_open(dialog, GTK_WINDOW(editor->window), NULL, quick_file_finished,
+                             g_object_ref(editor->window));
+    }
+}
+
 static void on_quick_editor_save(GtkButton *button, gpointer user_data)
 {
     (void)button;
     QuickButtonEditor *editor = user_data;
     TioSessionConfig *session = &editor->tab->config;
 
-    for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
-        g_free(session->quick_labels[index]);
-        session->quick_labels[index] =
-            g_strdup(gtk_editable_get_text(GTK_EDITABLE(editor->label_entries[index])));
-        g_free(session->quick_payloads[index]);
-        session->quick_payloads[index] =
-            g_strdup(gtk_editable_get_text(GTK_EDITABLE(editor->payload_entries[index])));
-    }
+    quick_editor_capture(editor, session);
+    capture_all_settings(editor->tab);
     update_quick_buttons(editor->tab);
 
     g_autoptr(GError) error = NULL;
     if (!tio_settings_save(&editor->tab->app->settings, &error)) {
-        g_warning("Could not save quick buttons: %s", error->message);
+        gtk_label_set_text(editor->file_status, error->message);
+        return;
     }
     gtk_window_destroy(GTK_WINDOW(editor->window));
 }
@@ -2420,7 +2591,8 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
     gtk_window_set_title(GTK_WINDOW(editor->window), _("Customize quick buttons"));
     gtk_window_set_transient_for(GTK_WINDOW(editor->window), GTK_WINDOW(tab->app->window));
     gtk_window_set_modal(GTK_WINDOW(editor->window), TRUE);
-    gtk_window_set_default_size(GTK_WINDOW(editor->window), 560, 280);
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(editor->window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(editor->window), 980, 620);
     g_object_set_data_full(G_OBJECT(editor->window), "quick-editor", editor, g_free);
 
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -2428,7 +2600,9 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
     gtk_widget_set_margin_bottom(root, 12);
     gtk_widget_set_margin_start(root, 12);
     gtk_widget_set_margin_end(root, 12);
-    gtk_window_set_child(GTK_WINDOW(editor->window), root);
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), root);
+    gtk_window_set_child(GTK_WINDOW(editor->window), scroll);
 
     GtkWidget *hint = gtk_label_new(_("Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."));
     gtk_label_set_xalign(GTK_LABEL(hint), 0.0F);
@@ -2442,17 +2616,21 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
     gtk_grid_attach(GTK_GRID(grid), make_label(_("Button")), 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), make_label(_("Label")), 1, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), make_label(_("Payload")), 2, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), make_label(_("Mode")), 3, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), make_label(_("Line ending")), 4, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), make_label(_("Checksum")), 5, 0, 1, 1);
+
 
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         g_autofree gchar *number = g_strdup_printf("%u", index + 1);
-        gtk_grid_attach(GTK_GRID(grid), make_label(number), 0, (gint)index + 1, 1, 1);
+        gtk_grid_attach(GTK_GRID(grid), make_label(number), 0, (gint)index * 3 + 1, 1, 1);
 
         editor->label_entries[index] = GTK_ENTRY(gtk_entry_new());
         gtk_editable_set_text(GTK_EDITABLE(editor->label_entries[index]),
                               tab->config.quick_labels[index]);
         gtk_grid_attach(GTK_GRID(grid),
                         GTK_WIDGET(editor->label_entries[index]),
-                        1, (gint)index + 1, 1, 1);
+                        1, (gint)index * 3 + 1, 1, 1);
 
         editor->payload_entries[index] = GTK_ENTRY(gtk_entry_new());
         gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[index]),
@@ -2460,7 +2638,42 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
         gtk_widget_set_hexpand(GTK_WIDGET(editor->payload_entries[index]), TRUE);
         gtk_grid_attach(GTK_GRID(grid),
                         GTK_WIDGET(editor->payload_entries[index]),
-                        2, (gint)index + 1, 1, 1);
+                        2, (gint)index * 3 + 1, 1, 1);
+        const char *modes[] = {_("Text"), "HEX", NULL};
+        const char *endings[] = {_("None"), "LF", "CR", "CRLF", NULL};
+        const char *crcs[] = {_("None"), "CRC-8/SMBUS", "CRC-16/MODBUS (LE)", "CRC-32/ISO-HDLC (LE)", NULL};
+        editor->modes[index] = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(modes));
+        editor->endings[index] = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(endings));
+        editor->crcs[index] = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(crcs));
+        gtk_drop_down_set_selected(editor->modes[index], tab->config.quick_modes[index]);
+        gtk_drop_down_set_selected(editor->endings[index], tab->config.quick_endings[index]);
+        gtk_drop_down_set_selected(editor->crcs[index], tab->config.quick_crcs[index]);
+        gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(editor->modes[index]), 3, (gint)index * 3 + 1, 1, 1);
+        gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(editor->endings[index]), 4, (gint)index * 3 + 1, 1, 1);
+        gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(editor->crcs[index]), 5, (gint)index * 3 + 1, 1, 1);
+        editor->previews[index] = GTK_LABEL(gtk_label_new(""));
+        gtk_label_set_xalign(editor->previews[index], 0);
+        gtk_label_set_selectable(editor->previews[index], TRUE);
+        gtk_label_set_ellipsize(editor->previews[index], PANGO_ELLIPSIZE_END);
+        gtk_widget_add_css_class(GTK_WIDGET(editor->previews[index]), "monospace");
+        gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(editor->previews[index]), 1, (gint)index * 3 + 3, 5, 1);
+        GtkWidget *controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        const char *names[] = {"CR", "LF", "Tab", "Esc"};
+        const char *escapes[] = {"\\r", "\\n", "\\t", "\\e"};
+        const char *hex_bytes[] = {" 0D ", " 0A ", " 09 ", " 1B "};
+        for (guint k = 0; k < 4; ++k) {
+            GtkWidget *insert = gtk_button_new_with_label(names[k]);
+            g_object_set_data(G_OBJECT(insert), "row", GUINT_TO_POINTER(index));
+            g_object_set_data(G_OBJECT(insert), "escaped", (gpointer)escapes[k]);
+            g_object_set_data(G_OBJECT(insert), "hex", (gpointer)hex_bytes[k]);
+            g_signal_connect(insert, "clicked", G_CALLBACK(quick_insert_control), editor);
+            gtk_box_append(GTK_BOX(controls), insert);
+        }
+        gtk_grid_attach(GTK_GRID(grid), controls, 2, (gint)index * 3 + 2, 2, 1);
+        gtk_grid_attach(GTK_GRID(grid), make_label(_("Delay (ms)")), 4, (gint)index * 3 + 2, 1, 1);
+        editor->delays[index] = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(0, 60000, 10));
+        gtk_spin_button_set_value(editor->delays[index], tab->config.quick_delays[index]);
+        gtk_grid_attach(GTK_GRID(grid), GTK_WIDGET(editor->delays[index]), 5, (gint)index * 3 + 2, 1, 1);
     }
 
     GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
@@ -2472,6 +2685,23 @@ static void on_customize_quick_buttons(GtkButton *button, gpointer user_data)
     gtk_box_append(GTK_BOX(actions), save);
     gtk_box_append(GTK_BOX(root), actions);
 
+    editor->file_status = GTK_LABEL(gtk_label_new(""));
+    gtk_label_set_wrap(editor->file_status, TRUE);
+    gtk_box_append(GTK_BOX(root), GTK_WIDGET(editor->file_status));
+    GtkWidget *import_button = gtk_button_new_with_label(_("Import button group…"));
+    editor->export_button = gtk_button_new_with_label(_("Export button group…"));
+    gtk_box_prepend(GTK_BOX(actions), editor->export_button);
+    gtk_box_prepend(GTK_BOX(actions), import_button);
+    g_signal_connect(import_button, "clicked", G_CALLBACK(quick_file_clicked), editor);
+    g_signal_connect(editor->export_button, "clicked", G_CALLBACK(quick_file_clicked), editor);
+    editor->save = save;
+    for (guint i = 0; i < TIO_GUI_QUICK_BUTTON_COUNT; ++i) {
+        g_signal_connect(editor->payload_entries[i], "changed", G_CALLBACK(quick_text_changed), editor);
+        g_signal_connect(editor->modes[i], "notify::selected", G_CALLBACK(quick_option_changed), editor);
+        g_signal_connect(editor->endings[i], "notify::selected", G_CALLBACK(quick_option_changed), editor);
+        g_signal_connect(editor->crcs[i], "notify::selected", G_CALLBACK(quick_option_changed), editor);
+    }
+    quick_editor_preview(editor);
     g_signal_connect(cancel, "clicked", G_CALLBACK(on_quick_editor_cancel), editor);
     g_signal_connect(save, "clicked", G_CALLBACK(on_quick_editor_save), editor);
     gtk_window_present(GTK_WINDOW(editor->window));

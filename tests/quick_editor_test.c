@@ -1,0 +1,106 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+#define main tio_gui_application_main
+#include "../src/main.c"
+#undef main
+#include <sys/socket.h>
+#include <unistd.h>
+
+static void check_editor(void)
+{
+    TioApp app = {0};
+    TioTab tab = {0};
+    tio_settings_init(&app.settings);
+    tio_session_config_init(&tab.config);
+    tab.app = &app;
+    app.window = gtk_window_new();
+    on_customize_quick_buttons(NULL, &tab);
+    GListModel *windows = gtk_window_get_toplevels();
+    QuickButtonEditor *editor = NULL;
+    GtkWindow *dialog = NULL;
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        GtkWindow *candidate = g_list_model_get_item(windows, i);
+        editor = g_object_get_data(G_OBJECT(candidate), "quick-editor");
+        if (editor) { dialog = candidate; break; }
+        g_object_unref(candidate);
+    }
+    g_assert_nonnull(editor);
+    gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[0]), "01 03 00 00 00 0A");
+    gtk_drop_down_set_selected(editor->modes[0], 1);
+    gtk_drop_down_set_selected(editor->crcs[0], 2);
+    g_assert_cmpstr(gtk_label_get_text(editor->previews[0]), ==,
+                    "01 03 00 00 00 0A C5 CD (8 bytes)");
+    g_assert_true(gtk_widget_get_sensitive(editor->save));
+    gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[0]), "01 0");
+    g_assert_false(gtk_widget_get_sensitive(editor->save));
+    gtk_editable_set_text(GTK_EDITABLE(editor->payload_entries[0]), "00 14 FF");
+    g_assert_true(gtk_widget_get_sensitive(editor->save));
+    if (g_getenv("TIO_TEST_SCREENSHOT")) {
+        gint64 until = g_get_monotonic_time() + 300000;
+        while (g_get_monotonic_time() < until) {
+            g_main_context_iteration(NULL, FALSE);
+            g_usleep(1000);
+        }
+        g_autoptr(GdkPaintable) paintable = gtk_widget_paintable_new(GTK_WIDGET(dialog));
+        GtkSnapshot *snapshot = gtk_snapshot_new();
+        gdk_paintable_snapshot(paintable, GDK_SNAPSHOT(snapshot),
+            gtk_widget_get_width(GTK_WIDGET(dialog)), gtk_widget_get_height(GTK_WIDGET(dialog)));
+        g_autoptr(GskRenderNode) node = gtk_snapshot_free_to_node(snapshot);
+        GskRenderer *renderer = gtk_native_get_renderer(GTK_NATIVE(dialog));
+        g_autoptr(GdkTexture) texture = gsk_renderer_render_texture(renderer, node, NULL);
+        g_assert_true(gdk_texture_save_to_png(texture, g_getenv("TIO_TEST_SCREENSHOT")));
+    }
+    gtk_window_destroy(dialog);
+    g_object_unref(dialog);
+    gtk_window_destroy(GTK_WINDOW(app.window));
+    tio_session_config_clear(&tab.config);
+    tio_settings_clear(&app.settings);
+}
+
+static void check_send(void)
+{
+    int pair[2];
+    g_assert_cmpint(socketpair(AF_UNIX, SOCK_STREAM, 0, pair), ==, 0);
+    TioTab tab = {0};
+    tab.child_pid = 1;
+    tab.status_label = GTK_LABEL(g_object_ref_sink(gtk_label_new("")));
+    TioRawTap *tap = g_new0(TioRawTap, 1);
+    tap->reference_count = 1;
+    tap->tab = &tab;
+    tap->cancellable = g_cancellable_new();
+    g_autoptr(GSocket) socket = g_socket_new_from_fd(pair[0], NULL);
+    tap->connection = g_socket_connection_factory_create_connection(socket);
+    tab.raw = tap;
+    g_autoptr(GByteArray) bytes = g_byte_array_new();
+    for (guint i = 0; i < 256; ++i) {
+        guint8 byte = (guint8)i;
+        g_byte_array_append(bytes, &byte, 1);
+    }
+    g_assert_true(send_payload(&tab, bytes));
+    g_assert_false(send_payload(&tab, bytes));
+    gint64 until = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (tap->sending && g_get_monotonic_time() < until) {
+        g_main_context_iteration(NULL, FALSE);
+        g_usleep(1000);
+    }
+    g_assert_null(tap->sending);
+    guint8 received[256];
+    g_assert_cmpint(recv(pair[1], received, sizeof received, MSG_DONTWAIT), ==, 256);
+    g_assert_cmpmem(received, sizeof received, bytes->data, bytes->len);
+    tab.quick_pending = g_byte_array_ref(bytes);
+    tab.quick_send_timer = g_timeout_add(60000, quick_send_delayed, &tab);
+    raw_tap_stop(&tab);
+    g_assert_cmpuint(tab.quick_send_timer, ==, 0);
+    g_assert_null(tab.quick_pending);
+    g_assert_null(tab.raw);
+    g_object_unref(tab.status_label);
+    close(pair[1]);
+}
+
+int main(int argc, char **argv)
+{
+    g_test_init(&argc, &argv, NULL);
+    gtk_init();
+    g_test_add_func("/quick-editor/preview-validation", check_editor);
+    g_test_add_func("/quick-editor/binary-send-and-cancel", check_send);
+    return g_test_run();
+}

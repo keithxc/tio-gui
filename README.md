@@ -61,7 +61,13 @@ Early development. The first release targets x86-64 Linux.
 - Send commands from a dedicated bottom input bar or interact directly with the terminal
 - Browse the last 100 sent commands with `Up` and `Down`, or pick one from the history list
 - Choose the line ending appended to each send: none, LF, CR, or CR+LF
-- Configure four persistent quick-send buttons with escaped control-byte support
+- Configure four persistent quick-send buttons with text or HEX payloads, control-byte
+  insertion, line endings, CRC-8/SMBUS, CRC-16/MODBUS or CRC-32/ISO-HDLC, and
+  a byte preview before saving. CRC is computed before the line ending; multi-byte
+  checksums are appended little-endian. Invalid input prevents saving.
+- Optionally delay a quick send by up to 60 seconds; disconnect cancels it
+- Import/export button groups independently of device and logging settings
+- Quick sends use the raw socket so binary values, including Ctrl-T, arrive intact
 - Toggle `tio --output-mode hex16` from a persistent bottom-right HEX control
 
 ### Logging

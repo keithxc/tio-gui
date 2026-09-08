@@ -149,6 +149,11 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         replace_string(&destination->quick_labels[index], source->quick_labels[index]);
         replace_string(&destination->quick_payloads[index], source->quick_payloads[index]);
+        destination->quick_delays[index] = source->quick_delays[index];
+        destination->quick_modes[index] = source->quick_modes[index];
+        destination->quick_endings[index] = source->quick_endings[index];
+        destination->quick_crcs[index] = source->quick_crcs[index];
+
     }
 }
 
@@ -226,6 +231,15 @@ static void session_config_read(GKeyFile *key_file,
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         g_autofree gchar *label_key = g_strdup_printf("label-%u", index + 1);
         g_autofree gchar *payload_key = g_strdup_printf("payload-%u", index + 1);
+        g_autofree gchar *modes_key = g_strdup_printf("quick-modes-%u", index + 1);
+        replace_uint_from_key(key_file, group, modes_key, &config->quick_modes[index], 1);
+        g_autofree gchar *delay_key = g_strdup_printf("quick-delay-%u", index + 1);
+        replace_uint_from_key(key_file, group, delay_key, &config->quick_delays[index], 60000);
+        g_autofree gchar *endings_key = g_strdup_printf("quick-endings-%u", index + 1);
+        replace_uint_from_key(key_file, group, endings_key, &config->quick_endings[index], 3);
+        g_autofree gchar *crcs_key = g_strdup_printf("quick-crcs-%u", index + 1);
+        replace_uint_from_key(key_file, group, crcs_key, &config->quick_crcs[index], 3);
+
         replace_optional_string_from_key(key_file,
                                          group,
                                          label_key,
@@ -270,6 +284,15 @@ static void session_config_write(GKeyFile *key_file,
     for (guint index = 0; index < TIO_GUI_QUICK_BUTTON_COUNT; ++index) {
         g_autofree gchar *label_key = g_strdup_printf("label-%u", index + 1);
         g_autofree gchar *payload_key = g_strdup_printf("payload-%u", index + 1);
+        g_autofree gchar *modes_key = g_strdup_printf("quick-modes-%u", index + 1);
+        g_key_file_set_integer(key_file, group, modes_key, (gint)config->quick_modes[index]);
+        g_autofree gchar *delay_key = g_strdup_printf("quick-delay-%u", index + 1);
+        g_key_file_set_integer(key_file, group, delay_key, (gint)config->quick_delays[index]);
+        g_autofree gchar *endings_key = g_strdup_printf("quick-endings-%u", index + 1);
+        g_key_file_set_integer(key_file, group, endings_key, (gint)config->quick_endings[index]);
+        g_autofree gchar *crcs_key = g_strdup_printf("quick-crcs-%u", index + 1);
+        g_key_file_set_integer(key_file, group, crcs_key, (gint)config->quick_crcs[index]);
+
         g_key_file_set_string(key_file, group, label_key, config->quick_labels[index]);
         g_key_file_set_string(key_file, group, payload_key, config->quick_payloads[index]);
     }

@@ -26,12 +26,22 @@ pkg_check_modules(JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0>=1.6)
 
 add_executable(tio-gui
   src/highlighter.c
+  src/payload.c
+  src/quick_presets.c
   src/main.c
   src/settings.c
 )
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(quick-presets-test tests/quick_presets_test.c src/quick_presets.c src/payload.c src/settings.c)
+  target_include_directories(quick-presets-test PRIVATE src)
+  target_link_libraries(quick-presets-test PRIVATE PkgConfig::GTK4)
+  add_test(NAME quick-presets COMMAND quick-presets-test)
+  add_executable(payload-test tests/payload_test.c src/payload.c)
+  target_include_directories(payload-test PRIVATE src)
+  target_link_libraries(payload-test PRIVATE PkgConfig::GTK4)
+  add_test(NAME payload COMMAND payload-test)
   add_executable(highlighter-test
     tests/highlighter_test.c
     src/highlighter.c
@@ -60,7 +70,7 @@ target_compile_options(tio-gui PRIVATE
 )
 
 if(BUILD_TESTING)
-  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
   target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(scroll-test PRIVATE
@@ -68,10 +78,17 @@ if(BUILD_TESTING)
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
   # Requires a display: run manually in a desktop session or under Xvfb.
-  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c)
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
   target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(keyboard-test PRIVATE
+    TIO_GUI_VERSION="${PROJECT_VERSION}"
+    TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+    TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
+  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
+  target_link_libraries(quick-editor-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
+    PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
+  target_compile_definitions(quick-editor-test PRIVATE
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")

@@ -34,6 +34,10 @@ typedef struct {
     gboolean log_strip;
     gchar *quick_labels[TIO_GUI_QUICK_BUTTON_COUNT];
     gchar *quick_payloads[TIO_GUI_QUICK_BUTTON_COUNT];
+    guint quick_delays[TIO_GUI_QUICK_BUTTON_COUNT]; /* milliseconds before sending */
+    guint quick_modes[TIO_GUI_QUICK_BUTTON_COUNT]; /* 0 text, 1 HEX */
+    guint quick_endings[TIO_GUI_QUICK_BUTTON_COUNT]; /* none, LF, CR, CRLF */
+    guint quick_crcs[TIO_GUI_QUICK_BUTTON_COUNT]; /* none, CRC8, MODBUS, CRC32 */
 } TioSessionConfig;
 
 typedef struct {
