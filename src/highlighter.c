@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 
 #include "highlighter.h"
+#include "text_line.h"
 
 #define TIO_HIGHLIGHT_MAX_LINES 10000
 #define TIO_HIGHLIGHT_MAX_LINE_BYTES 16384
@@ -72,11 +73,7 @@ struct _TioHighlighter {
   GtkTextBuffer *buffer;
   GArray *compiled;
   GByteArray *line;
-  gboolean saw_cr;
-  gboolean in_escape;
-  gboolean in_csi;
-  gboolean in_osc;
-  gboolean osc_escape;
+  TioTextLine editing;
   gint partial_chars;
   gchar *rendered;
 };
@@ -247,66 +244,28 @@ void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,
                           gsize length) {
   g_return_if_fail(highlighter != NULL);
   for (gsize index = 0; index < length; ++index) {
-    guint8 byte = data[index];
-    if (highlighter->in_osc) {
-      if (byte == 0x07 || (highlighter->osc_escape && byte == '\\')) {
-        highlighter->in_osc = FALSE;
-        highlighter->osc_escape = FALSE;
-      } else {
-        highlighter->osc_escape = byte == 0x1b;
-      }
-      continue;
-    }
-    if (highlighter->in_csi) {
-      /* ECMA-48 CSI sequences end at a byte in the 0x40..0x7e range. */
-      if (byte >= 0x40 && byte <= 0x7e) {
-        highlighter->in_csi = FALSE;
-      }
-      continue;
-    }
-    if (highlighter->in_escape) {
-      highlighter->in_escape = FALSE;
-      if (byte == ']') {
-        highlighter->in_osc = TRUE;
-      } else if (byte == '[') {
-        highlighter->in_csi = TRUE;
-      }
-      continue;
-    }
-    if (byte == 0x1b) {
-      highlighter->in_escape = TRUE;
-      continue;
-    }
-    if (byte == '\r') {
+    if (tio_text_line_feed(&highlighter->editing, highlighter->line,
+                           data[index], TIO_HIGHLIGHT_MAX_LINE_BYTES))
       flush_line(highlighter);
-      highlighter->saw_cr = TRUE;
-      continue;
-    }
-    if (byte == '\n') {
-      if (!highlighter->saw_cr) {
-        flush_line(highlighter);
-      }
-      highlighter->saw_cr = FALSE;
-      continue;
-    }
-    highlighter->saw_cr = FALSE;
-    if ((byte >= 0x20 || byte == '\t') &&
-        highlighter->line->len < TIO_HIGHLIGHT_MAX_LINE_BYTES) {
-      g_byte_array_append(highlighter->line, &byte, 1);
-    }
   }
   render_line(highlighter);
+}
+
+gboolean tio_highlighter_cursor(TioHighlighter *highlighter, GtkTextIter *iter) {
+  guint bytes = MIN(highlighter->editing.cursor, highlighter->line->len);
+  g_autofree char *prefix = g_utf8_make_valid((const char *)highlighter->line->data, bytes);
+  gint chars = (gint)g_utf8_strlen(prefix, -1);
+  gint offset = gtk_text_buffer_get_char_count(highlighter->buffer) -
+                highlighter->partial_chars + chars;
+  gtk_text_buffer_get_iter_at_offset(highlighter->buffer, iter, offset);
+  return !highlighter->editing.cursor_hidden;
 }
 
 void tio_highlighter_clear(TioHighlighter *highlighter) {
   g_return_if_fail(highlighter != NULL);
   gtk_text_buffer_set_text(highlighter->buffer, "", 0);
   g_byte_array_set_size(highlighter->line, 0);
-  highlighter->saw_cr = FALSE;
-  highlighter->in_escape = FALSE;
-  highlighter->in_csi = FALSE;
-  highlighter->in_osc = FALSE;
-  highlighter->osc_escape = FALSE;
+  highlighter->editing = (TioTextLine){0};
   highlighter->partial_chars = 0;
   g_clear_pointer(&highlighter->rendered, g_free);
 }

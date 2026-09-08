@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include "log_model.h"
+#include "text_line.h"
 #include <pcre2.h>
 #include <math.h>
 #include <string.h>
@@ -13,7 +14,7 @@ struct _TioLogModel {
     GByteArray *line;
     gsize bytes;
     guint64 next_id, revision, counts[TIO_LOG_LEVELS];
-    gboolean cr, esc, csi, osc, osc_esc;
+    TioTextLine editing;
 };
 struct _TioLogFilter {
     pcre2_code *code;
@@ -85,7 +86,7 @@ void tio_log_model_clear(TioLogModel *model)
     g_byte_array_set_size(model->line, 0);
     model->bytes = 0;
     memset(model->counts, 0, sizeof model->counts);
-    model->cr = model->esc = model->csi = model->osc = model->osc_esc = FALSE;
+    model->editing = (TioTextLine){0};
     ++model->revision;
 }
 void tio_log_model_free(TioLogModel *model)
@@ -104,20 +105,8 @@ static void flush(TioLogModel *model, gint64 time_us)
 void tio_log_model_feed(TioLogModel *model, const guint8 *bytes, gsize length, gint64 time_us)
 {
     for (gsize i = 0; i < length; ++i) {
-        guint8 byte = bytes[i];
-        if (model->osc) {
-            if (byte == 7 || (model->osc_esc && byte == '\\')) model->osc = FALSE;
-            model->osc_esc = byte == 27;
-            continue;
-        }
-        if (model->csi) { if (byte >= 0x40 && byte <= 0x7e) model->csi = FALSE; continue; }
-        if (model->esc) { model->esc = FALSE; model->csi = byte == '['; model->osc = byte == ']'; continue; }
-        if (byte == 27) { model->esc = TRUE; continue; }
-        if (byte == '\r') { flush(model, time_us); model->cr = TRUE; continue; }
-        if (byte == '\n') { if (!model->cr) flush(model, time_us); model->cr = FALSE; continue; }
-        model->cr = FALSE;
-        if ((byte >= 32 || byte == '\t') && model->line->len < MAX_LINE)
-            g_byte_array_append(model->line, &byte, 1);
+        if (tio_text_line_feed(&model->editing, model->line, bytes[i], MAX_LINE))
+            flush(model, time_us);
     }
 }
 void tio_log_model_command(TioLogModel *model, const char *text, gint64 time_us)

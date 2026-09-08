@@ -1,6 +1,58 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 
 #include "highlighter.h"
+#include "text_line_cases.h"
+
+static void test_progress(void) {
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *h = tio_highlighter_new(buffer);
+  for (guint i = 0; i < G_N_ELEMENTS(text_line_cases); ++i) {
+    const char *input = text_line_cases[i].input;
+    for (guint chunk = 1; chunk <= strlen(input); ++chunk) {
+      tio_highlighter_clear(h);
+      for (gsize offset = 0; offset < strlen(input); offset += chunk)
+        tio_highlighter_feed(h, (const guint8 *)input + offset,
+                             MIN(chunk, strlen(input) - offset));
+      GtkTextIter start, end;
+      gtk_text_buffer_get_bounds(buffer, &start, &end);
+      g_autofree char *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+      g_assert_cmpstr(text, ==, text_line_cases[i].expected);
+    }
+  }
+  tio_highlighter_clear(h);
+  const char *partial = "10%\r20%";
+  tio_highlighter_feed(h, (const guint8 *)partial, strlen(partial));
+  GtkTextIter start, end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(text, ==, "20%");
+  g_assert_cmpint(gtk_text_buffer_get_line_count(buffer), ==, 1);
+  /* Clearing discards both an incomplete CSI and the overwrite cursor. */
+  tio_highlighter_feed(h, (const guint8 *)"\r\x1b[", 3);
+  tio_highlighter_clear(h);
+  tio_highlighter_feed(h, (const guint8 *)"fresh", 5);
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *fresh = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(fresh, ==, "fresh");
+  /* A saturated line can still be overwritten and erased. */
+  tio_highlighter_clear(h);
+  g_autofree char *long_line = g_strnfill(20000, 'x');
+  tio_highlighter_feed(h, (const guint8 *)long_line, 20000);
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 16384);
+  const char *replace = "\rOK\x1b[K\n";
+  tio_highlighter_feed(h, (const guint8 *)replace, strlen(replace));
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *short_line = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(short_line, ==, "OK\n");
+  /* Untrusted cursor parameters remain bounded. */
+  tio_highlighter_clear(h);
+  const char *huge = "\x1b[999999999999999999999CX\rOK\x1b[K\n";
+  tio_highlighter_feed(h, (const guint8 *)huge, strlen(huge));
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *bounded = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(bounded, ==, "OK\n");
+  tio_highlighter_free(h);
+}
 
 static void assert_tag_at(GtkTextBuffer *buffer, const char *text,
                           const char *needle, const char *tag_name) {
@@ -106,5 +158,6 @@ int main(int argc, char **argv) {
   g_test_add_func("/highlighter/serial-log-rules", test_serial_log_rules);
   g_test_add_func("/highlighter/custom-atomic-and-bounded", test_custom_rules);
   g_test_add_func("/highlighter/incremental-tail", test_incremental_tail);
+  g_test_add_func("/highlighter/progress-line-editing", test_progress);
   return g_test_run();
 }

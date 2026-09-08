@@ -36,6 +36,9 @@ int main(void)
     tab.highlight_view = GTK_TEXT_VIEW(gtk_text_view_new());
     gtk_text_view_set_editable(tab.highlight_view, FALSE);
     gtk_text_view_set_cursor_visible(tab.highlight_view, FALSE);
+    g_signal_connect(tab.highlight_view, "map", G_CALLBACK(on_highlight_map), &tab);
+    g_signal_connect(tab.highlight_view, "unmap", G_CALLBACK(on_highlight_unmap), &tab);
+    g_signal_connect(tab.highlight_view, "notify::has-focus", G_CALLBACK(on_highlight_focus_changed), &tab);
     tab.highlighter = tio_highlighter_new(gtk_text_view_get_buffer(tab.highlight_view));
     GtkWidget *scroll = gtk_scrolled_window_new();
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), GTK_WIDGET(tab.highlight_view));

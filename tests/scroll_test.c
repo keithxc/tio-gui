@@ -89,6 +89,54 @@ static void check_smooth_line(TioTab *tab, GtkWidget *window)
     settle();
 }
 
+static void check_input_cursor(TioTab *tab, GtkWidget *window)
+{
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+    gtk_widget_grab_focus(GTK_WIDGET(tab->highlight_view));
+    tab->highlight_cursor_on = TRUE;
+    update_highlight_cursor(tab);
+    g_assert_false(gtk_text_view_get_editable(tab->highlight_view));
+    g_assert_true(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    GtkTextIter cursor;
+    gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer));
+    g_assert_cmpint(gtk_text_iter_get_offset(&cursor), ==, 6);
+    /* The real timeout changes visibility without changing any log bytes. */
+    gint64 deadline = g_get_monotonic_time() + 2 * G_TIME_SPAN_SECOND;
+    while (gtk_text_view_get_cursor_visible(tab->highlight_view) &&
+           g_get_monotonic_time() < deadline) {
+        g_main_context_iteration(NULL, FALSE);
+        g_usleep(1000);
+    }
+    g_assert_false(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 6);
+    tab->highlight_cursor_on = TRUE;
+    update_highlight_display(tab, (const guint8 *)"\b\b", 2);
+    gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer));
+    g_assert_cmpint(gtk_text_iter_get_offset(&cursor), ==, 4);
+    update_highlight_display(tab, (const guint8 *)"\x1b[?25l", 6);
+    g_assert_false(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    update_highlight_display(tab, (const guint8 *)"\x1b[?25h", 6);
+    g_assert_true(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    GtkTextIter start, end;
+    gtk_text_buffer_get_start_iter(buffer, &start);
+    gtk_text_buffer_get_iter_at_offset(buffer, &end, 3);
+    gtk_text_buffer_select_range(buffer, &start, &end);
+    tab->highlight_cursor_on = TRUE;
+    update_highlight_cursor(tab);
+    g_assert_false(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    g_assert_true(gtk_text_buffer_get_selection_bounds(buffer, &start, &end));
+    g_assert_cmpint(gtk_text_iter_get_offset(&end), ==, 3);
+    gtk_text_buffer_place_cursor(buffer, &end);
+    tab->highlight_follow = TRUE;
+    update_highlight_cursor(tab);
+    g_assert_true(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    gtk_window_set_focus(GTK_WINDOW(window), NULL);
+    g_assert_false(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    gtk_widget_grab_focus(GTK_WIDGET(tab->highlight_view));
+    g_assert_true(gtk_text_view_get_cursor_visible(tab->highlight_view));
+    g_print("Input cursor: timed blink, remote position/visibility, focus and selection passed.\n");
+}
+
 int main(void)
 {
     gtk_init();
@@ -104,9 +152,10 @@ int main(void)
     gtk_text_view_set_monospace(tab.highlight_view, TRUE);
     gtk_text_view_set_wrap_mode(tab.highlight_view, GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_top_margin(tab.highlight_view, 6);
-    gtk_text_view_set_bottom_margin(tab.highlight_view, 48);
+    gtk_text_view_set_bottom_margin(tab.highlight_view, 9);
     g_signal_connect(tab.highlight_view, "unmap", G_CALLBACK(on_highlight_unmap), &tab);
     g_signal_connect(tab.highlight_view, "map", G_CALLBACK(on_highlight_map), &tab);
+    g_signal_connect(tab.highlight_view, "notify::has-focus", G_CALLBACK(on_highlight_focus_changed), &tab);
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab.highlight_view);
     tab.highlighter = tio_highlighter_new(buffer);
     GtkWidget *window = gtk_window_new();
@@ -191,10 +240,12 @@ int main(void)
     tio_highlighter_clear(tab.highlighter);
     update_highlight_display(&tab, (const guint8 *)"prompt", 6);
     g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 6);
+    check_input_cursor(&tab, window);
     tio_highlighter_clear(tab.highlighter);
     settle();
     g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
     gtk_window_destroy(GTK_WINDOW(window));
+    g_assert_cmpuint(tab.highlight_cursor_timer, ==, 0);
     tio_highlighter_free(tab.highlighter);
     g_object_unref(tab.highlight_toggle);
     g_object_unref(tab.scroll_bottom_button);

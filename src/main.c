@@ -100,6 +100,8 @@ struct _TioTab {
     gboolean highlight_pointer_down;
     gboolean highlight_selected;
     guint highlight_scroll_tick;
+    guint highlight_cursor_timer;
+    gboolean highlight_cursor_on;
     gint64 highlight_scroll_time;
     double highlight_scroll_velocity;
     double highlight_scroll_position;
@@ -341,6 +343,7 @@ static void action_previous_tab(GSimpleAction *action, GVariant *parameter, gpoi
 static void raw_tap_start(TioTab *tab);
 static void raw_tap_stop(TioTab *tab);
 static void update_scroll_button(TioTab *tab);
+static void update_highlight_cursor(TioTab *tab);
 static void scroll_highlight_to_bottom(TioTab *tab);
 static void stop_highlight_scroll(TioTab *tab);
 static void focus_log_view(TioTab *tab)
@@ -1442,11 +1445,10 @@ static void update_session_label(TioTab *tab)
 
     gtk_label_set_text(tab->session_label, text->str);
     update_tab_label(tab);
-    if (tab->log_path != NULL) {
-        gtk_widget_set_tooltip_text(GTK_WIDGET(tab->session_label), tab->log_path);
-    } else {
-        gtk_widget_set_tooltip_text(GTK_WIDGET(tab->session_label), NULL);
-    }
+    g_autofree gchar *tooltip = tab->log_path != NULL
+        ? g_strdup_printf("%s\n%s", text->str, tab->log_path)
+        : g_strdup(text->str);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(tab->session_label), tooltip);
     g_string_free(text, TRUE);
 }
 
@@ -2413,6 +2415,7 @@ static void scroll_terminal_to_bottom(TioTab *tab)
 
 static void update_scroll_button(TioTab *tab)
 {
+    update_highlight_cursor(tab);
     gboolean highlight = gtk_check_button_get_active(tab->highlight_toggle);
     gboolean pending = highlight ? tab->highlight_pending : tab->pending_output;
     gboolean follow = highlight ? tab->highlight_follow : tab->follow_output;
@@ -2574,16 +2577,61 @@ static gboolean animate_highlight_scroll(GtkWidget *widget, GdkFrameClock *clock
     return G_SOURCE_CONTINUE;
 }
 
+/* Read-only GtkTextView does not blink its caret itself. Toggle the native
+ * caret without making the log editable or inserting synthetic characters. */
+static void update_highlight_cursor(TioTab *tab)
+{
+    if (!tab->highlight_view || !tab->highlighter) return;
+    GtkWidget *view = GTK_WIDGET(tab->highlight_view);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+    GtkTextIter cursor, current;
+    gboolean visible = gtk_widget_get_mapped(view) && gtk_widget_has_focus(view) &&
+        tab->highlight_follow && !tab->highlight_pointer_down &&
+        !gtk_text_buffer_get_has_selection(buffer) &&
+        tio_highlighter_cursor(tab->highlighter, &cursor);
+    if (visible) {
+        gtk_text_buffer_get_iter_at_mark(buffer, &current, gtk_text_buffer_get_insert(buffer));
+        if (!gtk_text_iter_equal(&current, &cursor))
+            gtk_text_buffer_place_cursor(buffer, &cursor);
+    }
+    gtk_text_view_set_cursor_visible(tab->highlight_view, visible && tab->highlight_cursor_on);
+}
+
+static gboolean blink_highlight_cursor(gpointer data)
+{
+    TioTab *tab = data;
+    tab->highlight_cursor_on = !tab->highlight_cursor_on;
+    update_highlight_cursor(tab);
+    return G_SOURCE_CONTINUE;
+}
+
+static void on_highlight_focus_changed(GObject *object, GParamSpec *pspec, gpointer data)
+{
+    (void)object; (void)pspec;
+    TioTab *tab = data;
+    tab->highlight_cursor_on = TRUE;
+    update_highlight_cursor(tab);
+}
+
 static void on_highlight_unmap(GtkWidget *widget, gpointer data)
 {
     (void)widget;
     stop_highlight_scroll(data);
+    TioTab *tab = data;
+    g_clear_handle_id(&tab->highlight_cursor_timer, g_source_remove);
+    gtk_text_view_set_cursor_visible(tab->highlight_view, FALSE);
 }
 
 static void on_highlight_map(GtkWidget *widget, gpointer data)
 {
-    (void)widget;
     TioTab *tab = data;
+    tab->highlight_cursor_on = TRUE;
+    if (!tab->highlight_cursor_timer) {
+        gint period = 1000;
+        g_object_get(gtk_widget_get_settings(widget), "gtk-cursor-blink-time", &period, NULL);
+        tab->highlight_cursor_timer = g_timeout_add((guint)MAX(100, period / 2), blink_highlight_cursor, tab);
+    }
+    update_highlight_cursor(tab);
     if (tab->highlight_follow) scroll_highlight_to_bottom(tab);
 }
 
@@ -2717,6 +2765,8 @@ static gboolean on_highlight_key_pressed(GtkEventControllerKey *controller, guin
         return FALSE;
     }
     on_log_return_pressed(controller, keyval, keycode, state, tab);
+    tab->highlight_cursor_on = TRUE;
+    update_highlight_cursor(tab);
     gtk_event_controller_key_forward(controller, GTK_WIDGET(tab->terminal));
     return TRUE;
 }
@@ -4136,6 +4186,7 @@ static void tio_tab_free(TioTab *tab)
     if (tab == NULL) {
         return;
     }
+    g_clear_handle_id(&tab->highlight_cursor_timer, g_source_remove);
 
     if (tab->quick_window) {
         GtkWidget *quick = tab->quick_window;
@@ -5528,14 +5579,17 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(settings_scroll), TRUE);
     gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(settings_scroll), 300);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(settings_scroll), session_settings);
-    gtk_expander_set_child(GTK_EXPANDER(tab->session_settings_expander), settings_scroll);
+    /* Keep the disclosure in the compact row, with its full-width panel below. */
+    g_object_bind_property(tab->session_settings_expander, "expanded",
+                           settings_scroll, "visible", G_BINDING_SYNC_CREATE);
     gtk_expander_set_expanded(GTK_EXPANDER(tab->session_settings_expander),
                               app->settings.advanced_expanded);
-    gtk_box_append(GTK_BOX(root), tab->session_settings_expander);
+    gtk_widget_set_valign(tab->session_settings_expander, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(options), tab->session_settings_expander);
+    gtk_box_append(GTK_BOX(root), settings_scroll);
 
-    /* Status bar. */
-    GtkWidget *status_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_widget_add_css_class(status_bar, "compact-controls");
+    /* Status and actions share the same row as the display switches. */
+    GtkWidget *status_bar = options;
     tab->status_label = GTK_LABEL(gtk_label_new(_("Ready")));
     gtk_label_set_xalign(tab->status_label, 0.0F);
     gtk_label_set_ellipsize(tab->status_label, PANGO_ELLIPSIZE_END);
@@ -5546,6 +5600,8 @@ static TioTab *tio_tab_new(TioApp *app)
 
     tab->session_label = GTK_LABEL(gtk_label_new(""));
     gtk_label_set_xalign(tab->session_label, 1.0F);
+    gtk_label_set_ellipsize(tab->session_label, PANGO_ELLIPSIZE_END);
+    gtk_widget_set_hexpand(GTK_WIDGET(tab->session_label), TRUE);
     gtk_widget_add_css_class(GTK_WIDGET(tab->session_label), "dim-label");
     gtk_widget_add_css_class(GTK_WIDGET(tab->session_label), "session-status");
     gtk_box_append(GTK_BOX(status_bar), GTK_WIDGET(tab->session_label));
@@ -5554,12 +5610,13 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->clear_terminal_button),
                                 _("Clear the terminal and its scrollback history"));
     gtk_box_append(GTK_BOX(status_bar), GTK_WIDGET(tab->clear_terminal_button));
-    gtk_box_append(GTK_BOX(root), status_bar);
 
     gtk_box_append(GTK_BOX(root), build_search_bar(tab));
 
     /* Terminal. */
     tab->terminal = VTE_TERMINAL(vte_terminal_new());
+    vte_terminal_set_cursor_blink_mode(tab->terminal, VTE_CURSOR_BLINK_ON);
+    vte_terminal_set_cursor_shape(tab->terminal, VTE_CURSOR_SHAPE_BLOCK);
     vte_terminal_set_scrollback_lines(tab->terminal, 10000);
     vte_terminal_set_mouse_autohide(tab->terminal, TRUE);
     vte_terminal_set_scroll_on_output(tab->terminal, FALSE);
@@ -5590,6 +5647,7 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(tab->highlight_view), "highlight-view");
     g_signal_connect(tab->highlight_view, "unmap", G_CALLBACK(on_highlight_unmap), tab);
     g_signal_connect(tab->highlight_view, "map", G_CALLBACK(on_highlight_map), tab);
+    g_signal_connect(tab->highlight_view, "notify::has-focus", G_CALLBACK(on_highlight_focus_changed), tab);
     gtk_text_view_set_editable(tab->highlight_view, FALSE);
     gtk_text_view_set_cursor_visible(tab->highlight_view, FALSE);
     gtk_text_view_set_monospace(tab->highlight_view, TRUE);
@@ -5597,8 +5655,8 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_text_view_set_left_margin(tab->highlight_view, 8);
     gtk_text_view_set_right_margin(tab->highlight_view, 8);
     gtk_text_view_set_top_margin(tab->highlight_view, 6);
-    /* Display-only breathing room; never add artificial serial/log lines. */
-    gtk_text_view_set_bottom_margin(tab->highlight_view, 48);
+    /* About half a line of breathing room at the default font size. */
+    gtk_text_view_set_bottom_margin(tab->highlight_view, 9);
     tab->highlighter =
         tio_highlighter_new(gtk_text_view_get_buffer(tab->highlight_view));
     tio_highlighter_rules(tab->highlighter, app->settings.highlight_rules ? app->settings.highlight_rules : "", NULL);

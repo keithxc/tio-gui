@@ -516,3 +516,41 @@ stops at rest. Tests run with GTK warnings fatal. GUI lifecycle and real keyboar
 PTY acceptance passed. A real-data replay on the Wayland desktop at 125% scale
 recorded 660 frames with zero backward jumps. Private experimental/replay files
 are kept under `.cache/smooth-research/`.
+
+## In-place progress and input cursor — 2026-09-08
+
+The highlight and analysis parsers now share bounded streaming line editing.
+CR returns to the start of the current line, LF commits it, and CR+LF commits
+only once. Progress updates overwrite existing characters; shorter text leaves
+the untouched suffix until explicitly erased. Backspace, CSI K (0/1/2), G,
+backtick, C and D are supported across read boundaries. Analysis records the
+final LF-terminated content, so transient progress does not inflate severity
+counts. CR-only records now remain a single current line. Raw capture is unchanged.
+Horizontal positions count Unicode characters, not wide/combining terminal cells;
+vertical screen editing still requires VTE.
+
+VTE explicitly uses a blinking block cursor. The read-only highlight view uses
+a timer to toggle its native caret at the parsed remote position. GTK's native
+[caret blinking requires editable text](https://github.com/GNOME/gtk/blob/4.22.0/gtk/gtktextview.c#L5864-L5899),
+so the timer preserves the selection-only buffer and VTE keyboard forwarding.
+The caret hides on focus loss, selection, paused following and CSI ?25l; CSI ?25h
+restores remote visibility. Unmapping or closing a tab removes the timer.
+
+Validation:
+
+- Full application build and all 10 CTest suites passed.
+- Shared fixtures exercised percentage progress, actual newlines, shorter
+  overwrites, erase modes, cursor movement, spinners, UTF-8 and ANSI/OSC sequences
+  with every fixed chunk size from one byte through the complete input.
+- Highlighter tests cover immediate partial progress, parser reset, saturated
+  lines and oversized cursor parameters. Analysis tests check final severity
+  counts and commands interleaved with an unfinished progress line.
+- AddressSanitizer/UndefinedBehaviorSanitizer highlighter and log-model suites
+  passed (`ASAN_OPTIONS=detect_leaks=0`).
+- `python3 tests/headless.py .cache/build/scroll-test`: timed caret blink,
+  backspace position, remote visibility, focus, selection and timer cleanup
+  passed; fragmented output painted 204 frames with zero backward jumps.
+- `python3 tests/headless.py python3 tests/keyboard_acceptance.py
+  .cache/build/keyboard-test`: real GTK keyboard events reached the VTE PTY with
+  the expected text, Enter, Tab, Escape, Up and Ctrl-C bytes while caret handling
+  was enabled.

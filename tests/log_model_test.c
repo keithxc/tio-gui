@@ -1,6 +1,41 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "log_model.h"
 #include <string.h>
+#include "text_line_cases.h"
+
+static void progress(void)
+{
+    TioLogModel *model = tio_log_model_new();
+    for (guint i = 0; i < G_N_ELEMENTS(text_line_cases); ++i) {
+        const char *input = text_line_cases[i].input;
+        for (guint chunk = 1; chunk <= strlen(input); ++chunk) {
+            tio_log_model_clear(model);
+            for (gsize offset = 0; offset < strlen(input); offset += chunk)
+                tio_log_model_feed(model, (const guint8 *)input + offset,
+                                   MIN(chunk, strlen(input) - offset), 123);
+            g_autoptr(GString) actual = g_string_new(NULL);
+            for (GList *it = tio_log_model_entries(model)->head; it; it = it->next) {
+                TioLogEntry *entry = it->data;
+                g_string_append(actual, entry->text);
+                g_string_append_c(actual, '\n');
+            }
+            g_assert_cmpstr(actual->str, ==, text_line_cases[i].expected);
+        }
+    }
+    g_assert_cmpuint(tio_log_model_count(model, TIO_LOG_ERROR), ==, 0);
+    g_assert_cmpuint(tio_log_model_count(model, TIO_LOG_INFO), ==, 1);
+    tio_log_model_clear(model);
+    const char *pending = "ERROR 10%\r";
+    tio_log_model_feed(model, (const guint8 *)pending, strlen(pending), 123);
+    g_assert_cmpuint(tio_log_model_entries(model)->length, ==, 0);
+    tio_log_model_command(model, "status", 124);
+    const char *done = "INFO 100%\x1b[K\n";
+    tio_log_model_feed(model, (const guint8 *)done, strlen(done), 125);
+    g_assert_cmpuint(tio_log_model_entries(model)->length, ==, 2);
+    g_assert_cmpuint(tio_log_model_count(model, TIO_LOG_ERROR), ==, 0);
+    g_assert_cmpuint(tio_log_model_count(model, TIO_LOG_COMMAND), ==, 1);
+    tio_log_model_free(model);
+}
 static void parsing(void)
 {
     TioLogModel *model = tio_log_model_new();
@@ -64,5 +99,6 @@ int main(int argc, char **argv)
     g_test_add_func("/log-model/parsing", parsing);
     g_test_add_func("/log-model/retention-regex-limits", limits);
     g_test_add_func("/log-model/csv-formula", csv);
+    g_test_add_func("/log-model/progress-line-editing", progress);
     return g_test_run();
 }

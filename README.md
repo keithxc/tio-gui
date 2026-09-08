@@ -6,7 +6,7 @@
 
 ## Status
 
-Version 0.3.4 targets x86-64 Linux with tio 3.9. Software acceptance covers real
+Version 0.3.5 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
 hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 
@@ -256,8 +256,21 @@ An optional line-oriented highlight view consumes the raw tap and uses these con
 
 The highlight view accepts keyboard input through VTE, including Enter, arrows and control
 keys. Mouse selection stays local for copying, and unfinished lines (such as shell prompts)
-are displayed immediately. This is a line-oriented log view; full-screen terminal programs
+are displayed immediately. Carriage returns overwrite the current line, so progress such as
+`10%\r20%\r100%` updates in place. Backspace, ANSI erase-in-line (`CSI K`), and
+horizontal cursor movement (`CSI G`, `CSI C`, `CSI D`, and `` CSI ` ``) are supported,
+including sequences split across reads. LF (including CR+LF) completes a line;
+the analysis log records its final content on LF. CR-only output is treated as
+updates to the current line, not as separate log records.
+This is a line-oriented log view; horizontal positions count Unicode characters
+rather than terminal display cells. Full-screen terminal programs
 and cursor-addressed screen updates still require the ordinary terminal view.
+
+The ordinary terminal uses a blinking block cursor. The highlight view shows a
+blinking caret at the current remote line position while focused and following
+output. Selecting text, browsing history, or leaving the view hides this caret;
+remote `CSI ?25l` / `CSI ?25h` also hide/show it. Cursor blinking does not add log
+characters or make the highlight buffer editable.
 
 - red: `ERROR`, `FAIL`, `FAILED`, `FATAL`, `PANIC`, `CRITICAL`, `ASSERT`
 - yellow: `WARN`, `WARNING`, `TIMEOUT`, `RETRY`
@@ -269,7 +282,7 @@ and cursor-addressed screen updates still require the ordinary terminal view.
 
 Matching is case-insensitive and word-boundary aware to avoid false positives such as highlighting
 `OK` inside another word. The renderer consumes the raw tap instead of modifying the terminal stream
-or `tio` log output. It strips terminal control sequences and bounds its scrollback, line length and
+or `tio` log output. It discards other terminal control sequences and bounds its scrollback, line length and
 matches per rule so malformed device output cannot grow memory without limit. User-defined
 regular-expression rules can be layered on after the safe defaults.
 
