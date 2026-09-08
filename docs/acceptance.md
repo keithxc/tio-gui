@@ -226,3 +226,20 @@ output, thrown errors, rejected asynchronous returns, GTK result display and
 closing a running plugin window. Bubblewrap/seccomp isolation and resource limits
 are exercised with the actual installed interpreters on Linux x86-64. There is no
 fallback to executing outside the sandbox.
+
+## TCP / UDP debugging — 2026-09-08
+
+Settings opens independent network debugging windows with hostname/address and
+port, TCP client or connected UDP peer, connect/disconnect, text/HEX payloads,
+CRC/ending preview, RX/TX counters, escaped text/HEX receive previews and Analyze.
+The analyzer receives the full byte chunks; the traffic view bounds preview length
+and retained rows. Follow can be paused. UDP explicitly reports a configured peer
+rather than claiming a successful remote handshake.
+
+The asynchronous backend handles DNS/connect cancellation, partial TCP writes,
+peer EOF, empty UDP packets and bounded send queues (1 MiB / 256 items). It emits
+TX only after a full write and limits datagrams to 65507 bytes. Tests run all-byte
+roundtrips with segmented TCP responses and separate empty/nonempty UDP responses,
+then cancellation during connect. The same localhost peer tests drive the actual
+GTK connect/send/preview/analyzer/disconnect controls. Network windows do not expose
+serial-only line controls or assume an underlying tio process.
