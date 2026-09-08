@@ -290,3 +290,29 @@ and cancellation. Malformed lengths/CONNACK/PUBLISH frames are rejected. The GTK
 test separately drives actual connection, subscribe, HEX publish/preview, received
 message and analyzer controls. The broker is stopped and its temporary configuration
 removed after every test; no external broker or user credentials are used.
+
+## SocketCAN / DBC — 2026-09-08
+
+CAN tools open an existing configured Linux SocketCAN interface, monitor frames and
+error frames, and send classic/FD, standard/extended IDs, BRS and classic RTR. FD
+lengths are validated against DLC sizes rather than silently padded. CAN writes
+are nonblocking and reported as accepted by the kernel, not electrically delivered.
+The application does not change host interface bitrate or link configuration.
+
+DBC import is bounded to 4 MiB, 1024 messages and 128 signals/message. Integer
+signals support Intel/Motorola bit order, signed values, factor/offset and simple
+M/mN multiplexing. Duplicate definitions and out-of-frame fields are rejected;
+extended multiplex definitions and floating-point SIG_VALTYPE_ are explicitly
+unsupported. Enum tables and presentation attributes are not interpreted. Decoded
+numeric JSON feeds Analyze/plots; scaled values use doubles, so very wide integer
+signals may lose numeric precision while raw frame bytes remain visible. An example
+is in `examples/dbc/board.dbc`.
+
+`tests/can_acceptance.sh` creates vcan0 only inside a new user/network namespace.
+It verifies real kernel classic/FD/extended/BRS binary roundtrips, invalid frame
+rejection, GUI sends and DBC-derived numeric analysis. GTK accessibility is disabled
+only in that namespace test because its remapped UID cannot authenticate to the
+host accessibility bus. No host CAN interface is reconfigured. Separate DBC tests
+cover endian/sign/scale/multiplex and malformed definitions. Hardware bus electrical
+behavior, arbitration and actual bitrate remain untested. Protocol reference:
+[Linux SocketCAN documentation](https://www.kernel.org/doc/html/latest/networking/can.html).
