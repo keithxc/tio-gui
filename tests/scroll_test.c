@@ -66,7 +66,7 @@ int main(void)
     gtk_text_view_set_monospace(tab.highlight_view, TRUE);
     gtk_text_view_set_wrap_mode(tab.highlight_view, GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_top_margin(tab.highlight_view, 6);
-    gtk_text_view_set_bottom_margin(tab.highlight_view, 6);
+    gtk_text_view_set_bottom_margin(tab.highlight_view, 48);
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab.highlight_view);
     tab.highlighter = tio_highlighter_new(buffer);
     GtkWidget *window = gtk_window_new();
@@ -85,7 +85,7 @@ int main(void)
     settle();
     g_assert_true(tab.highlight_follow);
     g_assert_cmpfloat(gtk_adjustment_get_value(adjustment), >, 0);
-    /* Interactive prompts are repeatedly replaced as more bytes arrive;
+    /* Interactive prompts grow as more bytes arrive;
        wrapped bursts force GtkTextView to validate its layout over frames. */
     for (int i = 0; i < 20; ++i) {
         const char *burst = "root@board:~# df -h\nFilesystem Size Used Available Use% Mounted on\n"
@@ -134,6 +134,23 @@ int main(void)
     g_assert_true(tab.highlight_follow);
     g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(adjustment),
         gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment), 0.5);
+    tio_highlighter_clear(tab.highlighter);
+    queue_highlight(&tab, (const guint8 *)"prompt", 6);
+    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
+    settle();
+    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 6);
+    g_assert_cmpuint(tab.highlight_flush_timer, ==, 0);
+    queue_highlight(&tab, (const guint8 *)"discard", 7);
+    reset_highlight_queue(&tab);
+    tio_highlighter_clear(tab.highlighter);
+    settle();
+    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
+    g_autofree char *large = g_strnfill(70000, 'x');
+    queue_highlight(&tab, (const guint8 *)large, 70000);
+    g_assert_cmpuint(tab.highlight_queue->len, <=, 65536);
+    settle();
+    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 16384);
+    reset_highlight_queue(&tab);
     gtk_window_destroy(GTK_WINDOW(window));
     tio_highlighter_free(tab.highlighter);
     g_object_unref(tab.highlight_toggle);

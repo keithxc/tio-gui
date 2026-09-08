@@ -410,3 +410,47 @@ monospace and six-pixel margins and samples after-paint during fragmented input.
 It failed on the original code with five backward jumps and passes after the fix,
 alongside selection retention, pause and resume checks. Captured device bytes and
 window images remain local under `.cache/ui-jitter`, not in the repository.
+
+## Incremental display and resource check — 0.3.2 (2026-09-08)
+
+The highlighter preserves unchanged partial-line text and replaces only a
+changed suffix (including incomplete UTF-8 replacement characters). Completed
+lines append a newline without deleting the visible prompt. Highlight tags are
+re-evaluated so extending ERROR to ERRORLESS does not leave a stale error tag.
+Serial display updates coalesce on a 16 ms timeout; pending bytes are capped at
+64 KiB with synchronous overflow flushes. Capture and analysis still receive
+original packets immediately. Clear and tab destruction cancel queued updates.
+A 48 logical-pixel bottom margin provides display-only breathing room; it does
+not insert blank records or eliminate the need to scroll when output grows.
+
+Validation: 10 CTest suites, GUI lifecycle checks, keyboard acceptance, and
+scroll/pause/selection/resume checks pass. Fragmented scrolling produced 193
+painted frames with zero backward jumps. Added regression checks cover unchanged
+prefix deletion counts, split UTF-8, stale tags, queue delivery, cancellation,
+and overflow. This validates update behavior, not a definitive diagnosis of
+monitor/compositor ghosting.
+
+Resource samples on this workstation (CPU percent relative to one core):
+
+| Scenario | CPU | RSS MiB | PSS MiB |
+| --- | ---: | ---: | ---: |
+| Existing 0.3.1 desktop session, 30 seconds | 0.93% | 133.1 | 98.7 |
+| Its tio subprocess | 0.10% | 4.0 | 2.0 |
+| 0.3.2 isolated application, connected idle, 15 seconds | 0.13% | 134.6 | 73.0 |
+| 0.3.2 receiving 1,500 lines / 84,000 bytes in 15.26 seconds | 12.45% | 141.6 | 88.4 |
+| 0.3.2 idle after reception, 15 seconds | 0.26% | 141.6 | 83.5 |
+
+The isolated application uses a real tio/PTY under Xvfb with Cairo software
+rendering and a private session bus/configuration; the user's device is never
+written to or disconnected. These are short samples, not a sustained leak test
+or a GPU benchmark. RSS includes shared pages; PSS apportions them. Receive
+history accounts for expected memory growth; RSS was stable after traffic
+stopped. The text view retains at most 10,000 lines and each parsed line is
+limited to 16 KiB.
+
+A highlighter-only microbenchmark (12,000 lines in 3-byte fragments, no GUI)
+measured 5.615 s before vs 7.328 s for suffix preservation without coalescing,
+with about 49 MiB peak RSS in both cases. Incremental text preservation alone
+is therefore not a CPU optimization; packet coalescing is needed to reduce
+repeated partial-line highlighting. Measurements and synthetic harnesses are
+under `.cache/ui-ghost/` and are not bundled in the application.

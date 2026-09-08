@@ -78,6 +78,7 @@ struct _TioHighlighter {
   gboolean in_osc;
   gboolean osc_escape;
   gint partial_chars;
+  gchar *rendered;
 };
 
 static void trim_scrollback(TioHighlighter *highlighter) {
@@ -126,15 +127,49 @@ static void apply_rules(TioHighlighter *highlighter, gint line_start,
   }
 }
 
-static void flush_line(TioHighlighter *highlighter) {
+/* Keep the unchanged prefix in the buffer, including across UTF-8 fragments.
+   Replacing only the differing suffix avoids deleting/reinserting a whole
+   visible prompt on every small serial read. */
+static void render_line(TioHighlighter *highlighter) {
   g_autofree char *valid = g_utf8_make_valid(
       (const char *)highlighter->line->data, highlighter->line->len);
-  GtkTextIter end;
+  const char *old = highlighter->rendered ? highlighter->rendered : "";
+  if (strcmp(old, valid) == 0) return;
+  gint common = 0;
+  const char *a = old, *b = valid;
+  while (*a && *b && g_utf8_get_char(a) == g_utf8_get_char(b)) {
+    ++common;
+    a = g_utf8_next_char(a);
+    b = g_utf8_next_char(b);
+  }
+  GtkTextIter start, end;
   gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
-  gint start = gtk_text_iter_get_offset(&end);
-  gtk_text_buffer_insert(highlighter->buffer, &end, valid, -1);
+  gint offset = gtk_text_iter_get_offset(&end) - highlighter->partial_chars;
+  gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &start, offset + common);
+  if (common < highlighter->partial_chars)
+    gtk_text_buffer_delete(highlighter->buffer, &start, &end);
+  gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
+  if (*b) gtk_text_buffer_insert(highlighter->buffer, &end, b, -1);
+  gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &start, offset);
+  gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
+  /* A previously complete token can stop matching when its suffix arrives. */
+  gtk_text_buffer_remove_all_tags(highlighter->buffer, &start, &end);
+  apply_rules(highlighter, offset, valid);
+  highlighter->partial_chars = (gint)g_utf8_strlen(valid, -1);
+  g_free(highlighter->rendered);
+  highlighter->rendered = g_steal_pointer(&valid);
+}
+
+static void flush_line(TioHighlighter *highlighter) {
+  render_line(highlighter);
+  GtkTextIter end, start;
+  gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
+  gint offset = gtk_text_iter_get_offset(&end);
   gtk_text_buffer_insert(highlighter->buffer, &end, "\n", 1);
-  apply_rules(highlighter, start, valid);
+  gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &start, offset);
+  gtk_text_buffer_remove_all_tags(highlighter->buffer, &start, &end);
+  highlighter->partial_chars = 0;
+  g_clear_pointer(&highlighter->rendered, g_free);
   g_byte_array_set_size(highlighter->line, 0);
   trim_scrollback(highlighter);
 }
@@ -211,14 +246,6 @@ gboolean tio_highlighter_rules(TioHighlighter *highlighter, const char *ini, GEr
 void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,
                           gsize length) {
   g_return_if_fail(highlighter != NULL);
-  if (highlighter->partial_chars > 0) {
-    GtkTextIter start, end;
-    gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
-    start = end;
-    gtk_text_iter_backward_chars(&start, highlighter->partial_chars);
-    gtk_text_buffer_delete(highlighter->buffer, &start, &end);
-    highlighter->partial_chars = 0;
-  }
   for (gsize index = 0; index < length; ++index) {
     guint8 byte = data[index];
     if (highlighter->in_osc) {
@@ -268,16 +295,7 @@ void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,
       g_byte_array_append(highlighter->line, &byte, 1);
     }
   }
-  if (highlighter->line->len > 0) {
-    g_autofree char *valid = g_utf8_make_valid((const char *)highlighter->line->data,
-                                              highlighter->line->len);
-    GtkTextIter end;
-    gtk_text_buffer_get_end_iter(highlighter->buffer, &end);
-    gint start = gtk_text_iter_get_offset(&end);
-    gtk_text_buffer_insert(highlighter->buffer, &end, valid, -1);
-    apply_rules(highlighter, start, valid);
-    highlighter->partial_chars = (gint)g_utf8_strlen(valid, -1);
-  }
+  render_line(highlighter);
 }
 
 void tio_highlighter_clear(TioHighlighter *highlighter) {
@@ -290,6 +308,7 @@ void tio_highlighter_clear(TioHighlighter *highlighter) {
   highlighter->in_osc = FALSE;
   highlighter->osc_escape = FALSE;
   highlighter->partial_chars = 0;
+  g_clear_pointer(&highlighter->rendered, g_free);
 }
 
 void tio_highlighter_free(TioHighlighter *highlighter) {
@@ -304,5 +323,6 @@ void tio_highlighter_free(TioHighlighter *highlighter) {
   g_array_unref(highlighter->compiled);
   g_byte_array_unref(highlighter->line);
   g_object_unref(highlighter->buffer);
+  g_free(highlighter->rendered);
   g_free(highlighter);
 }

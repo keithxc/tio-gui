@@ -65,9 +65,46 @@ static void test_custom_rules(void)
   tio_highlighter_free(highlighter);
 }
 
+static void deleted(GtkTextBuffer *buffer, GtkTextIter *start,
+                    GtkTextIter *end, gpointer data) {
+  (void)buffer;
+  *(guint *)data += gtk_text_iter_get_offset(end) - gtk_text_iter_get_offset(start);
+}
+
+static void test_incremental_tail(void) {
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *h = tio_highlighter_new(buffer);
+  guint removed = 0;
+  g_signal_connect(buffer, "delete-range", G_CALLBACK(deleted), &removed);
+  const char *text = "ERROR extended prompt ready\r\n";
+  for (gsize i = 0; i < strlen(text); ++i)
+    tio_highlighter_feed(h, (const guint8 *)text + i, 1);
+  g_assert_cmpuint(removed, ==, 0);
+  tio_highlighter_feed(h, (const guint8 *)"ERROR", 5);
+  tio_highlighter_feed(h, (const guint8 *)"LESS", 4);
+  GtkTextIter start, end;
+  gtk_text_buffer_get_end_iter(buffer, &end);
+  start = end;
+  gtk_text_iter_backward_chars(&start, 9);
+  GtkTextTag *tag = gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(buffer), "error");
+  g_assert_false(gtk_text_iter_has_tag(&start, tag));
+  /* Split multibyte input replaces only the temporary invalid suffix. */
+  tio_highlighter_feed(h, (const guint8 *)"\xe4", 1);
+  tio_highlighter_feed(h, (const guint8 *)"\xb8\xad\n", 3);
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *actual = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(actual, ==, "ERROR extended prompt ready\nERRORLESS中\n");
+  g_assert_cmpuint(removed, ==, 1);
+  tio_highlighter_clear(h);
+  tio_highlighter_feed(h, (const guint8 *)"new", 3);
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 3);
+  tio_highlighter_free(h);
+}
+
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
   g_test_add_func("/highlighter/serial-log-rules", test_serial_log_rules);
   g_test_add_func("/highlighter/custom-atomic-and-bounded", test_custom_rules);
+  g_test_add_func("/highlighter/incremental-tail", test_incremental_tail);
   return g_test_run();
 }

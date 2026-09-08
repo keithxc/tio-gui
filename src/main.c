@@ -89,6 +89,8 @@ struct _TioTab {
     GtkStack *terminal_stack;
     GtkTextView *highlight_view;
     TioHighlighter *highlighter;
+    GByteArray *highlight_queue;
+    guint highlight_flush_timer;
     GtkCheckButton *highlight_toggle;
     GtkButton *scroll_bottom_button;
     gboolean follow_output;
@@ -1665,6 +1667,47 @@ static void raw_tap_stop(TioTab *tab)
     }
 }
 
+/* Coalesce tiny serial packets into one display update. Raw recording and
+   analysis retain their original timing and bytes. Bound pending display data. */
+static gboolean flush_highlight_queue(gpointer data)
+{
+    TioTab *tab = data;
+    tab->highlight_flush_timer = 0;
+    if (tab->highlight_queue && tab->highlight_queue->len) {
+        tio_highlighter_feed(tab->highlighter, tab->highlight_queue->data,
+                             tab->highlight_queue->len);
+        g_byte_array_set_size(tab->highlight_queue, 0);
+        if (tab->highlight_follow) scroll_highlight_to_bottom(tab);
+        tab->highlight_pending = !tab->highlight_follow;
+        update_scroll_button(tab);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void reset_highlight_queue(TioTab *tab)
+{
+    if (tab->highlight_flush_timer) g_source_remove(tab->highlight_flush_timer);
+    tab->highlight_flush_timer = 0;
+    g_clear_pointer(&tab->highlight_queue, g_byte_array_unref);
+}
+
+static void queue_highlight(TioTab *tab, const guint8 *bytes, gsize length)
+{
+    if (!tab->highlight_queue) tab->highlight_queue = g_byte_array_sized_new(4096);
+    while (length) {
+        gsize part = MIN(length, 65536 - tab->highlight_queue->len);
+        g_byte_array_append(tab->highlight_queue, bytes, part);
+        bytes += part;
+        length -= part;
+        if (tab->highlight_queue->len == 65536) {
+            if (tab->highlight_flush_timer) g_source_remove(tab->highlight_flush_timer);
+            flush_highlight_queue(tab);
+        }
+    }
+    if (tab->highlight_queue->len && !tab->highlight_flush_timer)
+        tab->highlight_flush_timer = g_timeout_add(16, flush_highlight_queue, tab);
+}
+
 static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user_data)
 {
     TioRawTap *tap = user_data;
@@ -1692,14 +1735,9 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
             tap->tab->rx_lines++;
         }
     }
-    tio_highlighter_feed(tap->tab->highlighter, tap->buffer, (gsize)count);
+    queue_highlight(tap->tab, tap->buffer, (gsize)count);
     if (tap->tab->capture) tio_capture_record(tap->tab->capture, TIO_CAPTURE_RX, tap->buffer, (gsize)count, g_get_real_time());
     if (tap->tab->log_model) tio_log_model_feed(tap->tab->log_model, tap->buffer, (gsize)count, g_get_real_time());
-    if (tap->tab->highlight_follow) {
-        scroll_highlight_to_bottom(tap->tab);
-    }
-    tap->tab->highlight_pending = !tap->tab->highlight_follow;
-    update_scroll_button(tap->tab);
     raw_tap_read(tap);
     raw_tap_unref(tap);
 }
@@ -2006,6 +2044,7 @@ static void on_clear_terminal_clicked(GtkButton *button, gpointer user_data)
     TioTab *tab = user_data;
 
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    reset_highlight_queue(tab);
     tio_highlighter_clear(tab->highlighter);
 }
 
@@ -3787,6 +3826,7 @@ static void action_clear_terminal(GSimpleAction *action, GVariant *parameter, gp
         return;
     }
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    reset_highlight_queue(tab);
     tio_highlighter_clear(tab->highlighter);
 }
 
@@ -4053,6 +4093,7 @@ static void tio_tab_free(TioTab *tab)
     if (tab->capture_timer) g_source_remove(tab->capture_timer);
     g_clear_pointer(&tab->capture, tio_capture_unref);
     g_clear_pointer(&tab->running_metadata, g_free);
+    reset_highlight_queue(tab);
     g_clear_pointer(&tab->highlighter, tio_highlighter_free);
     g_clear_pointer(&tab->spawn_argv, g_strfreev);
     g_clear_pointer(&tab->log_path, g_free);
@@ -5494,7 +5535,8 @@ static TioTab *tio_tab_new(TioApp *app)
     gtk_text_view_set_left_margin(tab->highlight_view, 8);
     gtk_text_view_set_right_margin(tab->highlight_view, 8);
     gtk_text_view_set_top_margin(tab->highlight_view, 6);
-    gtk_text_view_set_bottom_margin(tab->highlight_view, 6);
+    /* Display-only breathing room; never add artificial serial/log lines. */
+    gtk_text_view_set_bottom_margin(tab->highlight_view, 48);
     tab->highlighter =
         tio_highlighter_new(gtk_text_view_get_buffer(tab->highlight_view));
     tio_highlighter_rules(tab->highlighter, app->settings.highlight_rules ? app->settings.highlight_rules : "", NULL);
