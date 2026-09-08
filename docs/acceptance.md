@@ -243,3 +243,28 @@ roundtrips with segmented TCP responses and separate empty/nonempty UDP response
 then cancellation during connect. The same localhost peer tests drive the actual
 GTK connect/send/preview/analyzer/disconnect controls. Network windows do not expose
 serial-only line controls or assume an underlying tio process.
+
+## Modbus RTU / TCP — 2026-09-08
+
+Modbus tools support functions 01/02 (coils/discrete inputs), 03/04 (holding/input
+registers), and 05/06 (single coil/register writes). Controls use explicit zero-based
+protocol addresses, unit, read count and write value, with an exact request preview.
+Register results show unsigned, hex and signed-16 interpretations. There are no
+automatic retries or broadcasts. TCP opens an independent per-request connection;
+RTU uses the current tio socket, requires an idle connected session, and keeps its
+window modal so ordinary GUI sends cannot interleave. Serial framing/baud/RS-485
+remain those of that tio session.
+
+Requests run off the GTK thread and cancel on window close. Responses validate
+RTU CRC or TCP MBAP transaction/protocol/length, unit, function, byte count and
+write echo. Exceptions are errors, never successful values. Read counts/address
+ranges and single-coil values are checked. Socket I/O has a two-second timeout and
+response assembly a three-second deadline (a blocked read may finish at its own
+socket timeout). This is a master request tool, not a slave simulator or bus sniffer.
+
+Tests cover the standard CRC request vector, transaction mismatch, exception and
+write-echo validation; application and GTK requests both receive fragmented TCP
+and real-tio/PTY RTU responses and decode registers 0x1234/0xABCD. Additional peers
+exercise mismatched transactions, exception frames and silence/timeouts. Protocol
+references: [application specification](https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf)
+and [TCP implementation guide](https://modbus.org/docs/Modbus_Messaging_Implementation_Guide_V1_0b.pdf).

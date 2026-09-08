@@ -39,12 +39,21 @@ add_executable(tio-gui
   src/plugin_ui.c
   src/network.c
   src/network_ui.c
+  src/modbus.c
+  src/modbus_ui.c
   src/main.c
   src/settings.c
 )
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(modbus-test tests/modbus_test.c src/modbus.c)
+  target_include_directories(modbus-test PRIVATE src)
+  target_link_libraries(modbus-test PRIVATE PkgConfig::GTK4)
+  add_test(NAME modbus COMMAND modbus-test)
+  add_executable(modbus-ui-test tests/modbus_ui_test.c src/modbus.c src/payload.c)
+  target_include_directories(modbus-ui-test PRIVATE src)
+  target_link_libraries(modbus-ui-test PRIVATE PkgConfig::GTK4)
   add_executable(network-ui-test tests/network_ui_test.c src/network.c src/payload.c src/log_model.c src/analyzer.c src/capture.c src/plugin.c src/plugin_ui.c)
   target_include_directories(network-ui-test PRIVATE src)
   target_link_libraries(network-ui-test PRIVATE PkgConfig::GTK4 PkgConfig::PCRE2 PkgConfig::JSON_GLIB)
@@ -120,7 +129,7 @@ target_compile_options(tio-gui PRIVATE
 )
 
 if(BUILD_TESTING)
-  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c src/modbus.c src/modbus_ui.c)
   target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(scroll-test PRIVATE
@@ -128,14 +137,14 @@ if(BUILD_TESTING)
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
   # Requires a display: run manually in a desktop session or under Xvfb.
-  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c)
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c src/modbus.c src/modbus_ui.c)
   target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(keyboard-test PRIVATE
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
-  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c)
+  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c src/network.c src/network_ui.c src/modbus.c src/modbus_ui.c)
   target_link_libraries(quick-editor-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(quick-editor-test PRIVATE

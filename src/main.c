@@ -32,6 +32,7 @@
 #include "capture.h"
 #include "transfer.h"
 #include "network_ui.h"
+#include "modbus_ui.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -3339,6 +3340,20 @@ static void highlight_rules_save(GtkButton *button, gpointer data)
     if (!tio_settings_save(&editor->app->settings, &error)) gtk_label_set_text(editor->status, error->message);
     else gtk_label_set_text(editor->status, _("Saved for all sessions; applies to incoming lines"));
 }
+static void on_modbus_tcp(GtkButton *button, gpointer data)
+{
+    (void)button; TioApp *app = data; tio_modbus_window(GTK_WINDOW(app->window), NULL);
+}
+static void on_modbus_rtu(GtkButton *button, gpointer data)
+{
+    (void)button; TioTab *tab = data;
+    if (!tab->raw || !tab->observed_connected || tio_transfer_active(tab->transfer) || tab->line_command_timer ||
+        tab->quick_send_timer || tab->raw->sending || tio_sequence_runner_active(tab->sequence_runner)) {
+        set_status(tab, _("Connect and stop pending sends before using Modbus RTU")); return;
+    }
+    tio_modbus_window(GTK_WINDOW(tab->app->window), tab->socket_path);
+}
+
 static void on_network_tools(GtkButton *button, gpointer data)
 {
     (void)button; TioApp *app = data; tio_network_window(GTK_WINDOW(app->window));
@@ -4652,6 +4667,9 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
     gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
 
+    GtkWidget *modbus_button = gtk_button_new_with_label(_("Modbus TCP…"));
+    g_signal_connect(modbus_button, "clicked", G_CALLBACK(on_modbus_tcp), app);
+    gtk_box_append(GTK_BOX(root), modbus_button);
     GtkWidget *network_button = gtk_button_new_with_label(_("TCP / UDP debugging…"));
     g_signal_connect(network_button, "clicked", G_CALLBACK(on_network_tools), app);
     gtk_box_append(GTK_BOX(root), network_button);
@@ -5111,6 +5129,9 @@ static TioTab *tio_tab_new(TioApp *app)
     GtkWidget *reconnect_expander = gtk_expander_new(_("Reconnect strategy"));
     gtk_expander_set_child(GTK_EXPANDER(reconnect_expander), reconnect_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), reconnect_expander);
+    GtkWidget *modbus_rtu = gtk_button_new_with_label(_("Modbus RTU…"));
+    g_signal_connect(modbus_rtu, "clicked", G_CALLBACK(on_modbus_rtu), tab);
+    gtk_box_append(GTK_BOX(session_settings), modbus_rtu);
     GtkWidget *transfer_expander = gtk_expander_new(_("File transfer"));
     gtk_expander_set_child(GTK_EXPANDER(transfer_expander), transfer_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), transfer_expander);
