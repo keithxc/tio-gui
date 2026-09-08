@@ -38,8 +38,7 @@ static void check_fragmented_follow(TioTab *tab, GtkWidget *window)
     for (guint repeat = 0; repeat < 20; ++repeat) {
         for (gsize offset = 0; offset < strlen(line); offset += 3) {
             gsize length = MIN((gsize)3, strlen(line) - offset);
-            tio_highlighter_feed(tab->highlighter, (const guint8 *)line + offset, length);
-            scroll_highlight_to_bottom(tab);
+            update_highlight_display(tab, (const guint8 *)line + offset, length);
             gint64 until = g_get_monotonic_time() + 8000;
             do { g_main_context_iteration(NULL, FALSE); g_usleep(500); } while (g_get_monotonic_time() < until);
         }
@@ -135,22 +134,11 @@ int main(void)
     g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(adjustment),
         gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment), 0.5);
     tio_highlighter_clear(tab.highlighter);
-    queue_highlight(&tab, (const guint8 *)"prompt", 6);
-    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
-    settle();
+    update_highlight_display(&tab, (const guint8 *)"prompt", 6);
     g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 6);
-    g_assert_cmpuint(tab.highlight_flush_timer, ==, 0);
-    queue_highlight(&tab, (const guint8 *)"discard", 7);
-    reset_highlight_queue(&tab);
     tio_highlighter_clear(tab.highlighter);
     settle();
     g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
-    g_autofree char *large = g_strnfill(70000, 'x');
-    queue_highlight(&tab, (const guint8 *)large, 70000);
-    g_assert_cmpuint(tab.highlight_queue->len, <=, 65536);
-    settle();
-    g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 16384);
-    reset_highlight_queue(&tab);
     gtk_window_destroy(GTK_WINDOW(window));
     tio_highlighter_free(tab.highlighter);
     g_object_unref(tab.highlight_toggle);

@@ -454,3 +454,20 @@ with about 49 MiB peak RSS in both cases. Incremental text preservation alone
 is therefore not a CPU optimization; packet coalescing is needed to reduce
 repeated partial-line highlighting. Measurements and synthetic harnesses are
 under `.cache/ui-ghost/` and are not bundled in the application.
+
+## Restore immediate serial display — 0.3.3 (2026-09-08)
+
+Following a report of renewed jitter in 0.3.2, remove the 16 ms display queue
+and restore synchronous feed-and-follow for incoming serial packets. Retain
+incremental text suffix updates and the 48-pixel display-only bottom margin.
+The previous resource figures describe 0.3.2; they are not performance claims
+for this version. This change prioritizes the previously accepted update cadence.
+
+Current desktop sampling (50 window images over approximately 15 seconds) and
+replay did not reproduce the earlier reverse bounce. They do not establish
+that all perceived jitter is resolved. The scroll regression now invokes the
+same immediate display helper as the real receive callback, and checks clear
+has no delayed text delivery. Xvfb checks passed with GTK warnings fatal:
+193 painted fragmented-input frames, zero backward jumps, follow/pause/
+selection/resume intact. GUI lifecycle checks also pass. Private captures and
+replay diagnostics remain in `.cache/ui-jitter-032/`, outside version control.

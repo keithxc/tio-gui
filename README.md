@@ -6,7 +6,7 @@
 
 ## Status
 
-Version 0.3.2 targets x86-64 Linux with tio 3.9. Software acceptance covers real
+Version 0.3.3 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
 hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 
