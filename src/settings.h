@@ -20,6 +20,7 @@ typedef struct {
     gchar *stop_bits;
     gchar *parity;
     gchar *flow;
+    guint capture_part_mb, capture_part_seconds, capture_keep_files, capture_disk_mb;
     gboolean reconnect, connection_notify, connection_sound;
     guint auto_connect; /* 0 direct, 1 new, 2 latest */
     gchar *exclude_devices, *exclude_drivers, *exclude_tids;

@@ -143,3 +143,33 @@ Tests cover segmented ANSI/CRLF, JSON/nested numeric paths, keys and quoted CSV,
 retention, adversarial regex limits, formula escaping and automatic CSV columns.
 The GTK analyzer test covers live/pause/resume, filter results, numeric curves,
 named captures and field inspection; a synthetic screenshot was inspected.
+
+## Capture, rotation and offline replay — 2026-09-08
+
+Per-session recording saves versioned JSONL `.tiocap` parts with base64 exact RX,
+completed socket TX, terminal INPUT requests, observed connection events and the
+running serial parameters. INPUT includes tio control requests and is deliberately
+separate from confirmed socket writes; neither proves physical delivery. Large
+writes split into adjacent records at the same timestamp. System-clock regressions
+are clamped to keep event order. Files are private and exclusively created.
+
+Rotation supports size/time, retained part count and a disk budget for files created
+by this recording. Only closed tracked parts are deleted. Each part is independently
+playable; select a part to review it. This does not rotate tio's separate legacy
+text log. An 8 MiB queue bounds memory; overflow or I/O failure stops recording and
+shows the error instead of blocking serial reception. App/tab close waits for
+pending recording writes. File-selection callbacks use weak windows and stable tab
+IDs. Dragged tab order and closing a tab's global signal subscriptions were fixed.
+
+Offline replay loads a regular file up to 128 MiB on a worker, with bounded records,
+JSON depth, decoded bytes and event count. It starts paused, supports 0.1–32x speed
+and optional RX hex display, and feeds only an independent analyzer model. There
+is no replay transport path. Tests cover every byte value, exact timestamps,
+pause/speed, retention/disk budgets, timed rotation, collisions, queue overflow,
+malformed input, asynchronous GTK replay and window-close draining.
+
+The complete GTK suite also exposed a GTK 4.22.4 Wayland input-method crash inside
+`notify_im_change` when rapidly destroying successive synthetic windows. Individual
+window tests pass with the desktop default input method; the combined suite is run
+with `GTK_IM_MODULE=simple` to isolate it from pending compositor IM events. This is
+a test environment workaround, not an application-wide input-method override.

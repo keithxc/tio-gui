@@ -29,6 +29,7 @@
 #include "serial_options.h"
 #include "connection_state.h"
 #include "analyzer.h"
+#include "capture.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -118,6 +119,14 @@ struct _TioTab {
 
     /* Raw data tap: the bytes tio received, before any display formatting. */
     gchar *socket_path;
+    guint64 id;
+    TioCapture *capture;
+    GtkSpinButton *capture_part_spin, *capture_time_spin, *capture_keep_spin, *capture_disk_spin;
+    GtkButton *capture_button;
+    GtkLabel *capture_label;
+    guint capture_timer, deferred_close_timer;
+    gboolean spawn_pending, close_requested;
+    gchar *running_metadata;
     TioLogModel *log_model;
     GtkWidget *analyzer_window;
     GtkWidget *sequence_window;
@@ -234,6 +243,7 @@ struct _TioApp {
     gint64 preview_started_at;
     TioSettings settings;
 
+    guint close_capture_timer;
     GtkButton *new_tab_button;
     GtkNotebook *notebook;
     GPtrArray *tabs; /* TioTab *, in page order */
@@ -878,6 +888,10 @@ static void capture_session_config(TioTab *tab, TioSessionConfig *config)
     g_free(config->log_file);
     config->log_file = g_strdup(gtk_editable_get_text(GTK_EDITABLE(tab->log_file_entry)));
 
+    config->capture_part_mb = (guint)gtk_spin_button_get_value_as_int(tab->capture_part_spin);
+    config->capture_part_seconds = (guint)gtk_spin_button_get_value_as_int(tab->capture_time_spin);
+    config->capture_keep_files = (guint)gtk_spin_button_get_value_as_int(tab->capture_keep_spin);
+    config->capture_disk_mb = (guint)gtk_spin_button_get_value_as_int(tab->capture_disk_spin);
     config->reconnect = gtk_check_button_get_active(tab->reconnect_check);
     config->connection_notify = gtk_check_button_get_active(tab->connection_notify_check);
     config->connection_sound = gtk_check_button_get_active(tab->connection_sound_check);
@@ -945,6 +959,10 @@ static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
                               : log_filename_templates[filename_index]);
     gtk_widget_set_visible(GTK_WIDGET(tab->log_file_entry),
                            filename_index == TIO_GUI_CUSTOM_LOG_FILENAME_INDEX);
+    gtk_spin_button_set_value(tab->capture_part_spin, config->capture_part_mb);
+    gtk_spin_button_set_value(tab->capture_time_spin, config->capture_part_seconds);
+    gtk_spin_button_set_value(tab->capture_keep_spin, config->capture_keep_files);
+    gtk_spin_button_set_value(tab->capture_disk_spin, config->capture_disk_mb);
     gtk_check_button_set_active(tab->reconnect_check, config->reconnect);
     gtk_check_button_set_active(tab->connection_notify_check, config->connection_notify);
     gtk_check_button_set_active(tab->connection_sound_check, config->connection_sound);
@@ -1267,6 +1285,11 @@ static void observe_connection(TioTab *tab)
         if (tab->quick_send_timer) { g_source_remove(tab->quick_send_timer); tab->quick_send_timer = 0; }
         g_clear_pointer(&tab->quick_pending, g_byte_array_unref);
     }
+    if (tab->capture) {
+        const char *event = connected ? device : tab->disconnect_reason;
+        tio_capture_record(tab->capture, connected ? TIO_CAPTURE_CONNECT : TIO_CAPTURE_DISCONNECT,
+                           (const guint8 *)event, strlen(event), g_get_real_time());
+    }
     set_status(tab, message);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_entry), connected);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->send_button), connected);
@@ -1412,6 +1435,7 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
     (void)terminal;
     TioTab *tab = user_data;
 
+    tab->spawn_pending = FALSE;
     g_clear_pointer(&tab->spawn_argv, g_strfreev);
     gtk_widget_set_sensitive(GTK_WIDGET(tab->connect_button), TRUE);
 
@@ -1427,6 +1451,7 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
     }
 
     tab->child_pid = pid;
+    if (tab->close_requested) { (void)kill(pid, SIGHUP); return; }
     tab->connected_at = g_get_monotonic_time();
     raw_tap_start(tab);
     gtk_button_set_label(tab->connect_button, _("Disconnect"));
@@ -1533,6 +1558,11 @@ static void raw_tap_unref(TioRawTap *tap)
    releases its own reference when the callback runs. */
 static void raw_tap_stop(TioTab *tab)
 {
+    if (tab->capture) {
+        const char *message = "Session stopped";
+        tio_capture_record(tab->capture, TIO_CAPTURE_DISCONNECT, (const guint8 *)message, strlen(message), g_get_real_time());
+        tio_capture_stop(tab->capture);
+    }
     if (tab->line_command_timer) { g_source_remove(tab->line_command_timer); tab->line_command_timer = 0; }
     g_clear_pointer(&tab->line_command_path, g_free);
     if (tab->line_script_paths) {
@@ -1591,6 +1621,7 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
         }
     }
     tio_highlighter_feed(tap->tab->highlighter, tap->buffer, (gsize)count);
+    if (tap->tab->capture) tio_capture_record(tap->tab->capture, TIO_CAPTURE_RX, tap->buffer, (gsize)count, g_get_real_time());
     if (tap->tab->log_model) tio_log_model_feed(tap->tab->log_model, tap->buffer, (gsize)count, g_get_real_time());
     if (tap->tab->highlight_follow) {
         scroll_highlight_to_bottom(tap->tab);
@@ -1854,11 +1885,16 @@ static void connect_tio(TioTab *tab)
     g_clear_pointer(&tab->observed_device, g_free);
     g_clear_pointer(&tab->disconnect_reason, g_free);
 
+    g_free(tab->running_metadata);
+    tab->running_metadata = g_strdup_printf("device=%s baud=%s data=%s stop=%s parity=%s flow=%s RS485=%u",
+        config->device ? config->device : "auto", config->baud, config->data_bits, config->stop_bits,
+        config->parity, config->flow, config->rs485);
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
     tab->spawn_argv = build_tio_argv(config, tab->log_path, tab->socket_path);
     set_status(tab, _("Connecting…"));
     gtk_widget_set_sensitive(GTK_WIDGET(tab->connect_button), FALSE);
 
+    tab->spawn_pending = TRUE;
     vte_terminal_spawn_async(tab->terminal,
                              VTE_PTY_DEFAULT,
                              NULL,
@@ -1931,6 +1967,7 @@ static void send_bytes(TioTab *tab, const char *data, gsize length)
     if (tab->child_pid <= 0 || length == 0) {
         return;
     }
+    if (tab->capture) tio_capture_record(tab->capture, TIO_CAPTURE_INPUT, (const guint8 *)data, length, g_get_real_time());
     vte_terminal_feed_child(tab->terminal, data, (gssize)length);
 }
 
@@ -1941,6 +1978,11 @@ static void on_payload_written(GObject *source, GAsyncResult *result, gpointer d
     g_autoptr(GError) error = NULL;
     gsize written = 0;
     gboolean ok = g_output_stream_write_all_finish(G_OUTPUT_STREAM(source), result, &written, &error);
+    if (ok && tap->tab && tap->tab->capture) {
+        gsize length;
+        const guint8 *bytes = g_bytes_get_data(tap->sending, &length);
+        tio_capture_record(tap->tab->capture, TIO_CAPTURE_TX, bytes, length, g_get_real_time());
+    }
     if (ok && tap->tab && tap->tab->log_model) {
         gsize length;
         const guint8 *bytes = g_bytes_get_data(tap->sending, &length);
@@ -3268,6 +3310,117 @@ static void on_line_control(GtkButton *button, gpointer data)
     tab->line_command_timer = g_timeout_add(50, line_command_prompt, tab);
 }
 
+/* -------------------------------------------------------------- recording */
+typedef struct { GWeakRef window; guint64 tab_id; } CaptureRequest;
+
+static gboolean capture_ui_tick(gpointer data)
+{
+    TioTab *tab = data;
+    const char *error = tio_capture_error(tab->capture);
+    const char *path = tio_capture_path(tab->capture);
+    g_autofree gchar *message = error ? g_strdup_printf(_("Recording failed: %s"), error)
+        : g_strdup_printf(tio_capture_finished(tab->capture) ? _("Recording saved: %s") : _("Recording: %s"), path ? path : "");
+    gtk_label_set_text(tab->capture_label, message);
+    if (tio_capture_finished(tab->capture)) {
+        gtk_button_set_label(tab->capture_button, _("Start recording…"));
+        tab->capture_timer = 0;
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+static void capture_file_finished(GObject *source, GAsyncResult *result, gpointer data)
+{
+    CaptureRequest *request = data;
+    g_autoptr(GObject) window = g_weak_ref_get(&request->window);
+    guint64 id = request->tab_id;
+    g_weak_ref_clear(&request->window); g_free(request);
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window))) return;
+    TioApp *app = g_object_get_data(window, "tio-gui");
+    if (!app || !file) return;
+    TioTab *tab = NULL;
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *candidate = g_ptr_array_index(app->tabs, i);
+        if (candidate->id == id) { tab = candidate; break; }
+    }
+    if (!tab) return;
+    if (tab->child_pid <= 0) { set_status(tab, _("Connect before starting a recording")); return; }
+    if (tab->capture && !tio_capture_finished(tab->capture)) { set_status(tab, _("A recording is already active")); return; }
+    g_autofree gchar *path = g_file_get_path(file);
+    if (!path) { set_status(tab, _("Choose a local capture file")); return; }
+    guint part = (guint)gtk_spin_button_get_value_as_int(tab->capture_part_spin);
+    guint seconds = (guint)gtk_spin_button_get_value_as_int(tab->capture_time_spin);
+    guint keep = (guint)gtk_spin_button_get_value_as_int(tab->capture_keep_spin);
+    guint disk = (guint)gtk_spin_button_get_value_as_int(tab->capture_disk_spin);
+    TioCapture *capture = tio_capture_new(path, (guint64)part * 1024 * 1024, seconds, keep,
+        (guint64)disk * 1024 * 1024, tab->running_metadata, &error);
+    if (!capture) { gtk_label_set_text(tab->capture_label, error->message); return; }
+    g_clear_pointer(&tab->capture, tio_capture_unref);
+    tab->capture = capture;
+    tab->config.capture_part_mb = part; tab->config.capture_part_seconds = seconds;
+    tab->config.capture_keep_files = keep; tab->config.capture_disk_mb = disk;
+    const char *metadata = tab->running_metadata ? tab->running_metadata : "";
+    tio_capture_record(capture, TIO_CAPTURE_PARAMETERS, (const guint8 *)metadata, strlen(metadata), g_get_real_time());
+    if (tab->observed_device) tio_capture_record(capture, TIO_CAPTURE_CONNECT,
+        (const guint8 *)tab->observed_device, strlen(tab->observed_device), g_get_real_time());
+    gtk_button_set_label(tab->capture_button, _("Stop recording"));
+    if (tab->capture_timer) g_source_remove(tab->capture_timer);
+    tab->capture_timer = g_timeout_add(200, capture_ui_tick, tab);
+}
+
+static void on_capture_clicked(GtkButton *button, gpointer data)
+{
+    (void)button;
+    TioTab *tab = data;
+    if (tab->capture && !tio_capture_finished(tab->capture)) {
+        tio_capture_stop(tab->capture);
+        gtk_button_set_label(tab->capture_button, _("Finishing recording…"));
+        return;
+    }
+    if (tab->child_pid <= 0) { set_status(tab, _("Connect before starting a recording")); return; }
+    g_autoptr(GtkFileDialog) dialog = gtk_file_dialog_new();
+    g_autoptr(GDateTime) now = g_date_time_new_now_local();
+    g_autofree gchar *stamp = g_date_time_format(now, "%Y%m%d-%H%M%S");
+    g_autofree gchar *name = g_strdup_printf("serial-%s.tiocap", stamp);
+    gtk_file_dialog_set_initial_name(dialog, name);
+    CaptureRequest *request = g_new0(CaptureRequest, 1);
+    g_weak_ref_init(&request->window, tab->app->window); request->tab_id = tab->id;
+    gtk_file_dialog_save(dialog, GTK_WINDOW(tab->app->window), NULL, capture_file_finished, request);
+}
+
+static void on_terminal_commit(VteTerminal *terminal, const char *text, guint length, gpointer data)
+{
+    (void)terminal;
+    TioTab *tab = data;
+    if (tab->capture) tio_capture_record(tab->capture, TIO_CAPTURE_INPUT, (const guint8 *)text, length, g_get_real_time());
+}
+
+static GtkWidget *capture_controls_new(TioTab *tab)
+{
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    GtkWidget *limits = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    tab->capture_part_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(1, 128, 1));
+    tab->capture_time_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(0, 86400, 60));
+    tab->capture_keep_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(1, 1000, 1));
+    tab->capture_disk_spin = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(1, 1048576, 16));
+    GtkSpinButton *spins[] = {tab->capture_part_spin, tab->capture_time_spin, tab->capture_keep_spin, tab->capture_disk_spin};
+    const char *labels[] = {_("Part MiB"), _("Part seconds (0=off)"), _("Keep parts"), _("Disk MiB")};
+    for (guint i = 0; i < 4; ++i) {
+        gtk_box_append(GTK_BOX(limits), gtk_label_new(labels[i]));
+        gtk_box_append(GTK_BOX(limits), GTK_WIDGET(spins[i]));
+    }
+    gtk_box_append(GTK_BOX(box), limits);
+    tab->capture_button = GTK_BUTTON(gtk_button_new_with_label(_("Start recording…")));
+    g_signal_connect(tab->capture_button, "clicked", G_CALLBACK(on_capture_clicked), tab);
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(tab->capture_button));
+    tab->capture_label = GTK_LABEL(gtk_label_new(_("Records exact RX/TX bytes, terminal input, connection events and serial parameters. Old closed parts expire at the configured limits.")));
+    gtk_label_set_wrap(tab->capture_label, TRUE); gtk_label_set_selectable(tab->capture_label, TRUE);
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(tab->capture_label));
+    return box;
+}
+
 static GtkWidget *reconnect_controls_new(TioTab *tab)
 {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
@@ -3510,6 +3663,19 @@ static void install_shortcuts(GtkApplication *application, TioApp *app)
 
 /* ------------------------------------------------------------------- exit */
 
+static gboolean close_after_capture(gpointer data)
+{
+    TioApp *app = data;
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        if (tab->spawn_pending || !tio_capture_finished(tab->capture)) return G_SOURCE_CONTINUE;
+    }
+    app->close_capture_timer = 0;
+    gtk_widget_set_sensitive(app->window, TRUE);
+    gtk_window_close(GTK_WINDOW(app->window));
+    return G_SOURCE_REMOVE;
+}
+
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
 {
     (void)window;
@@ -3518,12 +3684,24 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
     /* Stop every session, not just the visible one. */
     for (guint index = 0; index < app->tabs->len; ++index) {
         TioTab *tab = g_ptr_array_index(app->tabs, index);
+        tab->close_requested = TRUE;
         if (tab->child_pid > 0) {
             (void)kill(tab->child_pid, SIGHUP);
         }
         stop_session_timer(tab);
         raw_tap_stop(tab);
-        g_clear_pointer(&tab->spawn_argv, g_strfreev);
+        if (!tab->spawn_pending) g_clear_pointer(&tab->spawn_argv, g_strfreev);
+    }
+
+    gboolean draining = FALSE;
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        draining |= tab->spawn_pending || !tio_capture_finished(tab->capture);
+    }
+    if (draining) {
+        gtk_widget_set_sensitive(app->window, FALSE);
+        if (!app->close_capture_timer) app->close_capture_timer = g_timeout_add(50, close_after_capture, app);
+        return TRUE;
     }
 
     if (app->active != NULL) {
@@ -3567,6 +3745,10 @@ static void tio_tab_free(TioTab *tab)
     g_clear_pointer(&tab->log_model, tio_log_model_free);
     stop_session_timer(tab);
     raw_tap_stop(tab);
+    if (tab->deferred_close_timer) g_source_remove(tab->deferred_close_timer);
+    if (tab->capture_timer) g_source_remove(tab->capture_timer);
+    g_clear_pointer(&tab->capture, tio_capture_unref);
+    g_clear_pointer(&tab->running_metadata, g_free);
     g_clear_pointer(&tab->highlighter, tio_highlighter_free);
     g_clear_pointer(&tab->spawn_argv, g_strfreev);
     g_clear_pointer(&tab->log_path, g_free);
@@ -3584,6 +3766,7 @@ static void tio_app_free(gpointer data)
 {
     TioApp *app = data;
 
+    if (app->close_capture_timer) g_source_remove(app->close_capture_timer);
     if (app->settings_preview_timer != 0) {
         g_source_remove(app->settings_preview_timer);
         app->settings_preview_timer = 0;
@@ -4604,6 +4787,8 @@ static TioTab *tio_tab_new(TioApp *app)
 {
     TioTab *tab = g_new0(TioTab, 1);
     tab->app = app;
+    static guint64 next_tab_id = 0;
+    tab->id = ++next_tab_id;
     tab->log_model = tio_log_model_new();
     tab->child_pid = -1;
     tab->follow_output = TRUE;
@@ -4758,7 +4943,14 @@ static TioTab *tio_tab_new(TioApp *app)
     GtkWidget *reconnect_expander = gtk_expander_new(_("Reconnect strategy"));
     gtk_expander_set_child(GTK_EXPANDER(reconnect_expander), reconnect_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), reconnect_expander);
-    gtk_expander_set_child(GTK_EXPANDER(tab->session_settings_expander), session_settings);
+    GtkWidget *capture_expander = gtk_expander_new(_("Recording / safe rotation"));
+    gtk_expander_set_child(GTK_EXPANDER(capture_expander), capture_controls_new(tab));
+    gtk_box_append(GTK_BOX(session_settings), capture_expander);
+    GtkWidget *settings_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(settings_scroll), TRUE);
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(settings_scroll), 300);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(settings_scroll), session_settings);
+    gtk_expander_set_child(GTK_EXPANDER(tab->session_settings_expander), settings_scroll);
     gtk_expander_set_expanded(GTK_EXPANDER(tab->session_settings_expander),
                               app->settings.advanced_expanded);
     gtk_box_append(GTK_BOX(root), tab->session_settings_expander);
@@ -4973,6 +5165,7 @@ static TioTab *tio_tab_new(TioApp *app)
                      G_CALLBACK(on_show_all_ttys_toggled),
                      tab);
     g_signal_connect(tab->terminal, "child-exited", G_CALLBACK(on_child_exited), tab);
+    g_signal_connect(tab->terminal, "commit", G_CALLBACK(on_terminal_commit), tab);
     g_signal_connect(tab->terminal, "selection-changed", G_CALLBACK(on_terminal_selection_changed), tab);
     g_signal_connect(gtk_text_view_get_buffer(tab->highlight_view), "notify::has-selection",
                      G_CALLBACK(on_highlight_selection_changed), tab);
@@ -5066,19 +5259,32 @@ static void update_tab_label(TioTab *tab)
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->tab_label), text);
 }
 
-static void on_notebook_switch_page(GtkNotebook *notebook,
-                                    GtkWidget *page,
-                                    guint number,
-                                    gpointer user_data)
+static void on_notebook_switch_page(GtkNotebook *notebook, GtkWidget *page,
+                                    guint number, gpointer user_data)
 {
-    (void)notebook;
-    (void)page;
+    (void)notebook; (void)number;
     TioApp *app = user_data;
-
-    if (number < app->tabs->len) {
-        app->active = g_ptr_array_index(app->tabs, number);
-        update_settings_previews(app->active);
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        if (tab->content == page) { app->active = tab; update_settings_previews(tab); return; }
     }
+}
+
+static void on_notebook_reordered(GtkNotebook *notebook, GtkWidget *page, guint number, gpointer data)
+{
+    (void)page; (void)number;
+    TioApp *app = data;
+    GPtrArray *ordered = g_ptr_array_new();
+    for (gint i = 0; i < gtk_notebook_get_n_pages(notebook); ++i) {
+        GtkWidget *child = gtk_notebook_get_nth_page(notebook, i);
+        for (guint j = 0; j < app->tabs->len; ++j) {
+            TioTab *tab = g_ptr_array_index(app->tabs, j);
+            if (tab->content == child) { g_ptr_array_add(ordered, tab); break; }
+        }
+    }
+    g_ptr_array_unref(app->tabs); app->tabs = ordered;
+    gint current = gtk_notebook_get_current_page(notebook);
+    if (current >= 0 && (guint)current < app->tabs->len) app->active = g_ptr_array_index(app->tabs, (guint)current);
 }
 
 static TioTab *tio_app_add_tab(TioApp *app)
@@ -5108,8 +5314,27 @@ static TioTab *tio_app_add_tab(TioApp *app)
     return tab;
 }
 
+static void tio_app_finish_close_tab(TioApp *app, TioTab *tab);
+static gboolean close_tab_after_io(gpointer data)
+{
+    TioTab *tab = data;
+    if (tab->spawn_pending || !tio_capture_finished(tab->capture)) return G_SOURCE_CONTINUE;
+    tab->deferred_close_timer = 0;
+    tio_app_finish_close_tab(tab->app, tab);
+    return G_SOURCE_REMOVE;
+}
+
 static void tio_app_finish_close_tab(TioApp *app, TioTab *tab)
 {
+    tab->close_requested = TRUE;
+    raw_tap_stop(tab);
+    if (tab->spawn_pending || !tio_capture_finished(tab->capture)) {
+        gtk_widget_set_sensitive(tab->content, FALSE);
+        if (!tab->deferred_close_timer) tab->deferred_close_timer = g_timeout_add(50, close_tab_after_io, tab);
+        return;
+    }
+    g_signal_handlers_disconnect_by_data(tab->terminal, tab);
+    g_signal_handlers_disconnect_by_data(app->show_all_ttys_check, tab);
     gint page = gtk_notebook_page_num(app->notebook, tab->content);
     g_ptr_array_remove(app->tabs, tab);
     if (page >= 0) {
@@ -5253,6 +5478,7 @@ static void activate(GtkApplication *application, gpointer user_data)
        inside it. */
     app->notebook = GTK_NOTEBOOK(gtk_notebook_new());
     gtk_notebook_set_scrollable(app->notebook, TRUE);
+    g_signal_connect(app->notebook, "page-reordered", G_CALLBACK(on_notebook_reordered), app);
     gtk_notebook_set_show_border(app->notebook, FALSE);
     gtk_widget_set_vexpand(GTK_WIDGET(app->notebook), TRUE);
     gtk_window_set_child(GTK_WINDOW(app->window), GTK_WIDGET(app->notebook));

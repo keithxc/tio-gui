@@ -288,6 +288,46 @@ static void check_about(void)
     gtk_window_destroy(GTK_WINDOW(app.window));
 }
 
+static void check_application_lifecycle(void)
+{
+    g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.tests", G_APPLICATION_NON_UNIQUE);
+    g_assert_true(g_application_register(G_APPLICATION(application), NULL, NULL));
+    activate(application, NULL);
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    g_assert_nonnull(window);
+    g_object_add_weak_pointer(G_OBJECT(window), (gpointer *)&window);
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    TioTab *first = app->active;
+    g_assert_nonnull(first->capture_button);
+    TioTab *second = tio_app_add_tab(app);
+    gtk_notebook_reorder_child(app->notebook, second->content, 0);
+    g_assert_true(g_ptr_array_index(app->tabs, 0) == second);
+    gtk_notebook_set_current_page(app->notebook, 1);
+    g_assert_true(app->active == first);
+    tio_app_finish_close_tab(app, second);
+    gtk_check_button_set_active(app->show_all_ttys_check, TRUE);
+    gtk_check_button_set_active(app->show_all_ttys_check, FALSE);
+    g_autofree gchar *path = g_build_filename(g_get_user_config_dir(), "close-test.tiocap", NULL);
+    first->capture = tio_capture_new(path, 4096, 0, 2, 8192, "close test", NULL);
+    g_assert_nonnull(first->capture);
+    TioCapture *capture = tio_capture_ref(first->capture);
+    const guint8 bytes[] = {0, 0x14, 0xff};
+    g_assert_true(tio_capture_record(capture, TIO_CAPTURE_RX, bytes, sizeof bytes, g_get_real_time()));
+    gtk_window_close(GTK_WINDOW(window));
+    gint64 until = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (window && g_get_monotonic_time() < until) {
+        g_main_context_iteration(NULL, FALSE); g_usleep(1000);
+    }
+    g_assert_null(window);
+    g_assert_true(tio_capture_finished(capture));
+    g_assert_null(tio_capture_error(capture));
+    tio_capture_unref(capture);
+    g_autofree gchar *contents = NULL;
+    g_assert_true(g_file_get_contents(path, &contents, NULL, NULL));
+    g_assert_nonnull(strstr(contents, "ABT/"));
+    g_unlink(path);
+}
+
 int main(int argc, char **argv)
 {
     g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
@@ -301,6 +341,7 @@ int main(int argc, char **argv)
     g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
     g_test_add_func("/connection/real-reconnect", check_reconnect_observer);
     g_test_add_func("/about/version-diagnostics", check_about);
+    g_test_add_func("/application/reorder-close-drain", check_application_lifecycle);
     int result = g_test_run();
     g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);
     g_autofree gchar *directory = g_path_get_dirname(file);

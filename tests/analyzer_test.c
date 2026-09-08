@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "../src/analyzer.c"
+#include <glib/gstdio.h>
 static void exercise(void)
 {
     TioLogModel *model = tio_log_model_new();
@@ -50,9 +51,47 @@ static void exercise(void)
     gtk_window_destroy(GTK_WINDOW(window)); gtk_window_destroy(GTK_WINDOW(parent));
     tio_log_model_free(model);
 }
+static void playback(void)
+{
+    g_autofree gchar *directory = g_dir_make_tmp("tio-playback-XXXXXX", NULL);
+    g_autofree gchar *path = g_build_filename(directory, "test.tiocap", NULL);
+    TioCapture *capture = tio_capture_new(path, 4096, 0, 2, 8192, "115200", NULL);
+    const char *line = "INFO temp=42\n";
+    g_assert_true(tio_capture_record(capture, TIO_CAPTURE_RX, (const guint8 *)line, strlen(line), 1000000));
+    const guint8 bytes[] = {0, 0x14, 0xff};
+    g_assert_true(tio_capture_record(capture, TIO_CAPTURE_TX, bytes, sizeof bytes, 1100000));
+    tio_capture_stop(capture);
+    while (!tio_capture_finished(capture)) g_main_context_iteration(NULL, TRUE);
+    tio_capture_unref(capture);
+    GtkWidget *parent = gtk_window_new();
+    TioLogModel *model = tio_log_model_new();
+    GtkWidget *window = tio_analyzer_new(GTK_WINDOW(parent), model);
+    Analyzer *view = g_object_get_data(G_OBJECT(window), "analyzer");
+    ReplayLoad *load = g_new0(ReplayLoad, 1);
+    load->path = g_strdup(path); load->view = view;
+    g_weak_ref_init(&load->window, window);
+    GTask *task = g_task_new(NULL, NULL, replay_loaded, NULL);
+    g_task_set_task_data(task, load, replay_load_free);
+    g_task_run_in_thread(task, replay_load_worker); g_object_unref(task);
+    gint64 until = g_get_monotonic_time() + 3000000;
+    while (!view->replay && g_get_monotonic_time() < until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    g_assert_nonnull(view->replay);
+    g_assert_cmpuint(tio_log_model_entries(model)->length, ==, 0);
+    gtk_spin_button_set_value(view->replay_speed, 10);
+    gtk_check_button_set_active(view->replay_pause, FALSE);
+    while (!tio_replay_finished(view->replay) && g_get_monotonic_time() < until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    g_assert_true(tio_replay_finished(view->replay));
+    g_assert_cmpuint(tio_log_model_entries(model)->length, ==, 2);
+    TioLogEntry *last = g_queue_peek_tail((GQueue *)tio_log_model_entries(model));
+    g_assert_nonnull(strstr(last->text, "TX 00 14 FF"));
+    gtk_window_destroy(GTK_WINDOW(window)); gtk_window_destroy(GTK_WINDOW(parent));
+    tio_log_model_free(model);
+    g_remove(path); g_rmdir(directory);
+}
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL); gtk_init();
     g_test_add_func("/analyzer/filter-fields-plot-pause", exercise);
+    g_test_add_func("/analyzer/async-offline-playback", playback);
     return g_test_run();
 }

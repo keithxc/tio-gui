@@ -95,6 +95,10 @@ void tio_session_config_init(TioSessionConfig *config)
 
     *config = (TioSessionConfig){
         .baud = g_strdup("115200"),
+        .capture_part_mb = 16,
+        .capture_part_seconds = 0,
+        .capture_keep_files = 8,
+        .capture_disk_mb = 128,
         .reconnect = TRUE,
         .exclude_devices = g_strdup(""),
         .exclude_drivers = g_strdup(""),
@@ -146,6 +150,10 @@ void tio_session_config_copy(TioSessionConfig *destination, const TioSessionConf
     replace_string(&destination->log_file, source->log_file);
     replace_string(&destination->rs485_config, source->rs485_config);
     destination->rs485 = source->rs485;
+    destination->capture_part_mb = source->capture_part_mb;
+    destination->capture_part_seconds = source->capture_part_seconds;
+    destination->capture_keep_files = source->capture_keep_files;
+    destination->capture_disk_mb = source->capture_disk_mb;
     destination->reconnect = source->reconnect;
     destination->connection_notify = source->connection_notify;
     destination->connection_sound = source->connection_sound;
@@ -237,6 +245,10 @@ static void session_config_read(GKeyFile *key_file,
     replace_string_from_key(key_file, group, "parity", &config->parity);
     replace_string_from_key(key_file, group, "flow", &config->flow);
     replace_string_from_key(key_file, group, "line-ending", &config->line_ending);
+    replace_uint_from_key(key_file, group, "capture-part-mb", &config->capture_part_mb, 128);
+    replace_uint_from_key(key_file, group, "capture-part-seconds", &config->capture_part_seconds, 86400);
+    replace_uint_from_key(key_file, group, "capture-keep-files", &config->capture_keep_files, 1000);
+    replace_uint_from_key(key_file, group, "capture-disk-mb", &config->capture_disk_mb, 1048576);
     replace_boolean_from_key(key_file, group, "reconnect", &config->reconnect);
     replace_boolean_from_key(key_file, group, "connection-notify", &config->connection_notify);
     replace_boolean_from_key(key_file, group, "connection-sound", &config->connection_sound);
@@ -303,6 +315,10 @@ static void session_config_write(GKeyFile *key_file,
     g_key_file_set_string(key_file, group, "parity", config->parity);
     g_key_file_set_string(key_file, group, "flow", config->flow);
     g_key_file_set_string(key_file, group, "line-ending", config->line_ending);
+    g_key_file_set_integer(key_file, group, "capture-part-mb", (gint)config->capture_part_mb);
+    g_key_file_set_integer(key_file, group, "capture-part-seconds", (gint)config->capture_part_seconds);
+    g_key_file_set_integer(key_file, group, "capture-keep-files", (gint)config->capture_keep_files);
+    g_key_file_set_integer(key_file, group, "capture-disk-mb", (gint)config->capture_disk_mb);
     g_key_file_set_boolean(key_file, group, "reconnect", config->reconnect);
     g_key_file_set_boolean(key_file, group, "connection-notify", config->connection_notify);
     g_key_file_set_boolean(key_file, group, "connection-sound", config->connection_sound);

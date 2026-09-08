@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "analyzer.h"
+#include "capture.h"
 #include <libintl.h>
 #include <math.h>
 #include <string.h>
@@ -9,6 +10,13 @@ typedef struct { double x, y; } Point;
 typedef struct {
     GtkWidget *window;
     TioLogModel *model;
+    gboolean owns_model;
+    TioReplay *replay;
+    GtkWidget *replay_controls;
+    GtkCheckButton *replay_pause, *replay_hex;
+    GtkSpinButton *replay_speed;
+    GtkLabel *replay_status;
+    guint load_serial;
     GtkEntry *filter_entry, *fields_entry, *extract_entry;
     GtkCheckButton *regex, *sensitive, *follow, *levels[TIO_LOG_LEVELS], *curves[3];
     GtkSpinButton *point_limit;
@@ -191,6 +199,12 @@ static void rebuild(Analyzer *view)
 static gboolean tick(gpointer data)
 {
     Analyzer *view = data;
+    if (view->replay) {
+        g_autofree gchar *progress = g_strdup_printf(tio_replay_finished(view->replay)
+            ? _("Replay complete: %u/%u events") : _("Replay: %u/%u events"),
+            tio_replay_position(view->replay), tio_replay_count(view->replay));
+        gtk_label_set_text(view->replay_status, progress);
+    }
     for (guint i = 0; i < TIO_LOG_LEVELS; ++i) {
         g_autofree gchar *label = g_strdup_printf("%s: %" G_GUINT64_FORMAT,
             tio_log_level_name((TioLogLevel)i), tio_log_model_count(view->model, (TioLogLevel)i));
@@ -278,10 +292,110 @@ static void free_analyzer(gpointer data)
 {
     Analyzer *view = data;
     if (view->timer) g_source_remove(view->timer);
+    tio_replay_free(view->replay);
+    if (view->owns_model) tio_log_model_free(view->model);
     tio_log_filter_free(view->filter); tio_log_filter_free(view->extractor);
     g_array_unref(view->ids);
     for (guint i = 0; i < 3; ++i) { g_array_unref(view->points[i]); g_free(view->field_names[i]); }
     g_free(view);
+}
+
+/* Recordings are loaded off the GTK thread and replayed only into a fresh model. */
+typedef struct { GWeakRef window; gchar *path; guint serial; Analyzer *view; } ReplayLoad;
+static void replay_event(TioCaptureKind kind, const guint8 *bytes, gsize length, gint64 time, gpointer data)
+{
+    Analyzer *view = data;
+    if (kind == TIO_CAPTURE_RX && !gtk_check_button_get_active(view->replay_hex)) {
+        tio_log_model_feed(view->model, bytes, length, time);
+        return;
+    }
+    if (kind == TIO_CAPTURE_RX || kind == TIO_CAPTURE_TX || kind == TIO_CAPTURE_INPUT) {
+        g_autoptr(GString) text = g_string_new(kind == TIO_CAPTURE_RX ? "RX " : kind == TIO_CAPTURE_TX ? "TX " : "INPUT ");
+        for (gsize i = 0; i < MIN(length, 1024u); ++i) g_string_append_printf(text, "%02X ", bytes[i]);
+        if (length > 1024) g_string_append_printf(text, "… (%zu bytes total)", length);
+        if (kind == TIO_CAPTURE_RX) {
+            g_string_append_c(text, '\n');
+            tio_log_model_feed(view->model, (const guint8 *)text->str, text->len, time);
+        } else tio_log_model_command(view->model, text->str, time);
+    } else {
+        const char *prefix = kind == TIO_CAPTURE_CONNECT ? "CONNECTED " : kind == TIO_CAPTURE_DISCONNECT ? "DISCONNECTED " : "PARAMETERS ";
+        g_autofree gchar *valid = g_utf8_make_valid((const char *)bytes, (gssize)length);
+        g_autofree gchar *text = g_strconcat(prefix, valid, NULL);
+        tio_log_model_command(view->model, text, time);
+    }
+}
+static void replay_load_free(gpointer data)
+{
+    ReplayLoad *load = data; g_weak_ref_clear(&load->window); g_free(load->path); g_free(load);
+}
+static void replay_load_worker(GTask *task, gpointer source, gpointer task_data, GCancellable *cancellable)
+{
+    (void)source; (void)cancellable;
+    ReplayLoad *load = task_data;
+    g_autoptr(GError) error = NULL;
+    TioReplay *replay = tio_replay_load(load->path, replay_event, load->view, &error);
+    if (!replay) g_task_return_error(task, g_steal_pointer(&error));
+    else g_task_return_pointer(task, replay, (GDestroyNotify)tio_replay_free);
+}
+static void replay_loaded(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source; (void)data;
+    ReplayLoad *load = g_task_get_task_data(G_TASK(result));
+    g_autoptr(GObject) window = g_weak_ref_get(&load->window);
+    g_autoptr(GError) error = NULL;
+    TioReplay *replay = g_task_propagate_pointer(G_TASK(result), &error);
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window))) { tio_replay_free(replay); return; }
+    Analyzer *view = g_object_get_data(window, "analyzer");
+    if (load->serial != view->load_serial) { tio_replay_free(replay); return; }
+    if (!replay) { gtk_label_set_text(view->replay_status, error->message); return; }
+    tio_replay_free(view->replay); view->replay = replay;
+    tio_log_model_clear(view->model); view->rebuild = TRUE;
+    tio_replay_speed(replay, gtk_spin_button_get_value(view->replay_speed));
+    tio_replay_pause(replay, gtk_check_button_get_active(view->replay_pause));
+    gtk_label_set_text(view->replay_status, _("Loaded; uncheck Pause replay to play"));
+}
+static void replay_file_finished(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GWeakRef *weak = data;
+    g_autoptr(GObject) window = g_weak_ref_get(weak);
+    g_weak_ref_clear(weak); g_free(weak);
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window)) || !file) return;
+    Analyzer *view = g_object_get_data(window, "analyzer");
+    g_autofree gchar *path = g_file_get_path(file);
+    if (!path) { gtk_label_set_text(view->replay_status, _("Choose a local recording")); return; }
+    ReplayLoad *load = g_new0(ReplayLoad, 1);
+    g_weak_ref_init(&load->window, window); load->path = g_steal_pointer(&path);
+    load->serial = ++view->load_serial; load->view = view;
+    gtk_label_set_text(view->replay_status, _("Loading recording…"));
+    g_autoptr(GTask) task = g_task_new(NULL, NULL, replay_loaded, NULL);
+    g_task_set_task_data(task, load, replay_load_free);
+    g_task_run_in_thread(task, replay_load_worker);
+}
+static void choose_replay(Analyzer *view)
+{
+    g_autoptr(GtkFileDialog) dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, _("Open recording or retained part"));
+    GWeakRef *weak = g_new0(GWeakRef, 1); g_weak_ref_init(weak, view->window);
+    gtk_file_dialog_open(dialog, GTK_WINDOW(view->window), NULL, replay_file_finished, weak);
+}
+static void open_replay(GtkButton *button, gpointer data)
+{
+    (void)button;
+    Analyzer *view = data;
+    if (view->owns_model) choose_replay(view);
+    else {
+        GtkWindow *parent = gtk_window_get_transient_for(GTK_WINDOW(view->window));
+        tio_analyzer_open_replay(parent ? parent : GTK_WINDOW(view->window));
+    }
+}
+static void replay_controls_changed(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    Analyzer *view = data;
+    tio_replay_pause(view->replay, gtk_check_button_get_active(view->replay_pause));
+    tio_replay_speed(view->replay, gtk_spin_button_get_value(view->replay_speed));
 }
 
 GtkWidget *tio_analyzer_new(GtkWindow *parent, TioLogModel *model)
@@ -315,6 +429,26 @@ GtkWidget *tio_analyzer_new(GtkWindow *parent, TioLogModel *model)
     gtk_box_append(GTK_BOX(filters), GTK_WIDGET(view->sensitive));
     gtk_box_append(GTK_BOX(filters), apply); gtk_box_append(GTK_BOX(filters), GTK_WIDGET(view->follow));
     gtk_box_append(GTK_BOX(filters), export); gtk_box_append(GTK_BOX(root), filters);
+    GtkWidget *recording = gtk_button_new_with_label(_("Open recording…"));
+    g_signal_connect(recording, "clicked", G_CALLBACK(open_replay), view);
+    gtk_box_append(GTK_BOX(filters), recording);
+    view->replay_controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    view->replay_pause = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Pause replay")));
+    gtk_check_button_set_active(view->replay_pause, TRUE);
+    view->replay_hex = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("RX as HEX")));
+    view->replay_speed = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(.1, 32, .1));
+    gtk_spin_button_set_value(view->replay_speed, 1);
+    gtk_spin_button_set_digits(view->replay_speed, 1);
+    view->replay_status = GTK_LABEL(gtk_label_new(_("Playback never sends data to a device")));
+    gtk_box_append(GTK_BOX(view->replay_controls), GTK_WIDGET(view->replay_pause));
+    gtk_box_append(GTK_BOX(view->replay_controls), GTK_WIDGET(view->replay_hex));
+    gtk_box_append(GTK_BOX(view->replay_controls), gtk_label_new(_("Speed ×")));
+    gtk_box_append(GTK_BOX(view->replay_controls), GTK_WIDGET(view->replay_speed));
+    gtk_box_append(GTK_BOX(view->replay_controls), GTK_WIDGET(view->replay_status));
+    g_signal_connect(view->replay_pause, "toggled", G_CALLBACK(replay_controls_changed), view);
+    g_signal_connect(view->replay_speed, "value-changed", G_CALLBACK(replay_controls_changed), view);
+    gtk_box_append(GTK_BOX(root), view->replay_controls);
+    gtk_widget_set_visible(view->replay_controls, FALSE);
     g_signal_connect(apply, "clicked", G_CALLBACK(apply_filter), view);
     g_signal_connect(view->filter_entry, "activate", G_CALLBACK(apply_filter), view);
     g_signal_connect(export, "clicked", G_CALLBACK(export_csv), view);
@@ -380,4 +514,16 @@ GtkWidget *tio_analyzer_new(GtkWindow *parent, TioLogModel *model)
     view->timer = g_timeout_add(250, tick, view);
     gtk_window_present(GTK_WINDOW(view->window));
     return view->window;
+}
+
+GtkWidget *tio_analyzer_open_replay(GtkWindow *parent)
+{
+    TioLogModel *model = tio_log_model_new();
+    GtkWidget *window = tio_analyzer_new(parent, model);
+    Analyzer *view = g_object_get_data(G_OBJECT(window), "analyzer");
+    view->owns_model = TRUE;
+    gtk_window_set_title(GTK_WINDOW(window), _("Recording playback"));
+    gtk_widget_set_visible(view->replay_controls, TRUE);
+    choose_replay(view);
+    return window;
 }
