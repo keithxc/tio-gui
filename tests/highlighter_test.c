@@ -21,6 +21,7 @@ static void test_serial_log_rules(void) {
   const guint8 second[] =
       "[RemoteControl.cpp:164] ERROR addr=0x29300 timeout=400 ms\x1b[0m\r\n";
   tio_highlighter_feed(highlighter, first, sizeof(first) - 1);
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), >, 0);
   tio_highlighter_feed(highlighter, second, sizeof(second) - 1);
 
   GtkTextIter start;

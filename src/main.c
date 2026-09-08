@@ -79,6 +79,11 @@ struct _TioTab {
     GtkButton *scroll_bottom_button;
     gboolean follow_output;
     gboolean pending_output;
+    gboolean highlight_follow;
+    gboolean highlight_pending;
+    gboolean highlight_adjusting;
+    gboolean highlight_pointer_down;
+    gboolean highlight_selected;
 
     /* Send bar. */
     GtkMenuButton *history_button;
@@ -244,6 +249,13 @@ static void action_next_tab(GSimpleAction *action, GVariant *parameter, gpointer
 static void action_previous_tab(GSimpleAction *action, GVariant *parameter, gpointer user_data);
 static void raw_tap_start(TioTab *tab);
 static void raw_tap_stop(TioTab *tab);
+static void update_scroll_button(TioTab *tab);
+static void scroll_highlight_to_bottom(TioTab *tab);
+static void focus_log_view(TioTab *tab)
+{
+    gtk_widget_grab_focus(gtk_check_button_get_active(tab->highlight_toggle)
+                             ? GTK_WIDGET(tab->highlight_view) : GTK_WIDGET(tab->terminal));
+}
 static void refresh_profile_ui(TioTab *tab);
 static void refresh_history_ui(TioTab *tab);
 static void capture_session_config(TioTab *tab, TioSessionConfig *config);
@@ -1302,7 +1314,7 @@ static void on_spawn_finished(VteTerminal *terminal, GPid pid, GError *error, gp
     stop_session_timer(tab);
     tab->session_timer = g_timeout_add_seconds(1, on_session_tick, tab);
     update_session_label(tab);
-    gtk_widget_grab_focus(GTK_WIDGET(tab->terminal));
+    focus_log_view(tab);
 }
 
 /* tio can name log files by itself, but then tio-gui would not know which file
@@ -1436,12 +1448,11 @@ static void on_raw_tap_read(GObject *source, GAsyncResult *result, gpointer user
         }
     }
     tio_highlighter_feed(tap->tab->highlighter, tap->buffer, (gsize)count);
-    if (gtk_check_button_get_active(tap->tab->highlight_toggle)) {
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tap->tab->highlight_view);
-        GtkTextIter end;
-        gtk_text_buffer_get_end_iter(buffer, &end);
-        gtk_text_view_scroll_to_iter(tap->tab->highlight_view, &end, 0.0, FALSE, 0.0, 1.0);
+    if (tap->tab->highlight_follow) {
+        scroll_highlight_to_bottom(tap->tab);
     }
+    tap->tab->highlight_pending = !tap->tab->highlight_follow;
+    update_scroll_button(tap->tab);
     raw_tap_read(tap);
     raw_tap_unref(tap);
 }
@@ -1739,14 +1750,8 @@ static void on_highlight_toggled(GtkCheckButton *button, gpointer user_data)
     gboolean active = gtk_check_button_get_active(button);
     gtk_stack_set_visible_child_name(tab->terminal_stack,
                                      active ? "highlight" : "terminal");
-    if (active) {
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
-        GtkTextIter end;
-        gtk_text_buffer_get_end_iter(buffer, &end);
-        gtk_text_view_scroll_to_iter(tab->highlight_view, &end, 0.0, FALSE, 0.0, 1.0);
-    } else {
-        gtk_widget_grab_focus(GTK_WIDGET(tab->terminal));
-    }
+    update_scroll_button(tab);
+    focus_log_view(tab);
 }
 
 static void on_show_all_ttys_toggled(GtkCheckButton *button, gpointer user_data)
@@ -2041,7 +2046,7 @@ static void on_search_stopped(GtkSearchEntry *entry, gpointer user_data)
     (void)entry;
     TioTab *tab = user_data;
     gtk_search_bar_set_search_mode(tab->search_bar, FALSE);
-    gtk_widget_grab_focus(GTK_WIDGET(tab->terminal));
+    focus_log_view(tab);
 }
 
 /* ------------------------------------------------------------- autoscroll */
@@ -2076,9 +2081,12 @@ static void scroll_terminal_to_bottom(TioTab *tab)
 
 static void update_scroll_button(TioTab *tab)
 {
+    gboolean highlight = gtk_check_button_get_active(tab->highlight_toggle);
+    gboolean pending = highlight ? tab->highlight_pending : tab->pending_output;
+    gboolean follow = highlight ? tab->highlight_follow : tab->follow_output;
     gtk_button_set_label(tab->scroll_bottom_button,
-                         tab->pending_output ? _("New output ↓") : _("Back to bottom ↓"));
-    gtk_widget_set_visible(GTK_WIDGET(tab->scroll_bottom_button), !tab->follow_output);
+                         pending ? _("New output ↓") : _("Back to bottom ↓"));
+    gtk_widget_set_visible(GTK_WIDGET(tab->scroll_bottom_button), !follow);
 }
 
 static void on_terminal_scrolled(GtkAdjustment *adjustment, gpointer user_data)
@@ -2087,6 +2095,9 @@ static void on_terminal_scrolled(GtkAdjustment *adjustment, gpointer user_data)
     TioTab *tab = user_data;
 
     gboolean at_bottom = terminal_at_bottom(tab);
+    if (at_bottom && vte_terminal_get_has_selection(tab->terminal)) {
+        vte_terminal_unselect_all(tab->terminal);
+    }
     if (at_bottom == tab->follow_output) {
         return;
     }
@@ -2102,6 +2113,9 @@ static void on_terminal_content_changed(GtkAdjustment *adjustment, gpointer user
     (void)adjustment;
     TioTab *tab = user_data;
 
+    if (vte_terminal_get_has_selection(tab->terminal)) {
+        tab->follow_output = FALSE;
+    }
     if (tab->follow_output) {
         scroll_terminal_to_bottom(tab);
         return;
@@ -2117,10 +2131,188 @@ static void on_scroll_bottom_clicked(GtkButton *button, gpointer user_data)
     (void)button;
     TioTab *tab = user_data;
 
+    if (gtk_check_button_get_active(tab->highlight_toggle)) {
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+        GtkTextIter end;
+        gtk_text_buffer_get_end_iter(buffer, &end);
+        gtk_text_buffer_place_cursor(buffer, &end);
+        tab->highlight_follow = TRUE;
+        tab->highlight_pending = FALSE;
+        scroll_highlight_to_bottom(tab);
+        update_scroll_button(tab);
+        return;
+    }
+    vte_terminal_unselect_all(tab->terminal);
     scroll_terminal_to_bottom(tab);
     tab->follow_output = TRUE;
     tab->pending_output = FALSE;
     update_scroll_button(tab);
+}
+
+static void on_terminal_selection_changed(VteTerminal *terminal, gpointer user_data)
+{
+    TioTab *tab = user_data;
+    tab->follow_output = !vte_terminal_get_has_selection(terminal) && terminal_at_bottom(tab);
+    update_scroll_button(tab);
+}
+
+static void on_highlight_scrolled(GtkAdjustment *adjustment, gpointer user_data)
+{
+    TioTab *tab = user_data;
+    /* GtkTextView also changes the adjustment while validating/reflowing
+       text. Only an input event is allowed to turn following off. */
+    if (tab->highlight_adjusting || tab->highlight_follow || tab->highlight_pointer_down) {
+        return;
+    }
+    tab->highlight_follow =
+        gtk_adjustment_get_value(adjustment) >=
+            gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment) - 0.5;
+    if (tab->highlight_follow) {
+        GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+        if (gtk_text_buffer_get_has_selection(buffer)) {
+            GtkTextIter end;
+            gtk_text_buffer_get_end_iter(buffer, &end);
+            gtk_text_buffer_place_cursor(buffer, &end);
+        }
+        tab->highlight_pending = FALSE;
+    }
+    update_scroll_button(tab);
+}
+
+static void scroll_highlight_to_bottom(TioTab *tab)
+{
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+    GtkTextIter end;
+    gtk_text_buffer_get_end_iter(buffer, &end);
+    GtkTextMark *mark = gtk_text_buffer_get_mark(buffer, "tio-highlight-end");
+    if (mark == NULL) {
+        mark = gtk_text_buffer_create_mark(buffer, "tio-highlight-end", &end, FALSE);
+    } else {
+        gtk_text_buffer_move_mark(buffer, mark, &end);
+    }
+    /* Unlike scroll_to_iter, this remains pending until the text layout is
+       valid. Bottom alignment includes the final line and the view margin. */
+    tab->highlight_adjusting = TRUE;
+    gtk_text_view_scroll_to_mark(tab->highlight_view, mark, 0.0, TRUE, 0.0, 1.0);
+    GtkAdjustment *adjustment = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
+    gtk_adjustment_set_value(adjustment, gtk_adjustment_get_upper(adjustment) -
+                                        gtk_adjustment_get_page_size(adjustment));
+    tab->highlight_adjusting = FALSE;
+}
+
+static gboolean on_highlight_wheel(GtkEventControllerScroll *controller, double dx,
+                                   double dy, gpointer user_data)
+{
+    (void)controller;
+    (void)dx;
+    TioTab *tab = user_data;
+    if (dy < 0) {
+        tab->highlight_follow = FALSE;
+        update_scroll_button(tab);
+    }
+    return FALSE;
+}
+
+static void on_highlight_pointer_pressed(GtkGestureClick *gesture, int n_press,
+                                         double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)x; (void)y;
+    TioTab *tab = user_data;
+    tab->highlight_pointer_down = TRUE;
+    tab->highlight_follow = FALSE;
+    update_scroll_button(tab);
+}
+
+static void on_highlight_pointer_released(GtkGestureClick *gesture, int n_press,
+                                          double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)x; (void)y;
+    TioTab *tab = user_data;
+    tab->highlight_pointer_down = FALSE;
+    if (!gtk_text_buffer_get_has_selection(gtk_text_view_get_buffer(tab->highlight_view))) {
+        on_highlight_scrolled(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view)), tab);
+    }
+}
+
+static void on_highlight_pointer_stopped(GtkGestureClick *gesture, gpointer user_data)
+{
+    on_highlight_pointer_released(gesture, 0, 0, 0, user_data);
+}
+
+static void on_highlight_content_changed(GtkAdjustment *adjustment, gpointer user_data)
+{
+    (void)adjustment;
+    TioTab *tab = user_data;
+    if (gtk_text_buffer_get_has_selection(gtk_text_view_get_buffer(tab->highlight_view))) {
+        tab->highlight_follow = FALSE;
+    }
+    if (tab->highlight_follow) {
+        scroll_highlight_to_bottom(tab);
+    }
+    update_scroll_button(tab);
+}
+
+static void on_highlight_selection_changed(GObject *buffer, GParamSpec *pspec, gpointer user_data)
+{
+    (void)buffer;
+    (void)pspec;
+    TioTab *tab = user_data;
+    gboolean selected = gtk_text_buffer_get_has_selection(GTK_TEXT_BUFFER(buffer));
+    if (selected == tab->highlight_selected) {
+        return;
+    }
+    tab->highlight_selected = selected;
+    if (selected) {
+        tab->highlight_follow = FALSE;
+        update_scroll_button(tab);
+    } else {
+        on_highlight_scrolled(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view)), tab);
+    }
+}
+
+static gboolean on_log_return_pressed(GtkEventControllerKey *controller, guint keyval,
+                                      guint keycode, GdkModifierType state, gpointer user_data)
+{
+    (void)controller;
+    (void)keycode;
+    if ((keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter) &&
+        !(state & (GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK | GDK_SHIFT_MASK))) {
+        on_scroll_bottom_clicked(NULL, user_data);
+    }
+    /* Continue normal VTE input / send-entry activation after resuming. */
+    return FALSE;
+}
+
+/* Let VTE encode keyboard events, including control keys, terminal escape
+   sequences and input-method commits. The text view remains selection-only. */
+static gboolean on_highlight_key_pressed(GtkEventControllerKey *controller, guint keyval,
+                                         guint keycode, GdkModifierType state, gpointer user_data)
+{
+    TioTab *tab = user_data;
+    guint lower = gdk_keyval_to_lower(keyval);
+    gboolean ctrl = (state & GDK_CONTROL_MASK) != 0;
+    gboolean shift = (state & GDK_SHIFT_MASK) != 0;
+    /* Keep application shortcuts available before forwarding terminal input. */
+    if (keyval == GDK_KEY_F5 || keyval == GDK_KEY_F6 ||
+        (ctrl && shift && (lower == GDK_KEY_c || lower == GDK_KEY_v ||
+                           lower == GDK_KEY_f || lower == GDK_KEY_l)) ||
+        (ctrl && (lower == GDK_KEY_t || lower == GDK_KEY_w ||
+                  keyval == GDK_KEY_Page_Up || keyval == GDK_KEY_Page_Down))) {
+        return FALSE;
+    }
+    on_log_return_pressed(controller, keyval, keycode, state, tab);
+    gtk_event_controller_key_forward(controller, GTK_WIDGET(tab->terminal));
+    return TRUE;
+}
+
+static void on_highlight_key_released(GtkEventControllerKey *controller, guint keyval,
+                                      guint keycode, GdkModifierType state, gpointer user_data)
+{
+    (void)keyval;
+    (void)keycode;
+    (void)state;
+    TioTab *tab = user_data;
+    gtk_event_controller_key_forward(controller, GTK_WIDGET(tab->terminal));
 }
 
 /* ---------------------------------------------------------- quick buttons */
@@ -2345,7 +2537,12 @@ static void action_copy(GSimpleAction *action, GVariant *parameter, gpointer use
     if (tab == NULL) {
         return;
     }
-    vte_terminal_copy_clipboard_format(tab->terminal, VTE_FORMAT_TEXT);
+    if (gtk_check_button_get_active(tab->highlight_toggle)) {
+        gtk_text_buffer_copy_clipboard(gtk_text_view_get_buffer(tab->highlight_view),
+                                       gtk_widget_get_clipboard(GTK_WIDGET(tab->highlight_view)));
+    } else {
+        vte_terminal_copy_clipboard_format(tab->terminal, VTE_FORMAT_TEXT);
+    }
 }
 
 static void action_paste(GSimpleAction *action, GVariant *parameter, gpointer user_data)
@@ -2399,7 +2596,7 @@ static void action_search(GSimpleAction *action, GVariant *parameter, gpointer u
     if (active) {
         gtk_widget_grab_focus(GTK_WIDGET(tab->search_entry));
     } else {
-        gtk_widget_grab_focus(GTK_WIDGET(tab->terminal));
+        focus_log_view(tab);
     }
 }
 
@@ -3404,6 +3601,7 @@ static TioTab *tio_tab_new(TioApp *app)
     tab->child_pid = -1;
     tab->follow_output = TRUE;
     tio_session_config_init(&tab->config);
+    tab->highlight_follow = TRUE;
     tio_session_config_copy(&tab->config, &app->settings.defaults);
 
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
@@ -3595,7 +3793,6 @@ static TioTab *tio_tab_new(TioApp *app)
                                   GTK_WIDGET(tab->terminal));
 
     GtkWidget *terminal_overlay = gtk_overlay_new();
-    gtk_overlay_set_child(GTK_OVERLAY(terminal_overlay), terminal_scroll);
     tab->scroll_bottom_button =
         GTK_BUTTON(gtk_button_new_with_label(_("Back to bottom ↓")));
     gtk_widget_add_css_class(GTK_WIDGET(tab->scroll_bottom_button), "scroll-bottom");
@@ -3624,12 +3821,24 @@ static TioTab *tio_tab_new(TioApp *app)
                                    GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(highlight_scroll),
                                   GTK_WIDGET(tab->highlight_view));
+    GtkEventController *wheel = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    gtk_event_controller_set_propagation_phase(wheel, GTK_PHASE_CAPTURE);
+    g_signal_connect(wheel, "scroll", G_CALLBACK(on_highlight_wheel), tab);
+    gtk_widget_add_controller(highlight_scroll, wheel);
+    GtkGesture *pointer = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(pointer), GDK_BUTTON_PRIMARY);
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(pointer), GTK_PHASE_CAPTURE);
+    g_signal_connect(pointer, "pressed", G_CALLBACK(on_highlight_pointer_pressed), tab);
+    g_signal_connect(pointer, "released", G_CALLBACK(on_highlight_pointer_released), tab);
+    g_signal_connect(pointer, "stopped", G_CALLBACK(on_highlight_pointer_stopped), tab);
+    gtk_widget_add_controller(highlight_scroll, GTK_EVENT_CONTROLLER(pointer));
 
     tab->terminal_stack = GTK_STACK(gtk_stack_new());
-    gtk_stack_add_named(tab->terminal_stack, terminal_overlay, "terminal");
+    gtk_stack_add_named(tab->terminal_stack, terminal_scroll, "terminal");
     gtk_stack_add_named(tab->terminal_stack, highlight_scroll, "highlight");
     gtk_stack_set_visible_child_name(tab->terminal_stack, "highlight");
-    gtk_frame_set_child(GTK_FRAME(terminal_frame), GTK_WIDGET(tab->terminal_stack));
+    gtk_overlay_set_child(GTK_OVERLAY(terminal_overlay), GTK_WIDGET(tab->terminal_stack));
+    gtk_frame_set_child(GTK_FRAME(terminal_frame), terminal_overlay);
     gtk_widget_set_hexpand(terminal_frame, TRUE);
     gtk_widget_set_vexpand(terminal_frame, TRUE);
     gtk_box_append(GTK_BOX(root), terminal_frame);
@@ -3745,6 +3954,13 @@ static TioTab *tio_tab_new(TioApp *app)
                      G_CALLBACK(on_show_all_ttys_toggled),
                      tab);
     g_signal_connect(tab->terminal, "child-exited", G_CALLBACK(on_child_exited), tab);
+    g_signal_connect(tab->terminal, "selection-changed", G_CALLBACK(on_terminal_selection_changed), tab);
+    g_signal_connect(gtk_text_view_get_buffer(tab->highlight_view), "notify::has-selection",
+                     G_CALLBACK(on_highlight_selection_changed), tab);
+    GtkAdjustment *highlight_adjustment =
+        gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
+    g_signal_connect(highlight_adjustment, "value-changed", G_CALLBACK(on_highlight_scrolled), tab);
+    g_signal_connect(highlight_adjustment, "changed", G_CALLBACK(on_highlight_content_changed), tab);
     g_signal_connect(tab->send_button, "clicked", G_CALLBACK(on_send_clicked), tab);
     g_signal_connect(tab->send_entry, "activate", G_CALLBACK(on_send_activate), tab);
     g_signal_connect(tab->send_entry, "changed", G_CALLBACK(on_send_entry_changed), tab);
@@ -3757,6 +3973,18 @@ static TioTab *tio_tab_new(TioApp *app)
                      G_CALLBACK(on_scroll_bottom_clicked),
                      tab);
     GtkEventControllerKey *send_keys = GTK_EVENT_CONTROLLER_KEY(gtk_event_controller_key_new());
+    GtkEventController *highlight_keys = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(highlight_keys, GTK_PHASE_CAPTURE);
+    g_signal_connect(highlight_keys, "key-pressed", G_CALLBACK(on_highlight_key_pressed), tab);
+    g_signal_connect(highlight_keys, "key-released", G_CALLBACK(on_highlight_key_released), tab);
+    gtk_widget_add_controller(GTK_WIDGET(tab->highlight_view), highlight_keys);
+    GtkWidget *return_targets[] = {GTK_WIDGET(tab->terminal), GTK_WIDGET(tab->send_entry)};
+    for (guint i = 0; i < G_N_ELEMENTS(return_targets); ++i) {
+        GtkEventController *keys = gtk_event_controller_key_new();
+        gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
+        g_signal_connect(keys, "key-pressed", G_CALLBACK(on_log_return_pressed), tab);
+        gtk_widget_add_controller(return_targets[i], keys);
+    }
     g_signal_connect(send_keys, "key-pressed", G_CALLBACK(on_send_entry_key), tab);
     gtk_widget_add_controller(GTK_WIDGET(tab->send_entry),
                               GTK_EVENT_CONTROLLER(send_keys));

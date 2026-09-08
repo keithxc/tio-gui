@@ -46,6 +46,12 @@ Early development. The first release targets x86-64 Linux.
 - Search the scrollback with `Ctrl+Shift+F`, including case-sensitive and regular-expression matching
 - Follow new output while the view sits at the bottom, and pause following once you scroll up;
   a button reports new output and returns to the bottom
+- Selecting text also pauses following in both the terminal and highlight view. Each view
+  keeps its own position; new data keeps arriving below while you inspect or copy earlier
+  output. Scroll to the bottom, press Enter, or click the bottom button to resume
+  (resuming clears the selection). Enter retains normal terminal / send-bar behavior.
+  Ctrl+Shift+C copies the selection from the visible view. Retention remains limited to
+  10,000 lines, so the oldest output eventually expires during long captures.
 - Read the device, baud rate, framing, flow control, connected time, and log size from the status bar
 - See received bytes, line count and throughput taken from the serial stream itself, not from
   the rendered terminal, so they stay correct with hex output or timestamps switched on
@@ -166,6 +172,11 @@ of being simulated with an unsafe file truncation workaround.
 ## Semantic highlighting
 
 An optional line-oriented highlight view consumes the raw tap and uses these conservative defaults:
+
+The highlight view accepts keyboard input through VTE, including Enter, arrows and control
+keys. Mouse selection stays local for copying, and unfinished lines (such as shell prompts)
+are displayed immediately. This is a line-oriented log view; full-screen terminal programs
+and cursor-addressed screen updates still require the ordinary terminal view.
 
 - red: `ERROR`, `FAIL`, `FAILED`, `FATAL`, `PANIC`, `CRITICAL`, `ASSERT`
 - yellow: `WARN`, `WARNING`, `TIMEOUT`, `RETRY`

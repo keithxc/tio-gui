@@ -59,6 +59,24 @@ target_compile_options(tio-gui PRIVATE
   $<$<C_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic -Wconversion>
 )
 
+if(BUILD_TESTING)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c)
+  target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
+    PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
+  target_compile_definitions(scroll-test PRIVATE
+    TIO_GUI_VERSION="${PROJECT_VERSION}"
+    TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+    TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
+  # Requires a display: run manually in a desktop session or under Xvfb.
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c)
+  target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
+    PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
+  target_compile_definitions(keyboard-test PRIVATE
+    TIO_GUI_VERSION="${PROJECT_VERSION}"
+    TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+    TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
+endif()
+
 install(TARGETS tio-gui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/io.github.keithxc.tio_gui.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
