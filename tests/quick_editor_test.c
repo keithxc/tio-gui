@@ -373,6 +373,10 @@ static void check_session_tools(void)
     GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
     TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
     TioTab *first = app->active, *second = tio_app_add_tab(app);
+    first->spawn_pending = TRUE;
+    on_import_settings_clicked(NULL, app);
+    g_assert_cmpstr(gtk_label_get_text(second->status_label), ==, "Disconnect all sessions before importing settings");
+    first->spawn_pending = FALSE;
     g_autoptr(TabRequest) request = tab_request_new(second, "snapshot");
     g_assert_true(tab_request_resolve(request, GTK_WINDOW(window)) == second);
     g_free(first->config.device); first->config.device = g_strdup("/dev/tio-missing-test");

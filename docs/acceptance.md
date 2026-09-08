@@ -389,3 +389,7 @@ peer now uses a socketpair relayed to the real tio PTY. Both directions of all t
 protocols passed again, including exact 8192-byte comparisons, nonempty-directory
 protection and stalled-peer cleanup. Application timeout messages retain the last
 protocol status. The relay does not synthesize protocol acknowledgements.
+
+Configuration import also rejects pending process spawns and recording drains,
+checked both before opening the chooser and after it returns. The GTK session
+test covers import while a background tab is still spawning.

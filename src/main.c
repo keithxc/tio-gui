@@ -4533,7 +4533,7 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
 
     for (guint i = 0; i < app->tabs->len; ++i) {
         TioTab *other = g_ptr_array_index(app->tabs, i);
-        if (other->child_pid > 0) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
+        if (other->child_pid > 0 || other->spawn_pending || !tio_capture_finished(other->capture)) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
     }
     TioSettings imported;
     tio_settings_init(&imported);
@@ -4570,7 +4570,7 @@ static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
     TioTab *tab = app->active;
     for (guint i = 0; i < app->tabs->len; ++i) {
         TioTab *other = g_ptr_array_index(app->tabs, i);
-        if (other->child_pid > 0) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
+        if (other->child_pid > 0 || other->spawn_pending || !tio_capture_finished(other->capture)) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
     }
     GtkFileDialog *dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, _("Import settings"));
