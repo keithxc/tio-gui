@@ -7,6 +7,7 @@
 #include <glob.h>
 #include <libintl.h>
 #include <locale.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -98,6 +99,10 @@ struct _TioTab {
     gboolean highlight_adjusting;
     gboolean highlight_pointer_down;
     gboolean highlight_selected;
+    guint highlight_scroll_tick;
+    gint64 highlight_scroll_time;
+    double highlight_scroll_velocity;
+    double highlight_scroll_position;
 
     /* Send bar. */
     GtkMenuButton *history_button;
@@ -337,6 +342,7 @@ static void raw_tap_start(TioTab *tab);
 static void raw_tap_stop(TioTab *tab);
 static void update_scroll_button(TioTab *tab);
 static void scroll_highlight_to_bottom(TioTab *tab);
+static void stop_highlight_scroll(TioTab *tab);
 static void focus_log_view(TioTab *tab)
 {
     gtk_widget_grab_focus(gtk_check_button_get_active(tab->highlight_toggle)
@@ -2011,6 +2017,7 @@ static void on_clear_terminal_clicked(GtkButton *button, gpointer user_data)
     TioTab *tab = user_data;
 
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    stop_highlight_scroll(tab);
     tio_highlighter_clear(tab->highlighter);
 }
 
@@ -2504,6 +2511,82 @@ static void on_highlight_scrolled(GtkAdjustment *adjustment, gpointer user_data)
     update_scroll_button(tab);
 }
 
+static void stop_highlight_scroll(TioTab *tab)
+{
+    if (tab->highlight_scroll_tick)
+        gtk_widget_remove_tick_callback(GTK_WIDGET(tab->highlight_view), tab->highlight_scroll_tick);
+    tab->highlight_scroll_tick = 0;
+    tab->highlight_scroll_time = 0;
+    tab->highlight_scroll_velocity = 0;
+}
+
+static gboolean animate_highlight_scroll(GtkWidget *widget, GdkFrameClock *clock,
+                                         gpointer data)
+{
+    (void)widget;
+    TioTab *tab = data;
+    if (!tab->highlight_follow || tab->highlight_pointer_down ||
+        gtk_text_buffer_get_has_selection(gtk_text_view_get_buffer(tab->highlight_view))) {
+        tab->highlight_scroll_tick = 0;
+        tab->highlight_scroll_time = 0;
+        tab->highlight_scroll_velocity = 0;
+        return G_SOURCE_REMOVE;
+    }
+    GtkAdjustment *a = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
+    double target = MAX(0.0, gtk_adjustment_get_upper(a) - gtk_adjustment_get_page_size(a));
+    double current = tab->highlight_scroll_position;
+    gint64 now = gdk_frame_clock_get_frame_time(clock);
+    double dt = tab->highlight_scroll_time ? (now - tab->highlight_scroll_time) / 1000000.0 : 1.0 / 60.0;
+    tab->highlight_scroll_time = now;
+    dt = CLAMP(dt, 0.001, 0.05);
+    /* Critically damped motion preserves velocity when packets retarget it.
+       Integrate the spring analytically, using elapsed frame time. */
+    double distance = target - current;
+    double page = MAX(1.0, gtk_adjustment_get_page_size(a));
+    if (distance > page) {
+        /* Skip distant history on floods; animate the final screen only. */
+        current = target - page;
+        distance = page;
+        tab->highlight_scroll_velocity = 0;
+    }
+    const double omega = 32.0;
+    double error = -distance;
+    double coefficient = tab->highlight_scroll_velocity + omega * error;
+    double decay = exp(-omega * dt);
+    double next = target + (error + coefficient * dt) * decay;
+    tab->highlight_scroll_velocity = (tab->highlight_scroll_velocity - omega * coefficient * dt) * decay;
+    next = CLAMP(next, current, target);
+    /* GtkTextView anchors layout on integral logical pixel offsets. Keep its
+       adjustment on that grid so validation cannot round a frame backwards. */
+    tab->highlight_scroll_position = next;
+    gboolean done = target - next <= 0.25;
+    next = MIN(target, round(next));
+    if (done) next = target;
+    tab->highlight_adjusting = TRUE;
+    gtk_adjustment_set_value(a, next);
+    tab->highlight_adjusting = FALSE;
+    if (done) {
+        tab->highlight_scroll_tick = 0;
+        tab->highlight_scroll_time = 0;
+        tab->highlight_scroll_velocity = 0;
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+static void on_highlight_unmap(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    stop_highlight_scroll(data);
+}
+
+static void on_highlight_map(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    TioTab *tab = data;
+    if (tab->highlight_follow) scroll_highlight_to_bottom(tab);
+}
+
 static void scroll_highlight_to_bottom(TioTab *tab)
 {
     if (tab->highlight_adjusting) return;
@@ -2512,12 +2595,21 @@ static void scroll_highlight_to_bottom(TioTab *tab)
     GtkTextIter end;
     GdkRectangle location;
     gtk_text_buffer_get_end_iter(buffer, &end);
-    /* Validate the final line before using the scroll extent. Do not queue a
-       second animated target: mark alignment excludes the bottom margin. */
     gtk_text_view_get_iter_location(tab->highlight_view, &end, &location);
-    GtkAdjustment *adjustment = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
-    gtk_adjustment_set_value(adjustment, gtk_adjustment_get_upper(adjustment) -
-                                        gtk_adjustment_get_page_size(adjustment));
+    GtkAdjustment *a = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
+    double target = MAX(0.0, gtk_adjustment_get_upper(a) - gtk_adjustment_get_page_size(a));
+    /* Hidden views need no animation. Shrinking/clearing history must not
+       leave an obsolete destination or animate backwards through old text. */
+    if (!gtk_widget_get_mapped(GTK_WIDGET(tab->highlight_view)) ||
+        target <= gtk_adjustment_get_value(a)) {
+        stop_highlight_scroll(tab);
+        gtk_adjustment_set_value(a, target);
+    } else if (!tab->highlight_scroll_tick) {
+        tab->highlight_scroll_position = gtk_adjustment_get_value(a);
+        tab->highlight_scroll_time = 0;
+        tab->highlight_scroll_tick = gtk_widget_add_tick_callback(
+            GTK_WIDGET(tab->highlight_view), animate_highlight_scroll, tab, NULL);
+    }
     tab->highlight_adjusting = FALSE;
 }
 
@@ -2529,6 +2621,7 @@ static gboolean on_highlight_wheel(GtkEventControllerScroll *controller, double 
     TioTab *tab = user_data;
     if (dy < 0) {
         tab->highlight_follow = FALSE;
+        stop_highlight_scroll(tab);
         update_scroll_button(tab);
     }
     return FALSE;
@@ -2540,6 +2633,7 @@ static void on_highlight_pointer_pressed(GtkGestureClick *gesture, int n_press,
     (void)gesture; (void)n_press; (void)x; (void)y;
     TioTab *tab = user_data;
     tab->highlight_pointer_down = TRUE;
+    stop_highlight_scroll(tab);
     tab->highlight_follow = FALSE;
     update_scroll_button(tab);
 }
@@ -2585,6 +2679,7 @@ static void on_highlight_selection_changed(GObject *buffer, GParamSpec *pspec, g
     tab->highlight_selected = selected;
     if (selected) {
         tab->highlight_follow = FALSE;
+        stop_highlight_scroll(tab);
         update_scroll_button(tab);
     } else {
         on_highlight_scrolled(gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view)), tab);
@@ -3792,6 +3887,7 @@ static void action_clear_terminal(GSimpleAction *action, GVariant *parameter, gp
         return;
     }
     vte_terminal_reset(tab->terminal, TRUE, TRUE);
+    stop_highlight_scroll(tab);
     tio_highlighter_clear(tab->highlighter);
 }
 
@@ -5492,6 +5588,8 @@ static TioTab *tio_tab_new(TioApp *app)
 
     tab->highlight_view = GTK_TEXT_VIEW(gtk_text_view_new());
     gtk_widget_add_css_class(GTK_WIDGET(tab->highlight_view), "highlight-view");
+    g_signal_connect(tab->highlight_view, "unmap", G_CALLBACK(on_highlight_unmap), tab);
+    g_signal_connect(tab->highlight_view, "map", G_CALLBACK(on_highlight_map), tab);
     gtk_text_view_set_editable(tab->highlight_view, FALSE);
     gtk_text_view_set_cursor_visible(tab->highlight_view, FALSE);
     gtk_text_view_set_monospace(tab->highlight_view, TRUE);

@@ -471,3 +471,48 @@ has no delayed text delivery. Xvfb checks passed with GTK warnings fatal:
 193 painted fragmented-input frames, zero backward jumps, follow/pause/
 selection/resume intact. GUI lifecycle checks also pass. Private captures and
 replay diagnostics remain in `.cache/ui-jitter-032/`, outside version control.
+
+## Smooth output following — 0.3.4 (2026-09-08)
+
+Research distinguished input scrolling from output following:
+
+- Neovide `src/renderer/animation_utils.rs` at
+  `ade2d9cda777879975b1852f77dc672f5ff43b78` implements a critically damped
+  spring preserving velocity. `rendered_window.rs` retains twice the view's
+  line count, applies a fractional line translation, and limits distant scroll
+  animation. Sources: https://github.com/neovide/neovide/blob/ade2d9cda777879975b1852f77dc672f5ff43b78/src/renderer/animation_utils.rs
+  and https://github.com/neovide/neovide/blob/ade2d9cda777879975b1852f77dc672f5ff43b78/src/renderer/rendered_window.rs
+- xterm.js `Viewport.ts` at `c58ea3637f3968e0e6e79cd92cf9aace7ef89ee2`
+  supports smooth input scrolling, but explicitly stops animation and follows
+  immediately when input/buffer changes ydisp. Thus its smooth-scroll option
+  alone is not a model for continuously animated serial output.
+  https://github.com/xtermjs/xterm.js/blob/c58ea3637f3968e0e6e79cd92cf9aace7ef89ee2/src/browser/Viewport.ts
+- Contour separates line scroll offsets and sub-cell pixel offsets; forcing
+  bottom resets the pixel offset. Its mouse/touchpad smooth-scrolling features
+  must also be distinguished from output following.
+  https://github.com/contour-terminal/contour/blob/7bb15af9acdfa5b0e90d308a612dc09046cc62fc/src/vtbackend/screen/Viewport.cpp
+
+Our implementation uses an independently implemented analytical critically
+ damped spring (omega 32/s), advanced by elapsed GTK frame-clock time. Data is
+still fed immediately; only viewport position is animated. Incoming packets
+retarget the same follower without resetting velocity. Floating-point motion
+is retained internally while GTK receives integral logical-pixel positions,
+avoiding layout rounding reversals observed in the fractional-position trial.
+Floods skip to the last screen's distance and animate the remainder, keeping
+visual backlog bounded. The existing GTK text history provides offscreen text;
+no second copy of the serial log or artificial blank lines is introduced.
+
+Wheel-up, pointer selection, clear, and unmap cancel animation; map resumes
+following when appropriate. The callback removes itself at rest. This changes
+highlighted log output following; native VTE terminal-mode rendering remains
+owned by VTE.
+
+Validation: a single 18-pixel line traversed 9 moving frames with a largest
+4-pixel step. The fragmented receive test recorded 205 painted frames and zero
+backward jumps. Tests assert that retargeting preserves the active animation,
+manual pause stops it immediately, 200-line floods settle, hidden views cancel
+callbacks, history selection is retained, clear has no late text, and animation
+stops at rest. Tests run with GTK warnings fatal. GUI lifecycle and real keyboard
+PTY acceptance passed. A real-data replay on the Wayland desktop at 125% scale
+recorded 660 frames with zero backward jumps. Private experimental/replay files
+are kept under `.cache/smooth-research/`.

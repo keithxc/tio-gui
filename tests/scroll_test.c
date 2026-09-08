@@ -5,7 +5,7 @@
 
 static void settle(void)
 {
-    gint64 until = g_get_monotonic_time() + 200000;
+    gint64 until = g_get_monotonic_time() + 500000;
     while (g_get_monotonic_time() < until) {
         while (g_main_context_iteration(NULL, FALSE)) {}
         g_usleep(1000);
@@ -16,6 +16,8 @@ typedef struct {
     GtkAdjustment *adjustment;
     guint samples, reversals;
     double previous;
+    guint moving;
+    double max_step;
 } ScrollMotion;
 
 static void sample_scroll_frame(GdkFrameClock *clock, gpointer data)
@@ -24,6 +26,8 @@ static void sample_scroll_frame(GdkFrameClock *clock, gpointer data)
     ScrollMotion *motion = data;
     double current = gtk_adjustment_get_value(motion->adjustment);
     if (motion->samples && current < motion->previous - 0.5) ++motion->reversals;
+    double step = current - motion->previous;
+    if (motion->samples && step > 0.05) { ++motion->moving; motion->max_step = MAX(motion->max_step, step); }
     motion->previous = current;
     ++motion->samples;
 }
@@ -50,6 +54,41 @@ static void check_fragmented_follow(TioTab *tab, GtkWidget *window)
     g_assert_cmpuint(motion.reversals, ==, 0);
 }
 
+static void check_smooth_line(TioTab *tab, GtkWidget *window)
+{
+    GtkAdjustment *a = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
+    double before = gtk_adjustment_get_value(a);
+    ScrollMotion motion = {.adjustment = a, .samples = 1, .previous = before};
+    GdkFrameClock *clock = gtk_widget_get_frame_clock(window);
+    gulong handler = g_signal_connect(clock, "after-paint", G_CALLBACK(sample_scroll_frame), &motion);
+    update_highlight_display(tab, (const guint8 *)"INFO smooth\n", 12);
+    g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(a), before, 0.01);
+    settle();
+    g_signal_handler_disconnect(clock, handler);
+    double travel = gtk_adjustment_get_value(a) - before;
+    g_assert_cmpfloat(travel, >, 5);
+    g_assert_cmpuint(motion.moving, >=, 4);
+    g_assert_cmpfloat(motion.max_step, <, travel * 0.7);
+    g_assert_cmpuint(motion.reversals, ==, 0);
+    g_assert_cmpuint(tab->highlight_scroll_tick, ==, 0);
+    g_print("Smooth line: %.1f px, %u moving frames, largest step %.2f px\n", travel, motion.moving, motion.max_step);
+    update_highlight_display(tab, (const guint8 *)"INFO pause\n", 11);
+    gint64 deadline = g_get_monotonic_time() + 100000;
+    while (!tab->highlight_scroll_tick && g_get_monotonic_time() < deadline)
+        g_main_context_iteration(NULL, FALSE);
+    g_assert_cmpuint(tab->highlight_scroll_tick, !=, 0);
+    guint active_tick = tab->highlight_scroll_tick;
+    update_highlight_display(tab, (const guint8 *)"INFO retarget\n", 14);
+    g_assert_cmpuint(tab->highlight_scroll_tick, ==, active_tick);
+    on_highlight_wheel(NULL, 0, -1, tab);
+    g_assert_cmpuint(tab->highlight_scroll_tick, ==, 0);
+    double paused = gtk_adjustment_get_value(a);
+    settle();
+    g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(a), paused, 0.01);
+    on_scroll_bottom_clicked(NULL, tab);
+    settle();
+}
+
 int main(void)
 {
     gtk_init();
@@ -66,6 +105,8 @@ int main(void)
     gtk_text_view_set_wrap_mode(tab.highlight_view, GTK_WRAP_WORD_CHAR);
     gtk_text_view_set_top_margin(tab.highlight_view, 6);
     gtk_text_view_set_bottom_margin(tab.highlight_view, 48);
+    g_signal_connect(tab.highlight_view, "unmap", G_CALLBACK(on_highlight_unmap), &tab);
+    g_signal_connect(tab.highlight_view, "map", G_CALLBACK(on_highlight_map), &tab);
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab.highlight_view);
     tab.highlighter = tio_highlighter_new(buffer);
     GtkWidget *window = gtk_window_new();
@@ -96,7 +137,21 @@ int main(void)
         g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(adjustment),
             gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment), 0.5);
     }
+    check_smooth_line(&tab, window);
     check_fragmented_follow(&tab, window);
+    GString *flood = g_string_new(NULL);
+    for (int i = 0; i < 200; ++i) g_string_append(flood, "INFO flood\n");
+    update_highlight_display(&tab, (const guint8 *)flood->str, flood->len);
+    g_string_free(flood, TRUE);
+    settle();
+    g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(adjustment),
+        gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment), 0.5);
+    g_assert_cmpuint(tab.highlight_scroll_tick, ==, 0);
+    update_highlight_display(&tab, (const guint8 *)"INFO hidden\n", 12);
+    gtk_widget_set_visible(GTK_WIDGET(tab.highlight_view), FALSE);
+    g_assert_cmpuint(tab.highlight_scroll_tick, ==, 0);
+    gtk_widget_set_visible(GTK_WIDGET(tab.highlight_view), TRUE);
+    settle();
     on_highlight_wheel(NULL, 0, -1, &tab);
     gtk_adjustment_set_value(adjustment, 100);
     g_assert_false(tab.highlight_follow);
