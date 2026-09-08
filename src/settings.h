@@ -94,3 +94,6 @@ void tio_settings_add_tab(TioSettings *settings, const TioSessionConfig *session
 
 void tio_settings_push_history(TioSettings *settings, const char *text);
 void tio_settings_clear_history(TioSettings *settings);
+
+/* Share profiles/buttons/sequences without local paths, device identity or history. */
+gboolean tio_settings_export_portable(const TioSettings *settings, const char *path, GError **error);

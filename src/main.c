@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/un.h>
+#include <sys/utsname.h>
 
 #include <pcre2.h>
 
@@ -3812,12 +3813,123 @@ static void on_download_update_clicked(GtkButton *button, gpointer user_data)
     gtk_uri_launcher_launch(launcher, GTK_WINDOW(tab->app->window), NULL, NULL, NULL);
     g_object_unref(launcher);
 }
+/* -------------------------------------------------------------- diagnostics */
+typedef struct {
+    GtkWindow *window;
+    GSubprocess *process;
+    guint timeout;
+} AboutVersion;
+
+static gchar *build_diagnostics(const char *tio_version)
+{
+    struct utsname system = {0};
+    (void)uname(&system);
+    return g_strdup_printf("tio-gui %s\n%s\nGTK %u.%u.%u\nVTE %u.%u.%u\n%s %s (%s)\nLicense: GPL-3.0-only\n",
+        TIO_GUI_VERSION, tio_version, gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
+        vte_get_major_version(), vte_get_minor_version(), vte_get_micro_version(),
+        system.sysname, system.release, system.machine);
+}
+
+static void about_set_diagnostics(GtkWindow *window, const char *version)
+{
+    GtkTextBuffer *buffer = g_object_get_data(G_OBJECT(window), "diagnostic-buffer");
+    g_autofree gchar *text = build_diagnostics(version);
+    gtk_text_buffer_set_text(buffer, text, -1);
+}
+
+static gboolean about_version_timeout(gpointer data)
+{
+    AboutVersion *check = data;
+    check->timeout = 0;
+    g_subprocess_force_exit(check->process);
+    return G_SOURCE_REMOVE;
+}
+
+static void about_version_finished(GObject *source, GAsyncResult *result, gpointer data)
+{
+    AboutVersion *check = data;
+    g_autofree gchar *output = NULL;
+    g_autofree gchar *errors = NULL;
+    g_autoptr(GError) error = NULL;
+    gboolean ok = g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source), result, &output, &errors, &error);
+    if (check->timeout) g_source_remove(check->timeout);
+    if (gtk_widget_get_visible(GTK_WIDGET(check->window))) {
+        if (ok && g_subprocess_get_successful(check->process) && output && strlen(output) < 1024)
+            about_set_diagnostics(check->window, g_strstrip(output));
+        else about_set_diagnostics(check->window, _("tio version unavailable"));
+    }
+    g_object_unref(check->process);
+    g_object_unref(check->window);
+    g_free(check);
+}
+
+static void copy_diagnostics(GtkButton *button, gpointer data)
+{
+    (void)button;
+    GtkWindow *window = data;
+    GtkTextBuffer *buffer = g_object_get_data(G_OBJECT(window), "diagnostic-buffer");
+    GtkTextIter start, end;
+    gtk_text_buffer_get_bounds(buffer, &start, &end);
+    g_autofree gchar *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+    gdk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(window)), text);
+}
+
+static void on_about_clicked(GtkButton *button, gpointer data)
+{
+    (void)button;
+    TioApp *app = data;
+    GtkWidget *window = gtk_window_new();
+    gtk_window_set_title(GTK_WINDOW(window), _("About tio-gui"));
+    gtk_window_set_transient_for(GTK_WINDOW(window), GTK_WINDOW(app->window));
+    gtk_window_set_destroy_with_parent(GTK_WINDOW(window), TRUE);
+    gtk_window_set_default_size(GTK_WINDOW(window), 560, 340);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+    gtk_widget_set_margin_top(box, 16); gtk_widget_set_margin_bottom(box, 16);
+    gtk_widget_set_margin_start(box, 16); gtk_widget_set_margin_end(box, 16);
+    gtk_window_set_child(GTK_WINDOW(window), box);
+    GtkWidget *title = gtk_label_new("tio-gui");
+    gtk_widget_add_css_class(title, "title-1");
+    gtk_box_append(GTK_BOX(box), title);
+    gtk_box_append(GTK_BOX(box), gtk_label_new(_("Serial debugging for embedded development")));
+    GtkWidget *view = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(view), FALSE);
+    gtk_text_view_set_monospace(GTK_TEXT_VIEW(view), TRUE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), GTK_WRAP_WORD_CHAR);
+    gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(view), FALSE);
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
+    g_object_set_data(G_OBJECT(window), "diagnostic-buffer", buffer);
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_widget_set_vexpand(scroll, TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), view);
+    gtk_box_append(GTK_BOX(box), scroll);
+    GtkWidget *links = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(links), gtk_link_button_new_with_label("https://github.com/keithxc/tio-gui", _("GitHub project")));
+    gtk_box_append(GTK_BOX(links), gtk_link_button_new_with_label("https://www.gnu.org/licenses/gpl-3.0.html", "GPL-3.0-only"));
+    GtkWidget *copy = gtk_button_new_with_label(_("Copy diagnostics"));
+    gtk_box_append(GTK_BOX(links), copy);
+    g_signal_connect(copy, "clicked", G_CALLBACK(copy_diagnostics), window);
+    gtk_box_append(GTK_BOX(box), links);
+    about_set_diagnostics(GTK_WINDOW(window), _("Checking tio version…"));
+    gtk_window_present(GTK_WINDOW(window));
+    g_autoptr(GError) error = NULL;
+    GSubprocess *process = g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE,
+                                          &error, "tio", "--version", NULL);
+    if (!process) { about_set_diagnostics(GTK_WINDOW(window), _("tio was not found in PATH")); return; }
+    AboutVersion *check = g_new0(AboutVersion, 1);
+    check->window = g_object_ref(GTK_WINDOW(window));
+    check->process = process;
+    check->timeout = g_timeout_add_seconds(5, about_version_timeout, check);
+    g_subprocess_communicate_utf8_async(process, NULL, NULL, about_version_finished, check);
+}
+
 static void on_export_finished(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioApp *app = user_data;
-    TioTab *tab = app->active;
+    g_autoptr(GtkWindow) window = user_data;
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    TioTab *tab = app ? app->active : NULL;
     g_autoptr(GError) error = NULL;
     g_autoptr(GFile) file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!app || !gtk_widget_get_visible(GTK_WIDGET(window)) || !tab) return;
     if (file == NULL) {
         if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
             set_status(tab, error->message);
@@ -3831,7 +3943,10 @@ static void on_export_finished(GObject *source, GAsyncResult *result, gpointer u
         return;
     }
     capture_all_settings(tab);
-    if (!tio_settings_save_to_file(&tab->app->settings, path, &error)) {
+    gboolean portable = GPOINTER_TO_INT(g_object_get_data(source, "portable"));
+    gboolean saved = portable ? tio_settings_export_portable(&app->settings, path, &error)
+                              : tio_settings_save_to_file(&app->settings, path, &error);
+    if (!saved) {
         set_status(tab, error->message);
         return;
     }
@@ -3840,16 +3955,18 @@ static void on_export_finished(GObject *source, GAsyncResult *result, gpointer u
 
 static void on_export_settings_clicked(GtkButton *button, gpointer user_data)
 {
-    (void)button;
+
     TioApp *app = user_data;
     GtkFileDialog *dialog = gtk_file_dialog_new();
-    gtk_file_dialog_set_title(dialog, _("Export settings"));
+    gboolean portable = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "portable"));
+    g_object_set_data(G_OBJECT(dialog), "portable", GINT_TO_POINTER(portable));
+    gtk_file_dialog_set_title(dialog, portable ? _("Export portable settings") : _("Export settings"));
     gtk_file_dialog_set_initial_name(dialog, "tio-gui-settings.ini");
     gtk_file_dialog_save(dialog,
                          GTK_WINDOW(app->window),
                          NULL,
                          on_export_finished,
-                         app);
+                         g_object_ref(app->window));
     g_object_unref(dialog);
 }
 
@@ -3878,10 +3995,12 @@ static void apply_imported_settings(TioTab *tab)
 
 static void on_import_finished(GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    TioApp *app = user_data;
-    TioTab *tab = app->active;
+    g_autoptr(GtkWindow) window = user_data;
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    TioTab *tab = app ? app->active : NULL;
     g_autoptr(GError) error = NULL;
     g_autoptr(GFile) file = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!app || !gtk_widget_get_visible(GTK_WIDGET(window)) || !tab) return;
     if (file == NULL) {
         if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED)) {
             set_status(tab, error->message);
@@ -3895,6 +4014,10 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
         return;
     }
 
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *other = g_ptr_array_index(app->tabs, i);
+        if (other->child_pid > 0) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
+    }
     TioSettings imported;
     tio_settings_init(&imported);
     if (!tio_settings_load_from_file(&imported, path, &error)) {
@@ -3904,7 +4027,11 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
     }
     tio_settings_clear(&tab->app->settings);
     tab->app->settings = imported;
-    apply_imported_settings(tab);
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *other = g_ptr_array_index(app->tabs, i);
+        if (other->sequence_window) gtk_window_destroy(GTK_WINDOW(other->sequence_window));
+        apply_imported_settings(other);
+    }
     if (!tio_settings_save(&tab->app->settings, &error)) {
         set_status(tab, error->message);
         return;
@@ -3917,9 +4044,9 @@ static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
     (void)button;
     TioApp *app = user_data;
     TioTab *tab = app->active;
-    if (tab->child_pid > 0) {
-        set_status(tab, _("Disconnect before importing settings"));
-        return;
+    for (guint i = 0; i < app->tabs->len; ++i) {
+        TioTab *other = g_ptr_array_index(app->tabs, i);
+        if (other->child_pid > 0) { set_status(tab, _("Disconnect all sessions before importing settings")); return; }
     }
     GtkFileDialog *dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, _("Import settings"));
@@ -3927,7 +4054,7 @@ static void on_import_settings_clicked(GtkButton *button, gpointer user_data)
                          GTK_WINDOW(tab->app->window),
                          NULL,
                          on_import_finished,
-                         app);
+                         g_object_ref(app->window));
     g_object_unref(dialog);
 }
 
@@ -4233,6 +4360,11 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_set_hexpand(GTK_WIDGET(app->import_settings_button), TRUE);
     gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(app->export_settings_button));
     gtk_box_append(GTK_BOX(backup_card), GTK_WIDGET(app->import_settings_button));
+    GtkWidget *portable_button = gtk_button_new_with_label(_("Export portable settings…"));
+    gtk_widget_set_tooltip_text(portable_button, _("Profiles, buttons and sequences; excludes local paths, device identities and send history"));
+    g_object_set_data(G_OBJECT(portable_button), "portable", GINT_TO_POINTER(TRUE));
+    g_signal_connect(portable_button, "clicked", G_CALLBACK(on_export_settings_clicked), app);
+    gtk_box_append(GTK_BOX(backup_card), portable_button);
     gtk_box_append(GTK_BOX(root), backup_card);
 
     app->about_section_label = GTK_LABEL(make_label(_("About")));
@@ -4252,6 +4384,9 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(app->github_button), "flat");
     gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(app->version_label));
     gtk_box_append(GTK_BOX(about_header), GTK_WIDGET(app->github_button));
+    GtkWidget *about_button = gtk_button_new_with_label(_("About / diagnostics…"));
+    g_signal_connect(about_button, "clicked", G_CALLBACK(on_about_clicked), app);
+    gtk_box_append(GTK_BOX(about_header), about_button);
     gtk_box_append(GTK_BOX(about_card), about_header);
     app->about_description_label =
         GTK_LABEL(make_label(_("A lightweight, reliable GUI for tio")));

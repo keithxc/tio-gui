@@ -95,7 +95,10 @@ Early development. The first release targets x86-64 Linux.
   backup and project details sit in the top-left menu, and everything describing one
   connection sits in that session's own expander
 - Follow the desktop theme by default, or explicitly select the light or dark appearance
-- Export the complete INI configuration for backup and import it on another machine
+- Export complete INI backups or portable profiles/buttons/sequences with machine paths,
+  device identities and send history removed. Import requires all sessions disconnected.
+- Open About for application/tio/GTK/VTE/kernel versions, license and project links;
+  copy diagnostics without hostname, local paths or captured device content.
 - Select any timestamp format supported by `tio`: 24-hour clock, time since start,
   delta since the previous line, ISO 8601, or Unix epoch, with a live preview
 - Open the GitHub project and inspect the application version directly from the settings menu

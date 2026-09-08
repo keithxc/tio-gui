@@ -103,3 +103,19 @@ failure reason. A one-second observer may miss disconnects shorter than its inte
 real tio and runs the actual GUI observer, verifying connected → disconnected →
 reconnected, input gating, last reason and count = 1. CLI options are covered by
 `serial-options`; desktop notification delivery remains dependent on the desktop.
+
+## Portable configuration and diagnostics — 2026-09-08
+
+Full INI backups remain available. A separate portable export retains profiles,
+quick buttons, log options and sequences while removing machine-specific serial
+identities, local log paths, exclusion patterns, restored tabs and send history.
+Payload text is intentionally preserved. Import rechecks that **all** sessions
+are disconnected after file selection and updates each session's settings. File
+callbacks retain the window and ignore completion after it is closed.
+
+The About window shows application/tio/GTK/VTE/kernel versions, GPL-3.0-only and
+project/license links, and copies the displayed diagnostic text. It omits host
+name, user name, paths and device payloads. tio version is queried asynchronously
+with a five-second timeout. Tests verify portable exports omit seeded private
+paths/history without mutating source settings, and the GTK About window resolves
+the installed tio version and displays expected diagnostic fields.

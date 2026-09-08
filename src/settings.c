@@ -662,3 +662,35 @@ void tio_settings_clear_history(TioSettings *settings)
 
     g_ptr_array_set_size(settings->history, 0);
 }
+
+static void make_session_portable(TioSessionConfig *session)
+{
+    g_clear_pointer(&session->device, g_free);
+    g_clear_pointer(&session->device_id, g_free);
+    replace_string(&session->log_directory, "");
+    replace_string(&session->log_file, "");
+    replace_string(&session->exclude_devices, "");
+    replace_string(&session->exclude_drivers, "");
+    replace_string(&session->exclude_tids, "");
+}
+
+gboolean tio_settings_export_portable(const TioSettings *settings, const char *path, GError **error)
+{
+    TioSettings portable;
+    tio_settings_init(&portable);
+    tio_session_config_copy(&portable.defaults, &settings->defaults);
+    make_session_portable(&portable.defaults);
+    replace_string(&portable.language, settings->language);
+    replace_string(&portable.theme, settings->theme);
+    portable.log_warning_mb = settings->log_warning_mb;
+    for (guint i = 0; i < settings->profiles->len; ++i) {
+        TioProfile *profile = g_ptr_array_index(settings->profiles, i);
+        tio_settings_store_profile(&portable, profile->name, &profile->session);
+        make_session_portable(&tio_settings_find_profile(&portable, profile->name)->session);
+    }
+    for (guint i = 0; i < settings->sequences->len; ++i)
+        g_ptr_array_add(portable.sequences, g_strdup(g_ptr_array_index(settings->sequences, i)));
+    gboolean ok = tio_settings_save_to_file(&portable, path, error);
+    tio_settings_clear(&portable);
+    return ok;
+}

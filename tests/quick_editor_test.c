@@ -253,6 +253,41 @@ static void check_reconnect_observer(void)
     tio_session_config_clear(&tab.config);
 }
 
+static void check_about(void)
+{
+    TioApp app = {0};
+    app.window = gtk_window_new();
+    on_about_clicked(NULL, &app);
+    GListModel *windows = gtk_window_get_toplevels();
+    GtkWindow *about = NULL;
+    GtkTextBuffer *buffer = NULL;
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        GtkWindow *candidate = g_list_model_get_item(windows, i);
+        buffer = g_object_get_data(G_OBJECT(candidate), "diagnostic-buffer");
+        if (buffer) { about = candidate; break; }
+        g_object_unref(candidate);
+    }
+    g_assert_nonnull(about);
+    gint64 until = g_get_monotonic_time() + 6 * G_TIME_SPAN_SECOND;
+    g_autofree gchar *text = NULL;
+    do {
+        g_main_context_iteration(NULL, FALSE);
+        GtkTextIter start, end;
+        gtk_text_buffer_get_bounds(buffer, &start, &end);
+        g_free(text);
+        text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+        if (!strstr(text, "Checking")) break;
+        g_usleep(1000);
+    } while (g_get_monotonic_time() < until);
+    g_assert_nonnull(strstr(text, "tio-gui " TIO_GUI_VERSION));
+    g_assert_nonnull(strstr(text, "tio "));
+    g_assert_nonnull(strstr(text, "GPL-3.0-only"));
+    g_assert_null(strstr(text, g_get_home_dir()));
+    gtk_window_destroy(about);
+    g_object_unref(about);
+    gtk_window_destroy(GTK_WINDOW(app.window));
+}
+
 int main(int argc, char **argv)
 {
     g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
@@ -265,6 +300,7 @@ int main(int argc, char **argv)
     g_test_add_func("/sequences/real-tio", check_sequence_real_tio);
     g_test_add_func("/serial-lines/real-tio", check_line_controls_real_tio);
     g_test_add_func("/connection/real-reconnect", check_reconnect_observer);
+    g_test_add_func("/about/version-diagnostics", check_about);
     int result = g_test_run();
     g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);
     g_autofree gchar *directory = g_path_get_dirname(file);
