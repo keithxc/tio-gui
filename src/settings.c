@@ -337,6 +337,7 @@ void tio_settings_init(TioSettings *settings)
         .log_warning_mb = 256,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
+        .sequences = g_ptr_array_new_with_free_func(g_free),
         .tab_configs = g_ptr_array_new_with_free_func(session_config_free),
     };
     tio_session_config_init(&settings->defaults);
@@ -373,6 +374,12 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
     /* 0.1.x kept these two in other groups. */
     replace_string_from_key(key_file, "display", "language", &settings->language);
     replace_boolean_from_key(key_file, "serial", "show-all-ttys", &settings->show_all_ttys);
+
+    gsize sequence_count = 0;
+    g_auto(GStrv) sequences = g_key_file_get_string_list(key_file, "send", "sequences", &sequence_count, NULL);
+    g_ptr_array_set_size(settings->sequences, 0);
+    for (gsize i = 0; i < MIN(sequence_count, 100u); ++i)
+        g_ptr_array_add(settings->sequences, g_strdup(sequences[i]));
 
     gsize history_length = 0;
     g_auto(GStrv) history =
@@ -444,6 +451,10 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     g_key_file_set_boolean(key_file, "general", "restore-tabs", settings->restore_tabs);
     session_config_write(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
 
+    if (settings->sequences->len)
+        g_key_file_set_string_list(key_file, "send", "sequences",
+            (const gchar *const *)settings->sequences->pdata, settings->sequences->len);
+
     if (settings->history->len > 0) {
         g_key_file_set_string_list(key_file,
                                    "send",
@@ -513,6 +524,7 @@ void tio_settings_clear(TioSettings *settings)
     g_clear_pointer(&settings->active_profile, g_free);
     g_clear_pointer(&settings->profiles, g_ptr_array_unref);
     g_clear_pointer(&settings->history, g_ptr_array_unref);
+    g_clear_pointer(&settings->sequences, g_ptr_array_unref);
     g_clear_pointer(&settings->tab_configs, g_ptr_array_unref);
 }
 

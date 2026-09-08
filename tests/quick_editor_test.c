@@ -96,11 +96,103 @@ static void check_send(void)
     close(pair[1]);
 }
 
+static void editor_action(SequenceEditor *editor, const char *action)
+{
+    GtkWidget *button = g_object_ref_sink(sequence_button(editor, action, action));
+    g_signal_emit_by_name(button, "clicked");
+    g_object_unref(button);
+}
+
+static void check_sequence_editor(void)
+{
+    TioApp app = {0};
+    TioTab tab = {0};
+    tio_settings_init(&app.settings);
+    tab.app = &app;
+    app.window = gtk_window_new();
+    on_sequences_clicked(NULL, &tab);
+    SequenceEditor *editor = g_object_get_data(G_OBJECT(tab.sequence_window), "sequence-editor");
+    g_assert_nonnull(editor);
+    gtk_editable_set_text(GTK_EDITABLE(editor->name), "Boot test");
+    SequenceRow *row = g_ptr_array_index(editor->rows, 0);
+    gtk_editable_set_text(GTK_EDITABLE(row->payload), "AT");
+    gtk_drop_down_set_selected(row->ending, 3);
+    editor_action(editor, "add");
+    row = g_ptr_array_index(editor->rows, 1);
+    gtk_editable_set_text(GTK_EDITABLE(row->payload), "00 14 FF");
+    gtk_drop_down_set_selected(row->mode, 1);
+    editor_action(editor, "save");
+    g_assert_cmpuint(app.settings.sequences->len, ==, 1);
+    TioSettings restored;
+    tio_settings_init(&restored);
+    tio_settings_load(&restored);
+    g_assert_cmpuint(restored.sequences->len, ==, 1);
+    g_assert_cmpstr(g_ptr_array_index(restored.sequences, 0), ==,
+                   g_ptr_array_index(app.settings.sequences, 0));
+    tio_settings_clear(&restored);
+    editor_action(editor, "new");
+    g_assert_cmpuint(editor->rows->len, ==, 1);
+    editor_action(editor, "load");
+    g_assert_cmpuint(editor->rows->len, ==, 2);
+    row = g_ptr_array_index(editor->rows, 1);
+    g_assert_cmpstr(gtk_editable_get_text(GTK_EDITABLE(row->payload)), ==, "00 14 FF");
+    gtk_editable_set_text(GTK_EDITABLE(row->payload), "0");
+    editor_action(editor, "save");
+    g_assert_cmpuint(app.settings.sequences->len, ==, 1);
+    g_assert_nonnull(strstr(gtk_label_get_text(editor->status), "Step 2"));
+    gtk_window_destroy(GTK_WINDOW(tab.sequence_window));
+    g_assert_null(tab.sequence_window);
+    on_sequences_clicked(NULL, &tab);
+    gtk_window_destroy(GTK_WINDOW(tab.sequence_window));
+    gtk_window_destroy(GTK_WINDOW(app.window));
+    tio_settings_clear(&app.settings);
+}
+
+static void check_sequence_real_tio(void)
+{
+    const char *path = g_getenv("TIO_TEST_SOCKET");
+    if (!path) { g_test_skip("Set TIO_TEST_SOCKET using socket_acceptance.py"); return; }
+    TioTab tab = {0};
+    tab.child_pid = 1;
+    tab.status_label = GTK_LABEL(g_object_ref_sink(gtk_label_new("")));
+    TioRawTap *tap = g_new0(TioRawTap, 1);
+    tap->reference_count = 1;
+    tap->tab = &tab;
+    tap->cancellable = g_cancellable_new();
+    g_autoptr(GSocketAddress) address = g_unix_socket_address_new(path);
+    g_autoptr(GSocketClient) client = g_socket_client_new();
+    tap->connection = g_socket_client_connect(client, G_SOCKET_CONNECTABLE(address), NULL, NULL);
+    g_assert_nonnull(tap->connection);
+    tab.raw = tap;
+    TioSequence *sequence = tio_sequence_new("Real tio acceptance");
+    tio_sequence_add(sequence, "00 14 FF", 1, 0, 0, 100);
+    tio_sequence_add(sequence, "01 03 00 00 00 0A", 1, 0, 2, 0);
+    tab.sequence_runner = tio_sequence_runner_new(sequence, FALSE, sequence_send, &tab, NULL);
+    gint64 until = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (tio_sequence_runner_active(tab.sequence_runner) && g_get_monotonic_time() < until) {
+        g_main_context_iteration(NULL, FALSE);
+        g_usleep(1000);
+    }
+    g_assert_false(tio_sequence_runner_active(tab.sequence_runner));
+    g_assert_false(tio_sequence_runner_failed(tab.sequence_runner));
+    raw_tap_stop(&tab);
+    tio_sequence_free(sequence);
+    g_object_unref(tab.status_label);
+}
+
 int main(int argc, char **argv)
 {
+    g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
+    g_setenv("XDG_CONFIG_HOME", config_root, TRUE);
     g_test_init(&argc, &argv, NULL);
     gtk_init();
     g_test_add_func("/quick-editor/preview-validation", check_editor);
     g_test_add_func("/quick-editor/binary-send-and-cancel", check_send);
-    return g_test_run();
+    g_test_add_func("/sequences/editor-persistence", check_sequence_editor);
+    g_test_add_func("/sequences/real-tio", check_sequence_real_tio);
+    int result = g_test_run();
+    g_autofree gchar *file = g_build_filename(config_root, "tio-gui", "config.ini", NULL);
+    g_autofree gchar *directory = g_path_get_dirname(file);
+    g_unlink(file); g_rmdir(directory); g_rmdir(config_root);
+    return result;
 }

@@ -68,6 +68,9 @@ Early development. The first release targets x86-64 Linux.
 - Optionally delay a quick send by up to 60 seconds; disconnect cancels it
 - Import/export button groups independently of device and logging settings
 - Quick sends use the raw socket so binary values, including Ctrl-T, arrive intact
+- Build and save named send sequences with reorderable text/HEX steps, line endings,
+  CRC and post-send delays. Run once or loop; pause, resume or stop per session.
+  Disconnect stops the sequence. Closing the sequence editor leaves it running.
 - Toggle `tio --output-mode hex16` from a persistent bottom-right HEX control
 
 ### Logging

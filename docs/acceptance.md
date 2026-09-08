@@ -37,3 +37,29 @@ Next: saved send sequences with run-once, loop, pause and stop. Then serial line
 controls, reconnect controls, About/diagnostics, raw-stream analysis, recording,
 export/rotation, and remaining long-term backlog items. Do not mark unsupported
 or untested features complete merely to close the list.
+
+## Send sequences — 2026-09-08
+
+Named sequences support up to 256 editable/reorderable steps and 100 saved
+sequences. Each step has text/HEX, line ending, CRC and a post-send delay. Run
+once or loop, pause/resume, and stop are independent per session. Settings
+backup includes sequences. Execution snapshots the draft; editing or closing
+the editor does not change the active run. Disconnect cancels it immediately.
+Completed socket writes precede each delay; scheduler resolution is 10 ms and
+this is not a hard real-time generator. Stop prevents later steps; bytes already
+handed to tio cannot be recalled.
+
+The original backlog proposed Lua scripts. Inspection of the
+[tio 3.9 scripting implementation](https://github.com/tio/tio/blob/v3.9/src/script.c)
+and [serial loop](https://github.com/tio/tio/blob/v3.9/src/tty.c) showed synchronous
+script execution. A long-running or paused script occupies that loop. The
+implementation instead schedules bounded asynchronous raw-socket writes while
+normal RX continues, and never pushes protocol payloads through the pty.
+
+Validation: sequence lifecycle tests cover backpressure, post-send delay, pause,
+resume, looping, stop, failure and serialization. GTK tests cover save/load of
+multiple-step drafts, persistence, rejection of invalid HEX, and window reopen.
+`python3 tests/socket_acceptance.py .cache/build/quick-editor-test` exercises the
+application's actual sequence runner and send callback through real tio 3.9 and
+an isolated PTY: binary `00 14 FF`, then Modbus request
+`01 03 00 00 00 0A C5 CD`, with a measured 118 ms gap for a configured 100 ms delay.

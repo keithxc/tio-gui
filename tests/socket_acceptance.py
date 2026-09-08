@@ -5,6 +5,7 @@ import pty
 import select
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import tty
@@ -58,6 +59,26 @@ def main():
                 actual = read_exact(client.fileno(), len(payload))
                 assert actual == payload, (actual.hex(), payload.hex())
                 print("PASS: all 256 byte values preserved in both directions through tio socket")
+                if len(sys.argv) > 1:
+                    helper = subprocess.Popen(
+                        [sys.argv[1], "-p", "/sequences/real-tio"],
+                        env={**os.environ, "TIO_TEST_SOCKET": path},
+                    )
+                    try:
+                        first = read_exact(serial, 3)
+                        started = time.monotonic()
+                        second = read_exact(serial, 8)
+                        elapsed = time.monotonic() - started
+                        assert first == bytes.fromhex("00 14 FF"), first.hex()
+                        assert second == bytes.fromhex("01 03 00 00 00 0A C5 CD"), second.hex()
+                        assert elapsed >= 0.08, f"Delay too short: {elapsed}"
+                        assert helper.wait(timeout=5) == 0
+                        print(f"PASS: GUI sequence runner → tio → PTY, binary + CRC, delay {elapsed:.3f}s")
+                    finally:
+                        if helper.poll() is None:
+                            helper.kill()
+                            helper.wait()
+
         finally:
             process.terminate()
             try:

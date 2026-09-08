@@ -28,12 +28,17 @@ add_executable(tio-gui
   src/highlighter.c
   src/payload.c
   src/quick_presets.c
+  src/sequence.c
   src/main.c
   src/settings.c
 )
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(sequence-test tests/sequence_test.c src/sequence.c src/payload.c)
+  target_include_directories(sequence-test PRIVATE src)
+  target_link_libraries(sequence-test PRIVATE PkgConfig::GTK4)
+  add_test(NAME sequence COMMAND sequence-test)
   add_executable(quick-presets-test tests/quick_presets_test.c src/quick_presets.c src/payload.c src/settings.c)
   target_include_directories(quick-presets-test PRIVATE src)
   target_link_libraries(quick-presets-test PRIVATE PkgConfig::GTK4)
@@ -70,7 +75,7 @@ target_compile_options(tio-gui PRIVATE
 )
 
 if(BUILD_TESTING)
-  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c)
   target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(scroll-test PRIVATE
@@ -78,14 +83,14 @@ if(BUILD_TESTING)
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
   # Requires a display: run manually in a desktop session or under Xvfb.
-  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c)
   target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(keyboard-test PRIVATE
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
-  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c)
+  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c)
   target_link_libraries(quick-editor-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(quick-editor-test PRIVATE
