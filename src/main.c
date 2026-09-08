@@ -30,6 +30,7 @@
 #include "connection_state.h"
 #include "analyzer.h"
 #include "capture.h"
+#include "transfer.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -120,6 +121,11 @@ struct _TioTab {
     /* Raw data tap: the bytes tio received, before any display formatting. */
     gchar *socket_path;
     guint64 id;
+    TioTransfer *transfer;
+    guint transfer_timer;
+    GtkDropDown *transfer_protocol;
+    GtkSpinButton *transfer_timeout;
+    GtkLabel *transfer_status;
     TioCapture *capture;
     GtkSpinButton *capture_part_spin, *capture_time_spin, *capture_keep_spin, *capture_disk_spin;
     GtkButton *capture_button;
@@ -1278,6 +1284,7 @@ static void observe_connection(TioTab *tab)
         message = g_strdup_printf(_("Connected to %s"), device);
     } else {
         g_free(tab->disconnect_reason);
+        tio_transfer_cancel(tab->transfer);
         tab->disconnect_reason = g_strdup(_("tio no longer has the serial device open"));
         message = g_strdup(_("Device disconnected; waiting for tio to reconnect"));
         /* A sequence must never continue by surprise when a board reboots. */
@@ -1558,6 +1565,7 @@ static void raw_tap_unref(TioRawTap *tap)
    releases its own reference when the callback runs. */
 static void raw_tap_stop(TioTab *tab)
 {
+    tio_transfer_cancel(tab->transfer);
     if (tab->capture) {
         const char *message = "Session stopped";
         tio_capture_record(tab->capture, TIO_CAPTURE_DISCONNECT, (const guint8 *)message, strlen(message), g_get_real_time());
@@ -1964,7 +1972,7 @@ static void on_serial_setting_changed(GtkDropDown *dropdown, GParamSpec *pspec, 
 
 static void send_bytes(TioTab *tab, const char *data, gsize length)
 {
-    if (tab->child_pid <= 0 || length == 0) {
+    if (tab->child_pid <= 0 || length == 0 || tio_transfer_active(tab->transfer)) {
         return;
     }
     if (tab->capture) tio_capture_record(tab->capture, TIO_CAPTURE_INPUT, (const guint8 *)data, length, g_get_real_time());
@@ -2007,6 +2015,7 @@ static void on_payload_written(GObject *source, GAsyncResult *result, gpointer d
 static gboolean send_payload(TioTab *tab, const GByteArray *bytes)
 {
     TioRawTap *tap = tab->raw;
+    if (tio_transfer_active(tab->transfer)) { set_status(tab, _("Stop file transfer before sending commands")); return FALSE; }
     if (tab->child_pid <= 0 || !tap || (tab->connection_checked && !tab->observed_connected)) {
         set_status(tab, _("Serial data channel is not ready"));
         return FALSE;
@@ -3269,7 +3278,7 @@ static void on_line_control(GtkButton *button, gpointer data)
 {
     TioTab *tab = data;
     if (tab->child_pid <= 0) { set_status(tab, _("Connect before controlling serial lines")); return; }
-    if (tab->line_command_timer || tio_sequence_runner_active(tab->sequence_runner) ||
+    if (tio_transfer_active(tab->transfer) || tab->line_command_timer || tio_sequence_runner_active(tab->sequence_runner) ||
         tab->quick_send_timer || (tab->raw && tab->raw->sending)) {
         set_status(tab, _("Stop pending sends before controlling serial lines"));
         return;
@@ -3308,6 +3317,93 @@ static void on_line_control(GtkButton *button, gpointer data)
     tab->line_command_attempts = 0;
     send_bytes(tab, "\x14" "r", 2);
     tab->line_command_timer = g_timeout_add(50, line_command_prompt, tab);
+}
+
+/* ----------------------------------------------------------- file transfer */
+typedef struct { GWeakRef window; guint64 tab_id; gboolean receive; } TransferRequest;
+static gboolean transfer_tick(gpointer data)
+{
+    TioTab *tab = data;
+    gtk_label_set_text(tab->transfer_status, tio_transfer_status(tab->transfer));
+    if (tio_transfer_active(tab->transfer)) return G_SOURCE_CONTINUE;
+    vte_terminal_set_input_enabled(tab->terminal, TRUE);
+    tab->transfer_timer = 0;
+    return G_SOURCE_REMOVE;
+}
+static void transfer_file_selected(GObject *source, GAsyncResult *result, gpointer data)
+{
+    TransferRequest *request = data;
+    g_autoptr(GObject) window = g_weak_ref_get(&request->window);
+    guint64 id = request->tab_id; gboolean receive = request->receive;
+    g_weak_ref_clear(&request->window); g_free(request);
+    g_autoptr(GError) error = NULL;
+    g_autoptr(GFile) file = receive ? gtk_file_dialog_select_folder_finish(GTK_FILE_DIALOG(source), result, &error)
+                                  : gtk_file_dialog_open_finish(GTK_FILE_DIALOG(source), result, &error);
+    if (!window || !gtk_widget_get_visible(GTK_WIDGET(window)) || !file) return;
+    TioApp *app = g_object_get_data(window, "tio-gui");
+    TioTab *tab = NULL;
+    for (guint i = 0; app && i < app->tabs->len; ++i) {
+        TioTab *candidate = g_ptr_array_index(app->tabs, i);
+        if (candidate->id == id) { tab = candidate; break; }
+    }
+    if (!tab) return;
+    if (!tab->raw || !tab->observed_connected || tio_transfer_active(tab->transfer) ||
+        tab->line_command_timer || tab->quick_send_timer || tab->raw->sending || tio_sequence_runner_active(tab->sequence_runner)) {
+        set_status(tab, _("Connect and stop pending sends before transferring files")); return;
+    }
+    g_autofree gchar *path = g_file_get_path(file);
+    g_clear_pointer(&tab->transfer, tio_transfer_free);
+    tab->transfer = tio_transfer_start(tab->socket_path, path,
+        gtk_drop_down_get_selected(tab->transfer_protocol), receive,
+        (guint)gtk_spin_button_get_value_as_int(tab->transfer_timeout), &error);
+    if (!tab->transfer) { gtk_label_set_text(tab->transfer_status, error->message); return; }
+    vte_terminal_set_input_enabled(tab->terminal, FALSE);
+    if (tab->transfer_timer) g_source_remove(tab->transfer_timer);
+    tab->transfer_timer = g_timeout_add(100, transfer_tick, tab);
+    transfer_tick(tab);
+    tio_log_model_command(tab->log_model, receive ? "Receive file transfer started" : "Send file transfer started", g_get_real_time());
+}
+static void transfer_choose(GtkButton *button, gpointer data)
+{
+    TioTab *tab = data;
+    if (!tab->observed_connected) { set_status(tab, _("Connect before transferring files")); return; }
+    TransferRequest *request = g_new0(TransferRequest, 1);
+    request->tab_id = tab->id;
+    request->receive = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button), "receive"));
+    g_weak_ref_init(&request->window, tab->app->window);
+    g_autoptr(GtkFileDialog) dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, request->receive ? _("Choose an empty receive directory") : _("Choose a file to send"));
+    if (request->receive) gtk_file_dialog_select_folder(dialog, GTK_WINDOW(tab->app->window), NULL, transfer_file_selected, request);
+    else gtk_file_dialog_open(dialog, GTK_WINDOW(tab->app->window), NULL, transfer_file_selected, request);
+}
+static void transfer_cancel_clicked(GtkButton *button, gpointer data)
+{
+    (void)button; TioTab *tab = data; tio_transfer_cancel(tab->transfer);
+}
+static GtkWidget *transfer_controls_new(TioTab *tab)
+{
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    const char *protocols[] = {"XMODEM-CRC", "YMODEM", "ZMODEM", NULL};
+    tab->transfer_protocol = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(protocols));
+    tab->transfer_timeout = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(5, 86400, 5));
+    gtk_spin_button_set_value(tab->transfer_timeout, 300);
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->transfer_protocol));
+    gtk_box_append(GTK_BOX(row), gtk_label_new(_("Timeout (s)")));
+    gtk_box_append(GTK_BOX(row), GTK_WIDGET(tab->transfer_timeout));
+    const char *labels[] = {_("Send file…"), _("Receive files…"), _("Cancel transfer")};
+    for (guint i = 0; i < 3; ++i) {
+        GtkWidget *button = gtk_button_new_with_label(labels[i]);
+        g_object_set_data(G_OBJECT(button), "receive", GINT_TO_POINTER(i == 1));
+        g_signal_connect(button, "clicked", i == 2 ? G_CALLBACK(transfer_cancel_clicked) : G_CALLBACK(transfer_choose), tab);
+        gtk_box_append(GTK_BOX(row), button);
+    }
+    gtk_box_append(GTK_BOX(box), row);
+    tab->transfer_status = GTK_LABEL(gtk_label_new(_("Start the matching protocol on the peer. XMODEM receives as received.bin; its final block may contain padding.")));
+    gtk_label_set_wrap(tab->transfer_status, TRUE);
+    gtk_label_set_xalign(tab->transfer_status, 0);
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(tab->transfer_status));
+    return box;
 }
 
 /* -------------------------------------------------------------- recording */
@@ -3746,6 +3842,8 @@ static void tio_tab_free(TioTab *tab)
     stop_session_timer(tab);
     raw_tap_stop(tab);
     if (tab->deferred_close_timer) g_source_remove(tab->deferred_close_timer);
+    if (tab->transfer_timer) g_source_remove(tab->transfer_timer);
+    g_clear_pointer(&tab->transfer, tio_transfer_free);
     if (tab->capture_timer) g_source_remove(tab->capture_timer);
     g_clear_pointer(&tab->capture, tio_capture_unref);
     g_clear_pointer(&tab->running_metadata, g_free);
@@ -4943,6 +5041,9 @@ static TioTab *tio_tab_new(TioApp *app)
     GtkWidget *reconnect_expander = gtk_expander_new(_("Reconnect strategy"));
     gtk_expander_set_child(GTK_EXPANDER(reconnect_expander), reconnect_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), reconnect_expander);
+    GtkWidget *transfer_expander = gtk_expander_new(_("File transfer"));
+    gtk_expander_set_child(GTK_EXPANDER(transfer_expander), transfer_controls_new(tab));
+    gtk_box_append(GTK_BOX(session_settings), transfer_expander);
     GtkWidget *capture_expander = gtk_expander_new(_("Recording / safe rotation"));
     gtk_expander_set_child(GTK_EXPANDER(capture_expander), capture_controls_new(tab));
     gtk_box_append(GTK_BOX(session_settings), capture_expander);

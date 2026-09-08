@@ -33,7 +33,7 @@
         postFixup = ''
           wrapProgram "$out/bin/tio-gui" \
             --set LOCALE_ARCHIVE ${pkgs.glibcLocalesUtf8}/lib/locale/locale-archive \
-            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio ]}
+            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio pkgs.lrzsz ]}
         '';
       };
 
@@ -53,6 +53,7 @@
           pcre2
           vte-gtk4
           tio
+          lrzsz
         ];
 
         shellHook = ''

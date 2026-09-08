@@ -173,3 +173,24 @@ The complete GTK suite also exposed a GTK 4.22.4 Wayland input-method crash insi
 window tests pass with the desktop default input method; the combined suite is run
 with `GTK_IM_MODULE=simple` to isolate it from pending compositor IM events. This is
 a test environment workaround, not an application-wide input-method override.
+
+## XMODEM / YMODEM / ZMODEM — 2026-09-08
+
+File Transfer uses a separately cancellable lrzsz process connected directly to a
+fresh tio raw socket. Nix packages include lrzsz. No shell, remote command mode,
+full-path sender option or overwrite option is used. Receive requires an empty
+chosen directory and enables lrzsz restricted/protect mode. XMODEM lacks a length
+field and can retain final-block padding; its output is `received.bin`. Y/Z retain
+sender filenames. The GUI disables terminal input and rejects ordinary socket
+sends while transferring; disconnect/close cancels the process. A configurable
+5–86400 second deadline prevents abandoned jobs. stderr progress is bounded to the
+latest 2 KiB. A cancelled peer may need its own reset before normal commands resume.
+
+`transfer_acceptance.py` exercises the actual application transfer engine through
+real tio and a PTY lrzsz peer, all three protocols in both directions, comparing
+8192 bytes containing every byte value. It also verifies refusal of nonempty receive
+directories and termination of a stalled peer. GTK full-window regression passes.
+Transfer protocol TX goes directly through the transfer socket and is not part of
+the GUI's completed-command TX capture; incoming protocol bytes remain RX data.
+Protocol details and restricted-mode behavior were checked against the installed
+lrzsz help and [upstream lrzsz](https://www.ohse.de/uwe/software/lrzsz.html).
