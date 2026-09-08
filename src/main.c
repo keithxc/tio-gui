@@ -35,6 +35,7 @@
 #include "modbus_ui.h"
 #include "mqtt_ui.h"
 #include "can_ui.h"
+#include "ble.h"
 #include "highlighter.h"
 
 #define _(message) gettext(message)
@@ -3342,6 +3343,11 @@ static void highlight_rules_save(GtkButton *button, gpointer data)
     if (!tio_settings_save(&editor->app->settings, &error)) gtk_label_set_text(editor->status, error->message);
     else gtk_label_set_text(editor->status, _("Saved for all sessions; applies to incoming lines"));
 }
+static void on_ble_tools(GtkButton *button, gpointer data)
+{
+    (void)button; TioApp *app = data; tio_ble_window(GTK_WINDOW(app->window));
+}
+
 static void on_can_tools(GtkButton *button, gpointer data)
 {
     (void)button; TioApp *app = data; tio_can_window(GTK_WINDOW(app->window));
@@ -4679,6 +4685,9 @@ static GtkWidget *build_settings_popover(TioApp *app)
     gtk_widget_add_css_class(GTK_WIDGET(app->settings_title_label), "settings-title");
     gtk_box_append(GTK_BOX(root), GTK_WIDGET(app->settings_title_label));
 
+    GtkWidget *ble_button = gtk_button_new_with_label(_("BLE GATT debugging…"));
+    g_signal_connect(ble_button, "clicked", G_CALLBACK(on_ble_tools), app);
+    gtk_box_append(GTK_BOX(root), ble_button);
     GtkWidget *can_button = gtk_button_new_with_label(_("CAN / DBC debugging…"));
     g_signal_connect(can_button, "clicked", G_CALLBACK(on_can_tools), app);
     gtk_box_append(GTK_BOX(root), can_button);

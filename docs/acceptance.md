@@ -316,3 +316,23 @@ host accessibility bus. No host CAN interface is reconfigured. Separate DBC test
 cover endian/sign/scale/multiplex and malformed definitions. Hardware bus electrical
 behavior, arbitration and actual bitrate remain untested. Protocol reference:
 [Linux SocketCAN documentation](https://www.kernel.org/doc/html/latest/networking/can.html).
+
+## BLE GATT debugging — 2026-09-08
+
+BLE tools use asynchronous BlueZ D-Bus APIs to list known devices/characteristics,
+scan for LE devices for ten seconds, connect/disconnect, read, write with/without
+response and start/stop notifications. Writes validate text/HEX and cap values at
+512 bytes; BlueZ reports smaller device/MTU limits. Payloads feed Analyze. Pairing
+and adapter power remain in system settings. A window releases its own discovery,
+notification and newly acquired device connections on close, including a Connect
+that finishes after the window was closed. Pre-existing device links are not
+claimed as newly acquired by the window.
+
+A separate private D-Bus daemon exports a fake BlueZ adapter/device/characteristic
+and verifies the actual GTK discovery filter, connect, binary ReadValue/WriteValue,
+request/command options, notifications arriving before StartNotify's reply, invalid
+HEX rejection and scan/notify/link cleanup. A second window tests close during
+Connect. The real system BlueZ ObjectManager is also queried read-only; no real
+scan, pairing, GATT write or device connection was performed. Radio range, pairing
+workflows and real peripheral interoperability remain hardware validation limits.
+Reference: [BlueZ GATT API](https://bluez.readthedocs.io/en/latest/gatt-api/).
