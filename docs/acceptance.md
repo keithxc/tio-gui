@@ -393,3 +393,20 @@ protocol status. The relay does not synthesize protocol acknowledgements.
 Configuration import also rejects pending process spawns and recording drains,
 checked both before opening the chooser and after it returns. The GTK session
 test covers import while a background tab is still spawning.
+
+## Highlight scroll rebound — 0.3.1 (2026-09-08)
+
+Live-window sampling captured 70 frames over 22 seconds. Pixel comparisons found
+unchanged log blocks moving down by 1, 2, 4, 5 and 6 physical pixels after forward
+scrolling. Window chrome stayed fixed. A read-only raw socket sample captured 959
+chunks / 3726 bytes in ten seconds, mostly one- and two-byte fragments.
+
+Two scroll targets conflicted: immediate adjustment to `upper - page_size` and a
+pending GtkTextView mark alignment, which excludes the six-pixel bottom margin.
+The fix validates the final line layout before setting the adjustment, with a
+reentrancy guard and no second animated target. Existing margin and bottom
+alignment are preserved. The scroll regression now uses the actual wrapping,
+monospace and six-pixel margins and samples after-paint during fragmented input.
+It failed on the original code with five backward jumps and passes after the fix,
+alongside selection retention, pause and resume checks. Captured device bytes and
+window images remain local under `.cache/ui-jitter`, not in the repository.

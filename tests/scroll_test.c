@@ -12,6 +12,45 @@ static void settle(void)
     }
 }
 
+typedef struct {
+    GtkAdjustment *adjustment;
+    guint samples, reversals;
+    double previous;
+} ScrollMotion;
+
+static void sample_scroll_frame(GdkFrameClock *clock, gpointer data)
+{
+    (void)clock;
+    ScrollMotion *motion = data;
+    double current = gtk_adjustment_get_value(motion->adjustment);
+    if (motion->samples && current < motion->previous - 0.5) ++motion->reversals;
+    motion->previous = current;
+    ++motion->samples;
+}
+
+/* Final position checks miss a transient backward jump between input chunks. */
+static void check_fragmented_follow(TioTab *tab, GtkWidget *window)
+{
+    ScrollMotion motion = {.adjustment = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view))};
+    GdkFrameClock *clock = gtk_widget_get_frame_clock(window);
+    gulong handler = g_signal_connect(clock, "after-paint", G_CALLBACK(sample_scroll_frame), &motion);
+    const char *line = "[17:00:00.123] INFO status=ready temp=24.0 voltage=3.3\r\n";
+    for (guint repeat = 0; repeat < 20; ++repeat) {
+        for (gsize offset = 0; offset < strlen(line); offset += 3) {
+            gsize length = MIN((gsize)3, strlen(line) - offset);
+            tio_highlighter_feed(tab->highlighter, (const guint8 *)line + offset, length);
+            scroll_highlight_to_bottom(tab);
+            gint64 until = g_get_monotonic_time() + 8000;
+            do { g_main_context_iteration(NULL, FALSE); g_usleep(500); } while (g_get_monotonic_time() < until);
+        }
+    }
+    settle();
+    g_signal_handler_disconnect(clock, handler);
+    g_print("Fragmented follow: %u painted frames, %u backward jumps\n", motion.samples, motion.reversals);
+    g_assert_cmpuint(motion.samples, >, 20);
+    g_assert_cmpuint(motion.reversals, ==, 0);
+}
+
 int main(void)
 {
     gtk_init();
@@ -24,6 +63,10 @@ int main(void)
     g_object_ref_sink(tab.scroll_bottom_button);
     tab.highlight_view = GTK_TEXT_VIEW(gtk_text_view_new());
     gtk_text_view_set_editable(tab.highlight_view, FALSE);
+    gtk_text_view_set_monospace(tab.highlight_view, TRUE);
+    gtk_text_view_set_wrap_mode(tab.highlight_view, GTK_WRAP_WORD_CHAR);
+    gtk_text_view_set_top_margin(tab.highlight_view, 6);
+    gtk_text_view_set_bottom_margin(tab.highlight_view, 6);
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab.highlight_view);
     tab.highlighter = tio_highlighter_new(buffer);
     GtkWidget *window = gtk_window_new();
@@ -54,6 +97,7 @@ int main(void)
         g_assert_cmpfloat_with_epsilon(gtk_adjustment_get_value(adjustment),
             gtk_adjustment_get_upper(adjustment) - gtk_adjustment_get_page_size(adjustment), 0.5);
     }
+    check_fragmented_follow(&tab, window);
     on_highlight_wheel(NULL, 0, -1, &tab);
     gtk_adjustment_set_value(adjustment, 100);
     g_assert_false(tab.highlight_follow);

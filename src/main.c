@@ -2501,19 +2501,15 @@ static void on_highlight_scrolled(GtkAdjustment *adjustment, gpointer user_data)
 
 static void scroll_highlight_to_bottom(TioTab *tab)
 {
+    if (tab->highlight_adjusting) return;
+    tab->highlight_adjusting = TRUE;
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
     GtkTextIter end;
+    GdkRectangle location;
     gtk_text_buffer_get_end_iter(buffer, &end);
-    GtkTextMark *mark = gtk_text_buffer_get_mark(buffer, "tio-highlight-end");
-    if (mark == NULL) {
-        mark = gtk_text_buffer_create_mark(buffer, "tio-highlight-end", &end, FALSE);
-    } else {
-        gtk_text_buffer_move_mark(buffer, mark, &end);
-    }
-    /* Unlike scroll_to_iter, this remains pending until the text layout is
-       valid. Bottom alignment includes the final line and the view margin. */
-    tab->highlight_adjusting = TRUE;
-    gtk_text_view_scroll_to_mark(tab->highlight_view, mark, 0.0, TRUE, 0.0, 1.0);
+    /* Validate the final line before using the scroll extent. Do not queue a
+       second animated target: mark alignment excludes the bottom margin. */
+    gtk_text_view_get_iter_location(tab->highlight_view, &end, &location);
     GtkAdjustment *adjustment = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(tab->highlight_view));
     gtk_adjustment_set_value(adjustment, gtk_adjustment_get_upper(adjustment) -
                                         gtk_adjustment_get_page_size(adjustment));
