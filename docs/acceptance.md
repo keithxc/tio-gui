@@ -210,3 +210,19 @@ the old set intact. Built-in and custom GRegex rules now prepend explicit PCRE2
 match/depth/heap limits; previously the match-count limit alone did not constrain
 backtracking. Tests exercise an adversarial nested repetition, atomic rejection,
 custom tags/reset, and parser preset roundtrips through actual analyzer controls.
+
+## Lua / JavaScript analysis plugins — 2026-09-08
+
+API 1 is an explicit, per-entry `transform(input)` operation from Analyze. The
+plugin editor supports source load/save, Lua/JavaScript selection, read-only input
+snapshot and selectable result. See `docs/plugins.md` for limits and sandbox
+boundaries, plus tested examples in `examples/plugins/`. Runtime behavior was
+checked against [Lua 5.4](https://www.lua.org/manual/5.4/manual.html#pdf-load) and
+[QuickJS](https://bellard.org/quickjs/quickjs.html) documentation.
+
+Tests cover both language results, absent Lua I/O capabilities, hidden host files,
+infinite loops, closing output descriptors before an infinite loop, oversized
+output, thrown errors, rejected asynchronous returns, GTK result display and
+closing a running plugin window. Bubblewrap/seccomp isolation and resource limits
+are exercised with the actual installed interpreters on Linux x86-64. There is no
+fallback to executing outside the sandbox.

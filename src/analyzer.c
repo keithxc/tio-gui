@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "analyzer.h"
 #include "capture.h"
+#include "plugin_ui.h"
 #include <libintl.h>
 #include <math.h>
 #include <string.h>
@@ -149,6 +150,21 @@ static void select_entry(GtkGestureClick *gesture, int presses, double x, double
         break;
     }
     gtk_check_button_set_active(view->follow, FALSE);
+}
+
+static void open_plugin(GtkButton *button, gpointer data)
+{
+    (void)button; Analyzer *view = data;
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(view->list); GtkTextIter iter;
+    gtk_text_buffer_get_iter_at_mark(buffer, &iter, gtk_text_buffer_get_insert(buffer));
+    guint line = (guint)gtk_text_iter_get_line(&iter);
+    if (line >= view->ids->len) { gtk_label_set_text(view->status, _("Select a retained log entry first")); return; }
+    guint64 id = g_array_index(view->ids, guint64, line);
+    const GQueue *entries = tio_log_model_entries(view->model);
+    for (GList *item = entries->head; item; item = item->next) {
+        TioLogEntry *entry = item->data;
+        if (entry->id == id) { tio_plugin_window(GTK_WINDOW(view->window), entry->text); return; }
+    }
 }
 
 static void rebuild(Analyzer *view)
@@ -530,6 +546,9 @@ GtkWidget *tio_analyzer_new(GtkWindow *parent, TioLogModel *model)
         g_signal_connect(button, "clicked", G_CALLBACK(rules_choose), view);
         gtk_box_append(GTK_BOX(rules_row), button);
     }
+    GtkWidget *plugin = gtk_button_new_with_label(_("Run analysis plugin…"));
+    g_signal_connect(plugin, "clicked", G_CALLBACK(open_plugin), view);
+    gtk_box_append(GTK_BOX(rules_row), plugin);
     gtk_box_append(GTK_BOX(root), rules_row);
     GtkWidget *recording = gtk_button_new_with_label(_("Open recording…"));
     g_signal_connect(recording, "clicked", G_CALLBACK(open_replay), view);

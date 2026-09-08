@@ -35,12 +35,20 @@ add_executable(tio-gui
   src/analyzer.c
   src/capture.c
   src/transfer.c
+  src/plugin.c
+  src/plugin_ui.c
   src/main.c
   src/settings.c
 )
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(plugin-ui-test tests/plugin_ui_test.c src/plugin.c)
+  target_include_directories(plugin-ui-test PRIVATE src)
+  target_link_libraries(plugin-ui-test PRIVATE PkgConfig::GTK4)
+  add_executable(plugin-test tests/plugin_test.c src/plugin.c)
+  target_include_directories(plugin-test PRIVATE src)
+  target_link_libraries(plugin-test PRIVATE PkgConfig::GTK4)
   add_executable(transfer-test tests/transfer_test.c src/transfer.c)
   target_include_directories(transfer-test PRIVATE src)
   target_link_libraries(transfer-test PRIVATE PkgConfig::GTK4)
@@ -48,7 +56,7 @@ if(BUILD_TESTING)
   target_include_directories(capture-test PRIVATE src)
   target_link_libraries(capture-test PRIVATE PkgConfig::GTK4 PkgConfig::JSON_GLIB)
   add_test(NAME capture COMMAND capture-test)
-  add_executable(analyzer-test tests/analyzer_test.c src/log_model.c src/capture.c)
+  add_executable(analyzer-test tests/analyzer_test.c src/log_model.c src/capture.c src/plugin.c src/plugin_ui.c)
   target_include_directories(analyzer-test PRIVATE src)
   target_link_libraries(analyzer-test PRIVATE PkgConfig::GTK4 PkgConfig::PCRE2 PkgConfig::JSON_GLIB)
   add_executable(log-model-test tests/log_model_test.c src/log_model.c)
@@ -104,7 +112,7 @@ target_compile_options(tio-gui PRIVATE
 )
 
 if(BUILD_TESTING)
-  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c)
+  add_executable(scroll-test tests/scroll_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c)
   target_link_libraries(scroll-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(scroll-test PRIVATE
@@ -112,14 +120,14 @@ if(BUILD_TESTING)
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
   # Requires a display: run manually in a desktop session or under Xvfb.
-  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c)
+  add_executable(keyboard-test tests/keyboard_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c)
   target_link_libraries(keyboard-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(keyboard-test PRIVATE
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
-  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c)
+  add_executable(quick-editor-test tests/quick_editor_test.c src/settings.c src/highlighter.c src/payload.c src/quick_presets.c src/sequence.c src/serial_options.c src/connection_state.c src/log_model.c src/analyzer.c src/capture.c src/transfer.c src/plugin.c src/plugin_ui.c)
   target_link_libraries(quick-editor-test PRIVATE PkgConfig::GTK4 PkgConfig::VTE
     PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
   target_compile_definitions(quick-editor-test PRIVATE

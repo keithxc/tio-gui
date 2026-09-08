@@ -33,7 +33,7 @@
         postFixup = ''
           wrapProgram "$out/bin/tio-gui" \
             --set LOCALE_ARCHIVE ${pkgs.glibcLocalesUtf8}/lib/locale/locale-archive \
-            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio pkgs.lrzsz ]}
+            --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio pkgs.lrzsz pkgs.bubblewrap pkgs.quickjs pkgs.lua5_4 ]}
         '';
       };
 
@@ -54,6 +54,9 @@
           vte-gtk4
           tio
           lrzsz
+          bubblewrap
+          quickjs
+          lua5_4
         ];
 
         shellHook = ''
