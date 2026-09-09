@@ -1,5 +1,7 @@
 /build/
 /result
+/dist/
+__pycache__/
 /.cache/
 /compile_commands.json
 *.log

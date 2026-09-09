@@ -6,6 +6,12 @@
 
 ## Status
 
+A standalone **Windows/macOS serial edition** is available through
+`-DTIO_GUI_SERIAL_ONLY=ON` (the default on those platforms). It uses native serial
+APIs and a GTK line console, and includes packaging scripts for Windows NSIS and
+macOS DMG. See [installation, scope and hardware checks](docs/serial-portable.md).
+The Linux tio/VTE edition described below remains the default Linux build.
+
 Version 0.3.5 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
 hardware limits are recorded in [the acceptance report](docs/acceptance.md).
