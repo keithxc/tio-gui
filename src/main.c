@@ -1599,7 +1599,7 @@ static gchar *build_log_path(const TioSessionConfig *config)
    Three streams stay independent: VTE renders the pty, tio writes the log, and
    this tap feeds anything that needs the bytes themselves. */
 
-#define TIO_GUI_RAW_BUFFER_SIZE 8192
+#define TIO_GUI_RAW_BUFFER_SIZE 4096
 #define TIO_GUI_RAW_CONNECT_INTERVAL_MS 50
 /* tio creates the socket before it opens the device, but the GUI still has to
    wait for it. Give up after two seconds rather than retrying forever. */
@@ -1727,7 +1727,9 @@ static void raw_tap_read(TioRawTap *tap)
     g_input_stream_read_async(stream,
                               tap->buffer,
                               sizeof tap->buffer,
-                              G_PRIORITY_DEFAULT,
+                              /* Let input and GTK layout/redraw run between
+                                 bounded chunks of a continuously ready stream. */
+                              G_PRIORITY_DEFAULT_IDLE,
                               tap->cancellable,
                               on_raw_tap_read,
                               raw_tap_ref(tap));

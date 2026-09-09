@@ -186,8 +186,64 @@ static void test_shell_editing(void) {
   tio_highlighter_free(h);
 }
 
+static void test_flood_clear(void) {
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *h = tio_highlighter_new(buffer);
+  const char *line = "[12:34:56.789] INFO temperature=24.5 voltage=3.3 /dev/ttyUSB0 0x1234 ready\n";
+  g_autoptr(GString) burst = g_string_new(NULL);
+  for (guint i = 0; i < 12000; ++i) g_string_append(burst, line);
+  tio_highlighter_feed(h, (const guint8 *)burst->str, burst->len);
+  g_assert_cmpint(gtk_text_buffer_get_line_count(buffer), ==, 10000);
+  GtkTextTag *search = gtk_text_buffer_create_tag(buffer, "search-match", "background", "yellow", NULL);
+  GtkTextIter start, end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  gtk_text_buffer_apply_tag(buffer, search, &start, &end);
+  g_assert_true(tio_highlighter_rules(h, "[rule:custom]\npattern=custom\ncolor=red\n", NULL));
+  gint64 before = g_get_monotonic_time();
+  tio_highlighter_clear(h);
+  gint64 elapsed = g_get_monotonic_time() - before;
+  g_test_message("Clear 10,000 highlighted lines: %.1f ms", elapsed / 1000.0);
+  /* Generous regression guard: direct tagged deletion took about ten seconds. */
+  g_assert_cmpint(elapsed, <, 2 * G_TIME_SPAN_SECOND);
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
+  g_assert_true(gtk_text_tag_table_lookup(gtk_text_buffer_get_tag_table(buffer), "search-match") == search);
+  const char *fresh = "中 INFO custom 123\n";
+  tio_highlighter_feed(h, (const guint8 *)fresh, strlen(fresh));
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree char *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(text, ==, fresh);
+  gtk_text_buffer_get_iter_at_offset(buffer, &start, 7);
+  g_assert_true(gtk_text_iter_has_tag(&start, gtk_text_tag_table_lookup(
+      gtk_text_buffer_get_tag_table(buffer), "rule:custom")));
+  g_assert_false(gtk_text_iter_has_tag(&start, search));
+  tio_highlighter_free(h);
+}
+
+static void test_long_history_bound(void) {
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *h = tio_highlighter_new(buffer);
+  g_autofree char *line = g_strnfill(16384, 'x');
+  for (guint i = 0; i < 140; ++i) {
+    tio_highlighter_feed(h, (const guint8 *)line, 16384);
+    tio_highlighter_feed(h, (const guint8 *)"\n", 1);
+  }
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), <=, 2 * 1024 * 1024);
+  g_assert_cmpint(gtk_text_buffer_get_line_count(buffer), >, 100);
+  const char *tail = "中 INFO 123 456";
+  tio_highlighter_feed(h, (const guint8 *)tail, strlen(tail));
+  GtkTextIter cursor;
+  g_assert_true(tio_highlighter_cursor(h, &cursor));
+  g_assert_cmpint(gtk_text_iter_get_line_offset(&cursor), ==, 14);
+  gtk_text_iter_backward_chars(&cursor, 3);
+  g_assert_true(gtk_text_iter_has_tag(&cursor, gtk_text_tag_table_lookup(
+      gtk_text_buffer_get_tag_table(buffer), "number")));
+  tio_highlighter_free(h);
+}
+
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
+  g_test_add_func("/highlighter/flood-clear", test_flood_clear);
+  g_test_add_func("/highlighter/long-history-bound", test_long_history_bound);
   g_test_add_func("/highlighter/serial-log-rules", test_serial_log_rules);
   g_test_add_func("/highlighter/custom-atomic-and-bounded", test_custom_rules);
   g_test_add_func("/highlighter/incremental-tail", test_incremental_tail);

@@ -4,6 +4,8 @@
 #include "text_line.h"
 
 #define TIO_HIGHLIGHT_MAX_LINES 10000
+/* Also bound long-line histories (at most 8 MiB of UTF-8 text). */
+#define TIO_HIGHLIGHT_MAX_CHARS (2 * 1024 * 1024)
 #define TIO_HIGHLIGHT_MAX_LINE_BYTES 16384
 #define TIO_HIGHLIGHT_MAX_MATCHES_PER_RULE 512
 
@@ -80,14 +82,21 @@ struct _TioHighlighter {
 
 static void trim_scrollback(TioHighlighter *highlighter) {
   gint lines = gtk_text_buffer_get_line_count(highlighter->buffer);
-  if (lines <= TIO_HIGHLIGHT_MAX_LINES) {
+  gint chars = gtk_text_buffer_get_char_count(highlighter->buffer);
+  if (lines <= TIO_HIGHLIGHT_MAX_LINES && chars <= TIO_HIGHLIGHT_MAX_CHARS)
     return;
-  }
-  GtkTextIter start;
-  GtkTextIter keep;
+  GtkTextIter start, keep;
   gtk_text_buffer_get_start_iter(highlighter->buffer, &start);
   gtk_text_buffer_get_iter_at_line(highlighter->buffer, &keep,
-                                   lines - TIO_HIGHLIGHT_MAX_LINES);
+                                   MAX(0, lines - TIO_HIGHLIGHT_MAX_LINES));
+  if (chars - gtk_text_iter_get_offset(&keep) > TIO_HIGHLIGHT_MAX_CHARS) {
+    gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &keep,
+                                       chars - TIO_HIGHLIGHT_MAX_CHARS);
+    /* Retain whole lines, including the editable partial tail. */
+    if (!gtk_text_iter_starts_line(&keep)) gtk_text_iter_forward_line(&keep);
+  }
+  /* Delete plain text: deleting thousands of tag toggles is much more costly. */
+  gtk_text_buffer_remove_all_tags(highlighter->buffer, &start, &keep);
   gtk_text_buffer_delete(highlighter->buffer, &start, &keep);
 }
 
@@ -100,6 +109,7 @@ static void apply_rules(TioHighlighter *highlighter, gint line_start,
     g_autoptr(GMatchInfo) match = NULL;
     g_regex_match(rule->regex, text, 0, &match);
     guint matches = 0;
+    gint previous_byte = 0, previous_char = 0;
     while (g_match_info_matches(match) &&
            matches++ < TIO_HIGHLIGHT_MAX_MATCHES_PER_RULE) {
       gint byte_start = 0;
@@ -107,8 +117,10 @@ static void apply_rules(TioHighlighter *highlighter, gint line_start,
       if (g_match_info_fetch_pos(match, 0, &byte_start, &byte_end) &&
           byte_end > byte_start) {
         gint char_start =
-            (gint)g_utf8_pointer_to_offset(text, text + byte_start);
-        gint char_end = (gint)g_utf8_pointer_to_offset(text, text + byte_end);
+            previous_char + (gint)g_utf8_strlen(text + previous_byte, byte_start - previous_byte);
+        gint char_end = char_start + (gint)g_utf8_strlen(text + byte_start, byte_end - byte_start);
+        previous_byte = byte_end;
+        previous_char = char_end;
         GtkTextIter start;
         GtkTextIter end;
         gtk_text_buffer_get_iter_at_offset(highlighter->buffer, &start,
@@ -168,7 +180,6 @@ static void flush_line(TioHighlighter *highlighter) {
   highlighter->partial_chars = 0;
   g_clear_pointer(&highlighter->rendered, g_free);
   g_byte_array_set_size(highlighter->line, 0);
-  trim_scrollback(highlighter);
 }
 
 TioHighlighter *tio_highlighter_new(GtkTextBuffer *buffer) {
@@ -243,12 +254,17 @@ gboolean tio_highlighter_rules(TioHighlighter *highlighter, const char *ini, GEr
 void tio_highlighter_feed(TioHighlighter *highlighter, const guint8 *data,
                           gsize length) {
   g_return_if_fail(highlighter != NULL);
+  guint completed = 0;
   for (gsize index = 0; index < length; ++index) {
     if (tio_text_line_feed(&highlighter->editing, highlighter->line,
-                           data[index], TIO_HIGHLIGHT_MAX_LINE_BYTES))
+                           data[index], TIO_HIGHLIGHT_MAX_LINE_BYTES)) {
       flush_line(highlighter);
+      /* Amortize history deletion, even when a caller supplies a huge burst. */
+      if (++completed % 64 == 0) trim_scrollback(highlighter);
+    }
   }
   render_line(highlighter);
+  trim_scrollback(highlighter);
 }
 
 gboolean tio_highlighter_cursor(TioHighlighter *highlighter, GtkTextIter *iter) {
@@ -261,8 +277,20 @@ gboolean tio_highlighter_cursor(TioHighlighter *highlighter, GtkTextIter *iter) 
   return !highlighter->editing.cursor_hidden;
 }
 
+static void remove_buffer_tag(GtkTextTag *tag, gpointer data) {
+  GtkTextBuffer *buffer = data;
+  GtkTextIter start, end;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  gtk_text_buffer_remove_tag(buffer, tag, &start, &end);
+}
+
 void tio_highlighter_clear(TioHighlighter *highlighter) {
   g_return_if_fail(highlighter != NULL);
+  /* Visit each tag once, including search tags, before deleting its text.
+     Direct deletion repeatedly rebalances the tagged text tree. Keep the
+     table intact so custom rules and search continue to work after clear. */
+  gtk_text_tag_table_foreach(gtk_text_buffer_get_tag_table(highlighter->buffer),
+                             remove_buffer_tag, highlighter->buffer);
   gtk_text_buffer_set_text(highlighter->buffer, "", 0);
   g_byte_array_set_size(highlighter->line, 0);
   highlighter->editing = (TioTextLine){0};

@@ -137,6 +137,56 @@ static void check_input_cursor(TioTab *tab, GtkWidget *window)
     g_print("Input cursor: timed blink, remote position/visibility, focus and selection passed.\n");
 }
 
+typedef struct {
+    TioTab *tab;
+    gint64 previous, worst_gap;
+    guint ticks;
+} FloodHeartbeat;
+
+static gboolean flood_heartbeat(gpointer data)
+{
+    FloodHeartbeat *beat = data;
+    gint64 now = g_get_monotonic_time();
+    beat->worst_gap = MAX(beat->worst_gap, now - beat->previous);
+    beat->previous = now;
+    ++beat->ticks;
+    /* Exercise clear while reads are still arriving, without disconnecting. */
+    if (beat->ticks == 5) tio_highlighter_clear(beat->tab->highlighter);
+    return G_SOURCE_CONTINUE;
+}
+
+static void check_continuous_stream(TioTab *tab)
+{
+    g_autoptr(GString) flood = g_string_new(NULL);
+    for (guint i = 0; i < 12000; ++i)
+        g_string_append(flood, "[12:34:56.789] INFO temperature=24.5 voltage=3.3 /dev/ttyUSB0 0x1234 ready\n");
+    g_autoptr(GInputStream) input = g_memory_input_stream_new_from_data(flood->str, (gssize)flood->len, NULL);
+    g_autoptr(GOutputStream) output = g_memory_output_stream_new_resizable();
+    TioRawTap *tap = g_new0(TioRawTap, 1);
+    tap->reference_count = 1;
+    tap->tab = tab;
+    /* The raw reader only uses GIOStream; memory input stays continuously ready. */
+    tap->connection = (GSocketConnection *)g_simple_io_stream_new(input, output);
+    tap->cancellable = g_cancellable_new();
+    tab->raw = tap;
+    tab->rx_bytes = tab->rx_lines = 0;
+    FloodHeartbeat beat = {.tab = tab, .previous = g_get_monotonic_time()};
+    guint timer = g_timeout_add(10, flood_heartbeat, &beat);
+    raw_tap_read(tap);
+    gint64 deadline = g_get_monotonic_time() + 15 * G_TIME_SPAN_SECOND;
+    while (tab->raw && g_get_monotonic_time() < deadline)
+        g_main_context_iteration(NULL, TRUE);
+    g_source_remove(timer);
+    g_assert_null(tab->raw);
+    g_assert_cmpuint(tab->rx_bytes, ==, flood->len);
+    g_assert_cmpuint(tab->rx_lines, ==, 12000);
+    g_assert_cmpuint(beat.ticks, >=, 5);
+    g_print("Continuous stream: %u UI heartbeats, worst gap %.1f ms, all %" G_GUINT64_FORMAT " bytes received\n",
+            beat.ticks, beat.worst_gap / 1000.0, tab->rx_bytes);
+    g_assert_cmpint(beat.worst_gap, <, 500000);
+    settle();
+}
+
 int main(void)
 {
     gtk_init();
@@ -244,6 +294,7 @@ int main(void)
     tio_highlighter_clear(tab.highlighter);
     settle();
     g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 0);
+    check_continuous_stream(&tab);
     gtk_window_destroy(GTK_WINDOW(window));
     g_assert_cmpuint(tab.highlight_cursor_timer, ==, 0);
     tio_highlighter_free(tab.highlighter);

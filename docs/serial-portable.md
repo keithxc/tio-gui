@@ -7,9 +7,9 @@ available through the default Linux build.
 
 ## Installation
 
-- Windows x86-64: run `tio-gui-0.3.6-windows-x86_64-setup.exe`. Installation is per
+- Windows x86-64: run `tio-gui-0.3.7-windows-x86_64-setup.exe`. Installation is per
   user, with Start menu/Desktop shortcuts and an entry in installed applications.
-- macOS Apple Silicon: open `tio-gui-0.3.6-macos-arm64.dmg` and drag tio-gui to
+- macOS Apple Silicon: open `tio-gui-0.3.7-macos-arm64.dmg` and drag tio-gui to
   Applications. The current Homebrew-based package requires macOS 26 or later.
   Intel is not included in this build.
 

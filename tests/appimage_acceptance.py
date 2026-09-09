@@ -40,7 +40,8 @@ with tempfile.TemporaryDirectory(prefix='tio-appimage-') as directory:
               '--setenv', 'TIO_GUI_NON_UNIQUE', '1',
               image, '--appimage-extract-and-run']
     result = subprocess.check_output(launch + ['--version'], text=True, timeout=60)
-    assert 'tio-gui 0.3.6' in result, result
+    version = (Path(__file__).resolve().parents[1] / 'VERSION').read_text().strip()
+    assert f'tio-gui {version}' in result, result
     master, slave = pty.openpty()
     device = os.ttyname(slave)
     with (root / 'startup.log').open('w+') as log:
