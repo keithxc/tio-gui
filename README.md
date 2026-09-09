@@ -12,7 +12,7 @@ APIs and a GTK line console, and includes packaging scripts for Windows NSIS and
 macOS DMG. See [installation, scope and hardware checks](docs/serial-portable.md).
 The Linux tio/VTE edition described below remains the default Linux build.
 
-Version 0.3.5 targets x86-64 Linux with tio 3.9. Software acceptance covers real
+Version 0.3.6 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
 hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 
@@ -146,7 +146,16 @@ The project version is maintained in `VERSION`. Check an installed build with
 Translatable strings live in `po/tio-gui.pot`. After adding or changing a string, run
 `cmake --build build --target update-pot` and merge the result into each catalogue in `po/`.
 
-The initial packaging order is Nix/NixOS first, AppImage second, and Arch Linux (PKGBUILD/AUR) third. Ubuntu/Debian and RPM-native packages are intentionally out of scope for the first public versions.
+Linux releases include an x86-64 AppImage with tio, runtime dependencies and
+Latin/CJK fonts;
+Nix/NixOS users should use the flake. Build the AppImage with
+`nix build .#appimage` (the bundler revision is pinned in `flake.lock`). It uses
+software rendering by default for host graphics compatibility. Linux user
+namespaces must be enabled. With no FUSE available, run the AppImage with
+`--appimage-extract-and-run`. Debian/RPM/AUR packages are not provided.
+
+The release workflow prepares a draft from a version tag. Publish the draft only
+after uploading and verifying all platform packages and their checksums.
 
 ## Build on other Linux distributions
 

@@ -642,3 +642,32 @@ checks are not treated as acceptance of a full BusyBox ash line editor.
 The targeted highlighter/analyzer suites and all eight real Bash editing steps
 passed. The Nix package built successfully, its parser was verified against the
 workspace, and the KDE launcher was refreshed and checked with `--help`.
+
+## Release 0.3.6 — 2026-09-09
+
+The version was bumped from 0.3.5 to 0.3.6 for all three packages.
+Linux passed all 10 CTest suites, the real GTK Ctrl-wheel acceptance, and
+all eight real Bash/Readline editing steps. The KDE launcher reports 0.3.6.
+
+The Linux AppImage includes tio, GTK/VTE, runtime libraries and Latin/CJK
+fonts. `tests/headless.py tests/appimage_acceptance.py <AppImage>` tests it
+with the host `/nix` hidden and PATH restricted to `/usr/bin:/bin`: version,
+GUI startup, bundled tio PTY transmit/receive, raw logging and normal close.
+It exercises the extract-and-run path; a FUSE mount was not tested. On NixOS,
+the test clears only the AppImage identification bytes in a temporary copy
+to bypass the host binfmt helper and execute the bundled static runtime.
+The distributed file is unchanged. User namespaces are required.
+
+The Windows x86-64 NSIS installer passed a fresh Wine 11 installation,
+relocation into a path containing spaces, version, bundled native tests,
+GUI startup/close and uninstall. This does not replace physical Windows
+USB serial driver testing.
+
+The macOS arm64 package was built on macOS 26.6.2 with deployment target 26.0.
+All four native CTest suites passed, including GUI/PTY acceptance. The app
+was relocated to a temporary path containing spaces, its deep ad-hoc signature
+verified, and its version and GUI startup checked with Homebrew absent from
+PATH. The packager audits bundled library references. Intel Macs, notarization
+and physical USB serial hardware were not tested.
+
+The release includes SHA256SUMS for the three application packages.
