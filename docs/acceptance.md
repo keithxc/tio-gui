@@ -605,3 +605,40 @@ The installed derivation's four changed implementation files were compared
 byte-for-byte with the workspace, and the launcher passed `--help`. Existing
 serial sessions were left running; close and reopen to load the new build.
 All four translation catalogs pass `msgfmt --check` with 435 translated entries.
+
+
+## Interactive character deletion — 2026-09-09
+
+A real Bash/Readline PTY reproduced the stale-text failure: deleting inside
+`abcdef` emitted BS followed by `CSI 1 P`. The highlight model moved the cursor
+for BS but discarded DCH, leaving the deleted character visible. End-of-line
+Bash deletion emits BS/space/BS and already worked. The fix follows
+[xterm's documented controls](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+and the editing behavior described in the
+[Readline manual](https://www.gnu.org/s/bash/manual/html_node/Readline-Bare-Essentials.html).
+No upstream implementation was copied.
+
+The shared line model now handles DCH (`CSI P`, delete and shift left), ECH
+(`CSI X`, erase with blanks), ICH (`CSI @`, insert blanks and shift right), and
+ED0 (`CSI J` / `CSI 0 J`, erase the current line's suffix). All preserve the
+cursor; BS alone still only moves left, preserving spinner/overwrite behavior.
+Raw capture and serial keyboard encoding continue through their existing paths.
+Completed log records remain history: ED0 is supported for the current line,
+not as a full-screen erase across a terminal grid. Unicode horizontal positions
+retain the existing code-point model, rather than claiming terminal cell-width
+or multi-line Readline support.
+
+Validation adds shared highlighter/analyzer fixtures for default/zero/count/
+large parameters, cursor positions, UTF-8, unsupported private/multi-parameter
+controls, and every fragmentation size. A capacity test verifies that inserting
+blanks drops complete UTF-8 characters instead of splitting them.
+`tests/shell_edit_acceptance.py .cache/build/highlighter-test /path/to/bash`
+requires an interactive, Readline-enabled Bash and checks real PTY responses
+after end/middle Backspace, Delete, insertion, Ctrl-U and Ctrl-K. Each captured
+stream is replayed one byte at a time and checks both visible text and cursor.
+The two local BusyBox builds lacked command-line editing; their canonical echo
+checks are not treated as acceptance of a full BusyBox ash line editor.
+
+The targeted highlighter/analyzer suites and all eight real Bash editing steps
+passed. The Nix package built successfully, its parser was verified against the
+workspace, and the KDE launcher was refreshed and checked with `--help`.

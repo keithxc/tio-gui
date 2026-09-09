@@ -51,6 +51,19 @@ static void test_progress(void) {
   gtk_text_buffer_get_bounds(buffer, &start, &end);
   g_autofree char *bounded = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
   g_assert_cmpstr(bounded, ==, "OK\n");
+  /* Inserting at capacity drops a whole UTF-8 suffix, never half a character. */
+  tio_highlighter_clear(h);
+  g_autofree gchar *prefix = g_strnfill(16380, 'x');
+  tio_highlighter_feed(h, (const guint8 *)prefix, 16380);
+  tio_highlighter_feed(h, (const guint8 *)"中", strlen("中"));
+  tio_highlighter_feed(h, (const guint8 *)"\r\x1b[2@", 5);
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree gchar *inserted = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpuint(strlen(inserted), ==, 16382);
+  g_assert_true(g_str_has_prefix(inserted, "  xx"));
+  g_assert_null(strstr(inserted, "\xef\xbf\xbd"));
+  tio_highlighter_feed(h, (const guint8 *)"\r\x1b[999999999999@", strlen("\r\x1b[999999999999@"));
+  g_assert_cmpint(gtk_text_buffer_get_char_count(buffer), ==, 16384);
   tio_highlighter_free(h);
 }
 
@@ -153,11 +166,32 @@ static void test_incremental_tail(void) {
   tio_highlighter_free(h);
 }
 
+static void test_shell_editing(void) {
+  const char *path = g_getenv("TIO_TEST_SHELL_CAPTURE");
+  if (!path) { g_test_skip("Run shell_edit_acceptance.py"); return; }
+  g_autofree gchar *bytes = NULL;
+  gsize length = 0;
+  g_assert_true(g_file_get_contents(path, &bytes, &length, NULL));
+  g_autoptr(GtkTextBuffer) buffer = gtk_text_buffer_new(NULL);
+  TioHighlighter *h = tio_highlighter_new(buffer);
+  /* Fragmenting each byte covers ESC/CSI and UTF-8 across socket reads. */
+  for (gsize i = 0; i < length; i++) tio_highlighter_feed(h, (const guint8 *)bytes + i, 1);
+  GtkTextIter start, end, cursor;
+  gtk_text_buffer_get_bounds(buffer, &start, &end);
+  g_autofree gchar *text = gtk_text_buffer_get_text(buffer, &start, &end, FALSE);
+  g_assert_cmpstr(g_strchomp(text), ==, g_getenv("TIO_TEST_SHELL_EXPECTED"));
+  tio_highlighter_cursor(h, &cursor);
+  g_assert_cmpint(gtk_text_iter_get_line_offset(&cursor), ==,
+                  (gint)g_ascii_strtoll(g_getenv("TIO_TEST_SHELL_CURSOR"), NULL, 10));
+  tio_highlighter_free(h);
+}
+
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
   g_test_add_func("/highlighter/serial-log-rules", test_serial_log_rules);
   g_test_add_func("/highlighter/custom-atomic-and-bounded", test_custom_rules);
   g_test_add_func("/highlighter/incremental-tail", test_incremental_tail);
   g_test_add_func("/highlighter/progress-line-editing", test_progress);
+  g_test_add_func("/highlighter/real-shell-editing", test_shell_editing);
   return g_test_run();
 }

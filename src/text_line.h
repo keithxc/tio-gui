@@ -61,6 +61,44 @@ static inline gboolean tio_text_line_feed(TioTextLine *state, GByteArray *line,
                 if (byte == 'h') state->cursor_hidden = FALSE;
             }
             if (!state->unsupported && !state->private) switch (byte) {
+            case 'P': case 'X': {
+                /* DCH shifts the suffix left; ECH replaces cells with blanks.
+                 * Neither moves the cursor. BS alone must remain non-destructive. */
+                guint start = MIN(state->cursor, line->len), end = start, cells = 0;
+                while (cells < count && end < line->len) {
+                    end = tio_text_line_next(line, end);
+                    ++cells;
+                }
+                if (byte == 'P') cells = 0;
+                if (end > start) {
+                    memmove(line->data + start + cells, line->data + end, line->len - end);
+                    if (cells) memset(line->data + start, ' ', cells);
+                    g_byte_array_set_size(line, line->len - (end - start) + cells);
+                }
+                break;
+            }
+            case '@': {
+                /* ICH inserts blanks, retaining only complete UTF-8 characters
+                 * if the shifted suffix meets the bounded line capacity. */
+                guint start = state->cursor;
+                if (start >= line->len || start >= limit) break;
+                guint blanks = MIN(count, limit - start);
+                guint tail = MIN(line->len - start, limit - start - blanks);
+                while (tail && start + tail < line->len &&
+                       (line->data[start + tail] & 0xc0) == 0x80) --tail;
+                guint size = start + blanks + tail;
+                if (size > line->len) g_byte_array_set_size(line, size);
+                memmove(line->data + start + blanks, line->data + start, tail);
+                memset(line->data + start, ' ', blanks);
+                g_byte_array_set_size(line, size);
+                break;
+            }
+            case 'J':
+                /* ED0 also erases this line's suffix. Completed log records
+                 * remain history; this model deliberately has no screen rows. */
+                if (state->parameter == 0)
+                    g_byte_array_set_size(line, MIN(state->cursor, line->len));
+                break;
             case 'K':
                 if (state->parameter == 0)
                     g_byte_array_set_size(line, MIN(state->cursor, line->len));
