@@ -23,6 +23,7 @@ resources = contents / "Resources"
 libraries = contents / "Frameworks"
 resources.mkdir(exist_ok=True)
 libraries.mkdir(exist_ok=True)
+shutil.copytree(build / "locale", resources / "share/locale", dirs_exist_ok=True)
 brew = Path(subprocess.check_output(["brew", "--prefix"], text=True).strip())
 
 

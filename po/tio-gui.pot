@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: tio-gui 0.3.6\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-09 10:44+0800\n"
+"POT-Creation-Date: 2026-09-09 16:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -503,24 +503,6 @@ msgstr ""
 msgid "Payload supports \\r, \\n, \\t, \\e, and \\xNN escapes."
 msgstr ""
 
-msgid "Button"
-msgstr ""
-
-msgid "Label"
-msgstr ""
-
-msgid "Payload"
-msgstr ""
-
-msgid "Mode"
-msgstr ""
-
-msgid "Checksum"
-msgstr ""
-
-msgid "Text"
-msgstr ""
-
 msgid "None"
 msgstr ""
 
@@ -534,6 +516,9 @@ msgid "Export button group…"
 msgstr ""
 
 msgid "Payload (text escapes or HEX)"
+msgstr ""
+
+msgid "Text"
 msgstr ""
 
 msgid "Delay after sending (ms)"
@@ -953,15 +938,6 @@ msgstr ""
 msgid "Recording / safe rotation"
 msgstr ""
 
-msgid "No line ending"
-msgstr ""
-
-msgid "Sequences…"
-msgstr ""
-
-msgid "Analyze…"
-msgstr ""
-
 #, c-format
 msgid "Session %u"
 msgstr ""
@@ -994,10 +970,128 @@ msgstr ""
 msgid "Tools"
 msgstr ""
 
+msgid "Disconnected"
+msgstr ""
+
+#, c-format
+msgid "RX %s bytes   TX %s bytes"
+msgstr ""
+
+msgid "Log write failed; session stopped. Check free space and permissions."
+msgstr ""
+
+msgid "Could not finish writing the log"
+msgstr ""
+
+msgid "This port is already open in another tab"
+msgstr ""
+
+msgid "Enter a baud rate between 1 and 12000000"
+msgstr ""
+
+msgid "Choose a log file first"
+msgstr ""
+
+msgid "Profile saved"
+msgstr ""
+
+msgid "Profile not found; enter its saved name"
+msgstr ""
+
+msgid "Receive log (raw bytes, append)"
+msgstr ""
+
+msgid "Disconnect and close this session?"
+msgstr ""
+
+msgid "Disconnect and close"
+msgstr ""
+
+msgid "Open in new tab"
+msgstr ""
+
+msgid "Odd"
+msgstr ""
+
+msgid "Even"
+msgstr ""
+
+msgid "Flow"
+msgstr ""
+
+msgid "HEX send"
+msgstr ""
+
+msgid "Browse…"
+msgstr ""
+
+msgid "Serial lines"
+msgstr ""
+
+msgid "DTR low"
+msgstr ""
+
+msgid "DTR high"
+msgstr ""
+
+msgid "RTS low"
+msgstr ""
+
+msgid "RTS high"
+msgstr ""
+
+msgid "Break"
+msgstr ""
+
+msgid "Auto reconnect"
+msgstr ""
+
+msgid ""
+"Retry the same port once per second; pending sends are discarded after "
+"disconnect"
+msgstr ""
+
+msgid "Serial"
+msgstr ""
+
+#, c-format
+msgid "Could not save settings: %s"
+msgstr ""
+
+msgid "Disconnect all serial sessions and quit?"
+msgstr ""
+
+msgid "Disconnect and quit"
+msgstr ""
+
 msgid "Search text is too large"
 msgstr ""
 
 msgid "Search limit reached; refine the pattern"
+msgstr ""
+
+msgid "No line ending"
+msgstr ""
+
+msgid "Sequences…"
+msgstr ""
+
+msgid "Analyze…"
+msgstr ""
+
+msgid "Button"
+msgstr ""
+
+msgid "Label"
+msgstr ""
+
+msgid "Payload"
+msgstr ""
+
+msgid "Mode"
+msgstr ""
+
+msgid "Checksum"
 msgstr ""
 
 msgid "Select numeric fields to plot"
@@ -1152,9 +1246,6 @@ msgstr ""
 
 #, c-format
 msgid "RX %llu bytes / %llu chunks · TX %llu bytes"
-msgstr ""
-
-msgid "Disconnected"
 msgstr ""
 
 msgid "TCP / UDP debugging"

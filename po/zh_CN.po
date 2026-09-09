@@ -1379,3 +1379,122 @@ msgstr "搜索文本过大"
 
 msgid "Search limit reached; refine the pattern"
 msgstr "搜索达到上限，请缩小范围"
+
+msgid "Auto reconnect"
+msgstr "自动重连"
+
+msgid "Break"
+msgstr "发送 Break"
+
+msgid "Browse…"
+msgstr "浏览…"
+
+msgid "Choose a log file first"
+msgstr "请先选择日志文件"
+
+msgid "Command or HEX bytes"
+msgstr "输入命令或 HEX 字节"
+
+msgid "Could not finish writing the log"
+msgstr "无法完成日志写入"
+
+#, c-format
+msgid "Could not save settings: %s"
+msgstr "无法保存设置：%s"
+
+msgid "DTR high"
+msgstr "DTR 高电平"
+
+msgid "DTR low"
+msgstr "DTR 低电平"
+
+msgid "Detected serial ports"
+msgstr "检测到的串口"
+
+msgid "Disconnect all serial sessions and quit?"
+msgstr "断开所有串口会话并退出？"
+
+msgid "Disconnect and close this session?"
+msgstr "断开并关闭此会话？"
+
+msgid "Disconnect and close"
+msgstr "断开并关闭"
+
+msgid "Disconnect and quit"
+msgstr "断开并退出"
+
+msgid "Ending"
+msgstr "行尾"
+
+msgid "Enter a baud rate between 1 and 12000000"
+msgstr "请输入 1 到 12000000 之间的波特率"
+
+msgid "Even"
+msgstr "偶校验"
+
+msgid "Flow"
+msgstr "流控"
+
+msgid "HEX receive"
+msgstr "HEX 接收"
+
+msgid "HEX send"
+msgstr "HEX 发送"
+
+msgid "Language changes take effect after restarting."
+msgstr "语言设置将在重新启动后生效。"
+
+msgid "Line control"
+msgstr "线路控制"
+
+msgid "Log received bytes"
+msgstr "记录接收数据"
+
+msgid "Log write failed; session stopped. Check free space and permissions."
+msgstr "日志写入失败，会话已停止。请检查剩余空间和文件权限。"
+
+msgid "Odd"
+msgstr "奇校验"
+
+msgid "Open in new tab"
+msgstr "在新标签页打开"
+
+msgid "Profile not found; enter its saved name"
+msgstr "未找到配置，请输入已保存的名称"
+
+msgid "Profile saved"
+msgstr "配置已保存"
+
+msgid "Quick sends and profiles"
+msgstr "快捷发送与连接配置"
+
+msgid "RTS high"
+msgstr "RTS 高电平"
+
+msgid "RTS low"
+msgstr "RTS 低电平"
+
+msgid "RX 0 bytes   TX 0 bytes"
+msgstr "接收 0 字节   发送 0 字节"
+
+msgid "Receive log (raw bytes, append)"
+msgstr "接收日志（原始字节，追加写入）"
+
+msgid "Retry the same port once per second; pending sends are discarded after disconnect"
+msgstr "每秒重试同一串口；断开后丢弃待发送数据"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Serial"
+msgstr "串口"
+
+msgid "This port is already open in another tab"
+msgstr "此串口已在另一个标签页中打开"
+
+#, c-format
+msgid "RX %s bytes   TX %s bytes"
+msgstr "接收 %s 字节   发送 %s 字节"
+
+msgid "Serial lines"
+msgstr "串口控制线"

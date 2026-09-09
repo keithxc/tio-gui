@@ -401,7 +401,7 @@ void tio_settings_init(TioSettings *settings)
     g_return_if_fail(settings != NULL);
 
     *settings = (TioSettings){
-        .language = g_strdup("system"),
+        .language = g_strdup("zh_CN"),
         .theme = g_strdup("system"),
         .font_size = 10,
         .log_warning_mb = 256,

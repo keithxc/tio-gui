@@ -3,6 +3,8 @@
 
 This verifies software loading/install/uninstall, not USB driver behavior.
 """
+import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -27,6 +29,10 @@ def wine(*args, **kwargs):
 
 wine(installer, "/S")
 assert (directory / "bin/tio-gui.exe").exists()
+font_manifest = json.loads((directory / "FONT-DEPENDENCIES.json").read_text())
+font = directory / "share/fonts/NotoSansSC-Regular.otf"
+assert hashlib.sha256(font.read_bytes()).hexdigest() == font_manifest[0]["sha256"]
+assert (directory / "share/licenses/NotoSansSC/OFL.txt").is_file()
 shutil.copytree(directory, relocated, dirs_exist_ok=True)
 wine(relocated / "bin/tio-gui.exe", "--version")
 test_environment = dict(environment, WINEPATH=win_directory + r"\bin")
@@ -55,6 +61,7 @@ with log.open("w") as output:
         if process.poll() is None:
             process.terminate(); process.wait(timeout=10)
     assert "ERROR" not in log.read_text(), log.read_text()
+    assert "Could not load bundled font" not in log.read_text(), log.read_text()
 wine(directory / "Uninstall.exe", "/S")
 for _ in range(100):
     if not (directory / "bin/tio-gui.exe").exists(): break

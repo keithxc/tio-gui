@@ -6,7 +6,7 @@ let
 in pkgs.mkShell {
   packages = [
     cross.stdenv.cc pkgs.cmake pkgs.ninja pkgs.pkg-config pkgs.nsis
-    pkgs.glib.dev pkgs.python3 pkgs.zstd
+    pkgs.glib.dev pkgs.python3 pkgs.zstd pkgs.gettext
   ];
   TIO_WINDOWS_LDFLAGS = "-L${cross.windows.mcfgthreads}/lib";
   TIO_WINDOWS_EXTRA_DLL_DIR = "${cross.windows.mcfgthreads}/bin";

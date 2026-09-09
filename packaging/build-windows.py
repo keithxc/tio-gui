@@ -4,6 +4,7 @@
 Run inside a shell providing MinGW gcc/objdump, CMake, pkg-config, NSIS and
 glib-compile-schemas, after fetch-mingw.py. No Windows emulation is needed.
 """
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import struct
 import sys
+import urllib.request
 
 repo = Path(__file__).resolve().parents[1]
 sysroot = Path(sys.argv[1]).resolve()
@@ -81,6 +83,33 @@ if missing: raise SystemExit("Missing runtime dependencies: " + ", ".join(sorted
 for relative in ["share/glib-2.0/schemas", "share/icons/Adwaita", "share/icons/hicolor", "etc/fonts", "share/fontconfig", "share/licenses"]:
     if (prefix / relative).exists(): shutil.copytree(prefix / relative, stage / relative, dirs_exist_ok=True)
 subprocess.run(["glib-compile-schemas", str(stage / "share/glib-2.0/schemas")], check=True)
+shutil.copytree(build / "locale", stage / "share/locale", dirs_exist_ok=True)
+# Pin the fallback font and its license; keep cached downloads across builds.
+font_cache = repo / ".cache/native-font"
+font_cache.mkdir(parents=True, exist_ok=True)
+font_base = "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/"
+font_assets = [
+    ("NotoSansSC-Regular.otf", "Sans/SubsetOTF/SC/NotoSansSC-Regular.otf",
+     "faa6c9df652116dde789d351359f3d7e5d2285a2b2a1f04a2d7244df706d5ea9", "share/fonts/NotoSansSC-Regular.otf"),
+    ("OFL.txt", "LICENSE", "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+     "share/licenses/NotoSansSC/OFL.txt"),
+]
+for name, url_path, digest, relative in font_assets:
+    source = font_cache / name
+    if not source.exists():
+        with urllib.request.urlopen(font_base + url_path, timeout=60) as response:
+            data = response.read()
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise SystemExit("Font download checksum mismatch: " + name)
+        source.write_bytes(data)
+    if hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise SystemExit("Cached font checksum mismatch: " + name)
+    destination = stage / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+(stage / "FONT-DEPENDENCIES.json").write_text(json.dumps([
+    {"file": name, "url": font_base + url_path, "sha256": digest}
+    for name, url_path, digest, _ in font_assets], indent=2) + "\n")
 shutil.copy2(repo / "LICENSE", stage / "LICENSE.txt")
 shutil.copy2(repo / "docs/serial-portable.md", stage / "README.txt")
 shutil.copy2(sysroot / "manifest.json", stage / "BUILD-DEPENDENCIES.json")

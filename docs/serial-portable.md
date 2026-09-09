@@ -18,6 +18,33 @@ ad-hoc signature, not Apple notarization. Windows may show an unknown-publisher
 prompt. On macOS, approve the trusted download in System Settings → Privacy &
 Security if Gatekeeper blocks it. Do not disable system-wide security checks.
 
+## Appearance and language
+
+The native edition uses the same compact connection/console/send layout as the
+Linux edition. Connection and logging options are collapsed; line controls are
+in a menu, and Search or Ctrl+Shift+F opens the search row (Escape closes it).
+The gear in the tab bar opens application settings.
+
+Windows packages include a private Noto Sans SC fallback font (SIL OFL 1.1), so
+Chinese text remains readable on minimal English installations without changing
+the system font installation. Font source URLs and checksums ship with the package.
+
+The workspace and appearance settings are built from the same UI constructors as
+Linux (`src/workspace_ui.h`). Missing backend capabilities remove their actions;
+shared controls keep the same order, spacing and style. OS fonts, DPI and window
+decoration still follow the desktop. Quick sends sit below the send row; Customize
+opens their editor. Search uses Ctrl+Shift+F, with Enter/F3 navigation.
+
+Theme defaults to Follow system, with Light and Dark overrides applied immediately
+and saved in `serial.ini`. On Windows the system choice follows the user's app
+color preference, including changes while the application is open. The console
+uses the Linux edition's existing dark log palette. New/legacy native installations
+default to simplified Chinese; English can be selected in settings and takes effect
+immediately. Changing language does not interrupt an active serial connection.
+
+Normal client-decorated windows use matching top/bottom corner radii and clip the
+content at the bottom; maximized/fullscreen windows use square corners.
+
 ## Included
 
 - Multiple independent serial tabs; refresh detected ports or enter a port name.
@@ -80,9 +107,10 @@ settings and user-selected logs.
 
 ## Rebuilding
 
-On macOS, install build dependencies `brew install gtk4 pcre2 pkgconf cmake ninja`:
+On macOS, install build dependencies `brew install gtk4 pcre2 pkgconf cmake ninja gettext python`:
 
 ```sh
+export PATH="$(brew --prefix gettext)/bin:$PATH"
 cmake -S . -B build -G Ninja -DTIO_GUI_SERIAL_ONLY=ON -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
 cmake --build build

@@ -671,3 +671,85 @@ PATH. The packager audits bundled library references. Intel Macs, notarization
 and physical USB serial hardware were not tested.
 
 The release includes SHA256SUMS for the three application packages.
+
+
+## Native desktop layout and preferences — 2026-09-09
+
+The native edition now follows the Linux connection/console/send layout: compact
+port/baud/connect row, collapsed connection/logging and serial-line controls,
+optional search row, and settings/new-tab actions in the notebook bar. Connected
+sessions lock connection configuration fields; manual serial-line actions remain available.
+The console retains the Linux log palette; no new default dark application theme
+is imposed. CSD content is clipped at the matching 12px bottom corners, with zero
+radius for maximized/fullscreen windows.
+
+Theme settings are System/Light/Dark, applied immediately and persisted. The
+Windows system option reads AppsUseLightTheme and notices changes while open.
+Language defaults to simplified Chinese, with English selectable immediately without restart.
+Earlier native builds persisted an unused system-language value; that value now
+starts in Chinese. The native build compiles the shared zh_CN gettext catalog
+into a lookup table so explicit language selection does not depend on Windows CRT
+locale availability. Search messages use the same translation lookup.
+
+Linux native CTest (three suites) and the GTK/PTY suite passed. GUI assertions
+cover actual Chinese connection text, search reveal/Escape, immediate dark/light
+switching, persisted system theme and English choice, connected/failed-open field
+sensitivity, and existing binary transport, logging, profile, search and font
+persistence regressions. Python build scripts and the Chinese catalog validate.
+
+The final Windows installer passed installation into a fresh Wine 11 prefix,
+relocation to a path with spaces, bundled native/payload/highlighter tests, GUI
+startup, normal close and uninstall. The installer includes checksum-pinned Noto
+Sans SC and its SIL OFL license. The font is loaded into GTK's Pango font map and
+explicitly appended to the system UI font fallback; this does not install a system
+font. The smoke script checks the installed font hash and rejects font-load errors.
+The final installed-window screenshot shows Chinese labels and matching four
+corners (`.cache/windows-serial.png`, local only). Earlier appearance sampling
+also exercised Windows app-color registry changes from light to dark and back.
+
+A UI preview installer was copied to `~/Downloads/` for the user's Windows VM.
+Real Windows rendering at the user's DPI, maximized/restored corner behavior,
+and USB serial hardware remain manual acceptance items. This round does not
+claim new macOS desktop acceptance. Existing Linux sessions were left running;
+the KDE menu was refreshed to the newly built Linux Nix package.
+
+
+Windows VM visual confirmation — 2026-09-09: the user installed the UI preview
+in a Windows 10 VirtualBox guest and confirmed the improved interface. The shared
+screenshot shows readable Chinese, the dark theme, compact controls and matching
+four corners. This confirms that desktop appearance on the user's VM; it does not
+establish physical serial, every theme transition or maximized-state acceptance.
+The subsequent shared-layout build is being released as a refreshed Windows 0.3.6 installer; this screenshot is acceptance of the preceding preview only.
+
+
+## Shared workspace construction — 2026-09-09
+
+`src/workspace_ui.h` now owns the workspace row order, connection/send/search
+controls, console frame/text metrics, quick buttons and quick-editor fields,
+appearance settings card and CSS. Both `src/main.c` (Linux/tio/VTE) and
+`src/serial_main.c` (Windows/macOS/native serial) consume these constructors.
+Backend-specific actions are omitted in the corresponding row; native builds do
+not advertise the Linux protocol tools, analyzer, sequences or checksum/delay
+controls. Native OS fonts/DPI/window decoration are retained, so the guarantee is
+shared application layout and style, not identical pixels across desktop themes.
+New settings default to Chinese on all platforms; existing saved choices remain.
+
+Native GTK/PTY regression passed with Chinese/English switching both disconnected
+and during a live connection, checking transport identity, device/baud and send
+text preservation. Quick editor cancellation preserves saved payloads even when
+preferences are saved. Existing binary transport, logging, profiles, failed-open
+unlock, search/Escape and persistent zoom checks passed. Linux's ten CTest suites
+and native's three suites passed. Linux quick-editor GUI checks passed, with the
+separate hardware/socket fixtures explicitly skipped when not supplied. Localized
+Linux/native main and quick-editor snapshots are in `.cache/shared-layout/`.
+
+The standalone keyboard test program is an interactive fixture, not a terminating
+test; its direct invocation was timed out. Automated keyboard acceptance uses
+`tests/keyboard_acceptance.py` through `tests/headless.py`.
+
+Final shared-layout Windows package passed the fresh Wine 11 installer/relocation,
+bundled tests/font check, GUI launch/normal close/uninstall smoke. Screenshot:
+`.cache/windows-serial.png`. Installer SHA256: `69e9639402eb21ce70681fdae80b04722151786c3c9f07f0ec79746560770d3c`.
+The GTK keyboard driver also passed text, Enter, Tab, Escape, arrow and Ctrl-C
+through the real hidden VTE PTY. The installer was copied to
+`/home/keith/Downloads/tio-gui-0.3.6-windows-x86_64-setup.exe`.
