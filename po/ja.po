@@ -1366,3 +1366,18 @@ msgstr "書き込み"
 
 msgid "Loading BlueZ…"
 msgstr "BlueZ を読み込み中…"
+
+msgid "Search pattern is too long"
+msgstr "検索パターンが長すぎます"
+
+msgid "Invalid search pattern"
+msgstr "無効な検索パターン"
+
+msgid "Match found"
+msgstr "一致が見つかりました"
+
+msgid "Search text is too large"
+msgstr "検索対象のテキストが大きすぎます"
+
+msgid "Search limit reached; refine the pattern"
+msgstr "検索上限に達しました。パターンを絞り込んでください"

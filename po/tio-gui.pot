@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: tio-gui 0.3.0\n"
+"Project-Id-Version: tio-gui 0.3.5\n"
 "Report-Msgid-Bugs-To: https://github.com/keithxc/tio-gui/issues\n"
-"POT-Creation-Date: 2026-09-08 16:40+0800\n"
+"POT-Creation-Date: 2026-09-09 10:44+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -463,8 +463,17 @@ msgstr ""
 msgid "Send history cleared"
 msgstr ""
 
+msgid "Search pattern is too long"
+msgstr ""
+
 #, c-format
 msgid "Invalid search pattern: %s"
+msgstr ""
+
+msgid "Invalid search pattern"
+msgstr ""
+
+msgid "Match found"
 msgstr ""
 
 msgid "No matches"
@@ -983,6 +992,12 @@ msgid "New session"
 msgstr ""
 
 msgid "Tools"
+msgstr ""
+
+msgid "Search text is too large"
+msgstr ""
+
+msgid "Search limit reached; refine the pattern"
 msgstr ""
 
 msgid "Select numeric fields to plot"

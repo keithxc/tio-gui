@@ -478,12 +478,129 @@ static void check_application_lifecycle(void)
     g_unlink(path);
 }
 
+static void check_search_zoom(void)
+{
+    g_autoptr(GtkApplication) application = gtk_application_new("io.github.keithxc.tio_gui.search.tests", G_APPLICATION_NON_UNIQUE);
+    g_assert_true(g_application_register(G_APPLICATION(application), NULL, NULL));
+    activate(application, NULL);
+    GtkWidget *window = g_object_get_data(G_OBJECT(application), "tio-gui-window");
+    TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
+    TioTab *tab = app->active;
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->highlight_view);
+    gtk_search_bar_set_search_mode(tab->search_bar, TRUE);
+    gtk_check_button_set_active(tab->highlight_toggle, TRUE);
+    gtk_text_buffer_set_text(buffer, "中文 ERROR one\nerror two\nERROR three\n", -1);
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "error");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "1 / 3");
+    g_assert_false(tab->highlight_follow);
+    search_step(tab, TRUE);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "2 / 3");
+    on_search_key(NULL, GDK_KEY_Return, 0, GDK_SHIFT_MASK, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "1 / 3");
+    search_step(tab, FALSE);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "3 / 3");
+    gtk_toggle_button_set_active(tab->search_case_toggle, TRUE);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "1 / 1");
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "中文");
+    on_search_changed(tab->search_entry, tab);
+    GtkTextIter a, b; g_assert_true(gtk_text_buffer_get_selection_bounds(buffer, &a, &b));
+    g_autofree gchar *selected = gtk_text_buffer_get_text(buffer, &a, &b, TRUE);
+    g_assert_cmpstr(selected, ==, "中文");
+    gtk_toggle_button_set_active(tab->search_regex_toggle, TRUE);
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "ERROR (one|three)");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "1 / 2");
+    gtk_search_bar_set_search_mode(tab->search_bar, TRUE);
+    GtkTextIter tail; gtk_text_buffer_get_end_iter(buffer, &tail);
+    gtk_text_buffer_insert(buffer, &tail, "ERROR one\n", -1);
+    gint64 refresh_until = g_get_monotonic_time() + 400000;
+    while (g_get_monotonic_time() < refresh_until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "1 / 3");
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "[");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_true(gtk_widget_has_css_class(GTK_WIDGET(tab->search_entry), "error"));
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "missing");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "No matches");
+    g_assert_false(gtk_widget_has_css_class(GTK_WIDGET(tab->search_entry), "error"));
+    g_autofree gchar *long_line = g_strnfill(16000, 'a');
+    gtk_text_buffer_set_text(buffer, long_line, -1);
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "(a+)+$");
+    GtkTextIter end; gtk_text_buffer_get_end_iter(buffer, &end); gtk_text_buffer_insert(buffer, &end, "!", 1);
+    gint64 started = g_get_monotonic_time(); on_search_changed(tab->search_entry, tab);
+    g_assert_cmpint(g_get_monotonic_time() - started, <, G_TIME_SPAN_SECOND);
+    g_assert_true(gtk_widget_has_css_class(GTK_WIDGET(tab->search_entry), "error"));
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "^$");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "No matches");
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "");
+    on_search_changed(tab->search_entry, tab);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "");
+    /* Closing before the entry's debounce fires must not restart search. */
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "pending");
+    on_search_stopped(tab->search_entry, tab);
+    gint64 closed_until = g_get_monotonic_time() + 300000;
+    while (g_get_monotonic_time() < closed_until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "");
+    gtk_search_bar_set_search_mode(tab->search_bar, TRUE);
+    /* Search the actual VTE when terminal mode is visible. */
+    gtk_check_button_set_active(tab->highlight_toggle, FALSE);
+    vte_terminal_feed(tab->terminal, "terminal-only needle\r\nsecond needle\r\n", -1);
+    gint64 render_until = g_get_monotonic_time() + 200000;
+    while (g_get_monotonic_time() < render_until) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+    gtk_toggle_button_set_active(tab->search_regex_toggle, FALSE);
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "needle"); on_search_changed(tab->search_entry, tab);
+    g_assert_true(vte_terminal_get_has_selection(tab->terminal));
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "Match found");
+    search_step(tab, TRUE);
+    g_assert_true(vte_terminal_get_has_selection(tab->terminal));
+    gtk_check_button_set_active(tab->highlight_toggle, TRUE);
+    g_assert_cmpstr(gtk_label_get_text(tab->search_feedback), ==, "No matches");
+    gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), ""); on_search_changed(tab->search_entry, tab);
+    app->settings.font_size = 17; apply_console_fonts(app);
+    TioTab *other = tio_app_add_tab(app);
+    g_assert_cmpint(pango_font_description_get_size(vte_terminal_get_font(other->terminal)), ==, 17 * PANGO_SCALE);
+    g_assert_cmpint(pango_font_description_get_size(vte_terminal_get_font(tab->terminal)), ==, 17 * PANGO_SCALE);
+    g_assert_cmpstr(gtk_editable_get_text(GTK_EDITABLE(other->search_entry)), ==, "");
+    if (g_getenv("TIO_TEST_ZOOM")) {
+        gtk_notebook_set_current_page(app->notebook, 0);
+        gtk_window_set_title(GTK_WINDOW(window), "tio-gui zoom acceptance");
+        gtk_text_buffer_set_text(buffer, "中文 ERROR one\nerror two\nERROR three\n", -1);
+        gtk_editable_set_text(GTK_EDITABLE(tab->search_entry), "ERROR");
+        search_run(tab, TRUE, TRUE);
+        gint64 settle = g_get_monotonic_time() + 300000;
+        while (g_get_monotonic_time() < settle) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+        graphene_point_t origin = GRAPHENE_POINT_INIT(30, 30), target;
+        g_assert_true(gtk_widget_compute_point(GTK_WIDGET(tab->highlight_view), window, &origin, &target));
+        g_print("ZOOM_READY %d %d\n", (int)target.x, (int)target.y); fflush(stdout);
+        gint64 deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+        while (app->settings.font_size != 19 && g_get_monotonic_time() < deadline) {
+            g_main_context_iteration(NULL, FALSE); g_usleep(1000);
+        }
+        g_assert_cmpuint(app->settings.font_size, ==, 19);
+        settle = g_get_monotonic_time() + 300000;
+        while (g_get_monotonic_time() < settle) { g_main_context_iteration(NULL, FALSE); g_usleep(1000); }
+        const PangoFontDescription *shown_font = pango_context_get_font_description(
+            gtk_widget_get_pango_context(GTK_WIDGET(tab->highlight_view)));
+        g_assert_true(pango_font_description_get_size_is_absolute(shown_font));
+        g_assert_cmpfloat_with_epsilon((double)pango_font_description_get_size(shown_font) / PANGO_SCALE,
+                                      19.0 * 96.0 / 72.0, 0.01);
+        save_layout(GTK_WINDOW(window), "search-zoom.png");
+    }
+    g_assert_true(tio_settings_save(&app->settings, NULL));
+    TioSettings restored; tio_settings_init(&restored); tio_settings_load(&restored);
+    g_assert_cmpuint(restored.font_size, ==, app->settings.font_size); tio_settings_clear(&restored);
+    gtk_window_close(GTK_WINDOW(window));
+}
+
 int main(int argc, char **argv)
 {
     g_autofree gchar *config_root = g_dir_make_tmp("tio-gui-ui-test-XXXXXX", NULL);
     g_setenv("XDG_CONFIG_HOME", config_root, TRUE);
     g_test_init(&argc, &argv, NULL);
     gtk_init();
+    g_test_add_func("/console/search-zoom", check_search_zoom);
     g_test_add_func("/quick-editor/preview-validation", check_editor);
     g_test_add_func("/quick-editor/binary-send-and-cancel", check_send);
     g_test_add_func("/sequences/editor-persistence", check_sequence_editor);

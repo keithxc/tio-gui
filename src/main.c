@@ -39,7 +39,7 @@
 #include "ble.h"
 #include "highlighter.h"
 
-#define _(message) gettext(message)
+#include "console_search.h"
 
 #define TIO_GUI_HISTORY_MENU_LIMIT 25
 
@@ -78,6 +78,10 @@ struct _TioTab {
     /* Search. */
     GtkSearchBar *search_bar;
     GtkSearchEntry *search_entry;
+    GtkLabel *search_feedback;
+    guint search_refresh;
+    gboolean search_disposed;
+    gchar *search_query_key;
     GtkButton *search_previous_button;
     GtkButton *search_next_button;
     GtkToggleButton *search_case_toggle;
@@ -357,6 +361,8 @@ static void capture_session_config(TioTab *tab, TioSessionConfig *config);
 static void apply_session_config(TioTab *tab, const TioSessionConfig *config);
 static void refresh_devices(TioTab *tab);
 static void update_search_regex(TioTab *tab);
+static void search_run(TioTab *tab, gboolean forward, gboolean reset);
+static void apply_console_fonts(TioApp *app);
 static void on_language_changed(GtkDropDown *dropdown, GParamSpec *pspec, gpointer user_data);
 static void capture_all_settings(TioTab *tab);
 static gboolean update_settings_previews(gpointer user_data);
@@ -2030,6 +2036,7 @@ static void on_highlight_toggled(GtkCheckButton *button, gpointer user_data)
     gtk_stack_set_visible_child_name(tab->terminal_stack,
                                      active ? "highlight" : "terminal");
     update_scroll_button(tab);
+    if (tab->search_bar && gtk_search_bar_get_search_mode(tab->search_bar)) search_run(tab, TRUE, TRUE);
     focus_log_view(tab);
 }
 
@@ -2311,7 +2318,11 @@ static void update_search_regex(TioTab *tab)
     }
 
     g_autoptr(GError) error = NULL;
-    VteRegex *regex = vte_regex_new_for_search(pattern, -1, flags, &error);
+    g_autofree gchar *bounded = g_strconcat("(*LIMIT_MATCH=10000)(*LIMIT_DEPTH=100)", pattern, NULL);
+    VteRegex *regex = strlen(pattern) <= 4096
+        ? vte_regex_new_for_search(bounded, -1, flags, &error) : NULL;
+    if (!regex && !error) g_set_error_literal(&error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                                             _("Search pattern is too long"));
     if (regex == NULL) {
         vte_terminal_search_set_regex(tab->terminal, NULL, 0);
         g_clear_pointer(&tab->search_pattern, g_free);
@@ -2331,24 +2342,92 @@ static void update_search_regex(TioTab *tab)
     tab->search_flags = flags;
 }
 
-static void search_step(TioTab *tab, gboolean forward)
+static void search_run(TioTab *tab, gboolean forward, gboolean reset)
 {
-    update_search_regex(tab);
-    if (vte_terminal_search_get_regex(tab->terminal) == NULL) {
+    if (!tab->terminal || !tab->highlight_view) return;
+    const char *query = gtk_editable_get_text(GTK_EDITABLE(tab->search_entry));
+    g_autofree gchar *key = g_strdup_printf("%d:%d:%d:%s",
+        gtk_check_button_get_active(tab->highlight_toggle),
+        gtk_toggle_button_get_active(tab->search_case_toggle),
+        gtk_toggle_button_get_active(tab->search_regex_toggle), query);
+    if (!reset && g_strcmp0(key, tab->search_query_key)) reset = TRUE;
+    g_free(tab->search_query_key); tab->search_query_key = g_strdup(key);
+    gtk_label_set_text(tab->search_feedback, "");
+    if (gtk_check_button_get_active(tab->highlight_toggle)) {
+        if (*query) {
+            tab->highlight_follow = FALSE;
+            stop_highlight_scroll(tab);
+            update_scroll_button(tab);
+        }
+        tio_console_search(tab->highlight_view, query,
+            gtk_toggle_button_get_active(tab->search_case_toggle),
+            gtk_toggle_button_get_active(tab->search_regex_toggle), forward, reset,
+            tab->search_feedback, GTK_WIDGET(tab->search_entry));
         return;
     }
-
+    if (reset) {
+        vte_terminal_search_set_regex(tab->terminal, NULL, 0);
+        g_clear_pointer(&tab->search_pattern, g_free);
+    }
+    update_search_regex(tab);
+    if (vte_terminal_search_get_regex(tab->terminal) == NULL) {
+        if (*query) gtk_label_set_text(tab->search_feedback, _("Invalid search pattern"));
+        return;
+    }
     gboolean found = forward ? vte_terminal_search_find_next(tab->terminal)
                              : vte_terminal_search_find_previous(tab->terminal);
-    if (!found) {
-        set_status(tab, _("No matches"));
+    gtk_label_set_text(tab->search_feedback, found ? _("Match found") : _("No matches"));
+}
+
+static gboolean refresh_search_matches(gpointer data)
+{
+    TioTab *tab = data; tab->search_refresh = 0;
+    if (gtk_search_bar_get_search_mode(tab->search_bar) &&
+        gtk_check_button_get_active(tab->highlight_toggle)) {
+        tio_console_search(tab->highlight_view,
+            gtk_editable_get_text(GTK_EDITABLE(tab->search_entry)),
+            gtk_toggle_button_get_active(tab->search_case_toggle),
+            gtk_toggle_button_get_active(tab->search_regex_toggle), TRUE, TIO_SEARCH_REFRESH,
+            tab->search_feedback, GTK_WIDGET(tab->search_entry));
     }
+    return G_SOURCE_REMOVE;
+}
+
+static void on_search_buffer_changed(GtkTextBuffer *buffer, gpointer data)
+{
+    (void)buffer; TioTab *tab = data;
+    if (!tab->search_disposed && !tab->search_refresh && gtk_search_bar_get_search_mode(tab->search_bar) &&
+        *gtk_editable_get_text(GTK_EDITABLE(tab->search_entry)))
+        tab->search_refresh = g_timeout_add(250, refresh_search_matches, tab);
+}
+
+static void search_step(TioTab *tab, gboolean forward)
+{
+    search_run(tab, forward, FALSE);
 }
 
 static void on_search_changed(GtkSearchEntry *entry, gpointer user_data)
 {
     (void)entry;
-    update_search_regex(user_data);
+    TioTab *tab = user_data;
+    if (!gtk_search_bar_get_search_mode(tab->search_bar)) return;
+    const char *query = gtk_editable_get_text(GTK_EDITABLE(tab->search_entry));
+    g_autofree gchar *key = g_strdup_printf("%d:%d:%d:%s",
+        gtk_check_button_get_active(tab->highlight_toggle),
+        gtk_toggle_button_get_active(tab->search_case_toggle),
+        gtk_toggle_button_get_active(tab->search_regex_toggle), query);
+    if (g_strcmp0(key, tab->search_query_key)) search_run(tab, TRUE, TRUE);
+}
+
+static gboolean on_search_key(GtkEventControllerKey *controller, guint key,
+                              guint code, GdkModifierType state, gpointer data)
+{
+    (void)controller; (void)code;
+    if (key == GDK_KEY_Return || key == GDK_KEY_KP_Enter || key == GDK_KEY_F3) {
+        search_step(data, !(state & GDK_SHIFT_MASK));
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static void on_search_next(GtkButton *button, gpointer user_data)
@@ -2372,7 +2451,7 @@ static void on_search_activate(GtkSearchEntry *entry, gpointer user_data)
 static void on_search_option_toggled(GtkToggleButton *button, gpointer user_data)
 {
     (void)button;
-    update_search_regex(user_data);
+    search_run(user_data, TRUE, TRUE);
 }
 
 static void on_search_stopped(GtkSearchEntry *entry, gpointer user_data)
@@ -2380,7 +2459,23 @@ static void on_search_stopped(GtkSearchEntry *entry, gpointer user_data)
     (void)entry;
     TioTab *tab = user_data;
     gtk_search_bar_set_search_mode(tab->search_bar, FALSE);
+    tio_console_search(tab->highlight_view, "", FALSE, FALSE, TRUE, TRUE,
+                       tab->search_feedback, GTK_WIDGET(tab->search_entry));
+    vte_terminal_search_set_regex(tab->terminal, NULL, 0);
     focus_log_view(tab);
+}
+
+static void on_search_visibility(GObject *object, GParamSpec *spec, gpointer data)
+{
+    (void)object; (void)spec; TioTab *tab = data;
+    if (!gtk_search_bar_get_search_mode(tab->search_bar) && tab->highlight_view) {
+        g_clear_handle_id(&tab->search_refresh, g_source_remove);
+        tio_console_search(tab->highlight_view, "", FALSE, FALSE, TRUE, TRUE,
+                           tab->search_feedback, GTK_WIDGET(tab->search_entry));
+        vte_terminal_search_set_regex(tab->terminal, NULL, 0);
+        g_clear_pointer(&tab->search_query_key, g_free);
+        focus_log_view(tab);
+    }
 }
 
 /* ------------------------------------------------------------- autoscroll */
@@ -2659,6 +2754,36 @@ static void scroll_highlight_to_bottom(TioTab *tab)
             GTK_WIDGET(tab->highlight_view), animate_highlight_scroll, tab, NULL);
     }
     tab->highlight_adjusting = FALSE;
+}
+
+static void apply_console_fonts(TioApp *app)
+{
+    for (guint i = 0; i < app->tabs->len; i++) {
+        TioTab *tab = g_ptr_array_index(app->tabs, i);
+        guint size = CLAMP(app->settings.font_size, 6, 40);
+        PangoFontDescription *font = pango_font_description_from_string("Monospace");
+        pango_font_description_set_size(font, (gint)size * PANGO_SCALE);
+        vte_terminal_set_font(tab->terminal, font);
+        pango_font_description_free(font);
+        tio_console_font(GTK_WIDGET(tab->highlight_view), size);
+    }
+}
+
+static gboolean on_console_zoom(GtkEventControllerScroll *controller, double dx,
+                                double dy, gpointer data)
+{
+    (void)dx;
+    if (!(gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(controller)) & GDK_CONTROL_MASK))
+        return FALSE;
+    TioTab *tab = data;
+    if (dy == 0) return TRUE;
+    guint size = (guint)CLAMP((gint)tab->app->settings.font_size + (dy < 0 ? 1 : -1), 6, 40);
+    if (size == tab->app->settings.font_size) return TRUE;
+    tab->app->settings.font_size = size;
+    apply_console_fonts(tab->app);
+    g_autoptr(GError) error = NULL;
+    if (!tio_settings_save(&tab->app->settings, &error)) set_status(tab, error->message);
+    return TRUE;
 }
 
 static gboolean on_highlight_wheel(GtkEventControllerScroll *controller, double dx,
@@ -4004,13 +4129,18 @@ static void action_search(GSimpleAction *action, GVariant *parameter, gpointer u
         return;
     }
 
-    gboolean active = !gtk_search_bar_get_search_mode(tab->search_bar);
-    gtk_search_bar_set_search_mode(tab->search_bar, active);
-    if (active) {
-        gtk_widget_grab_focus(GTK_WIDGET(tab->search_entry));
-    } else {
-        focus_log_view(tab);
-    }
+    gtk_search_bar_set_search_mode(tab->search_bar, TRUE);
+    gtk_widget_grab_focus(GTK_WIDGET(tab->search_entry));
+    gtk_editable_select_region(GTK_EDITABLE(tab->search_entry), 0, -1);
+    search_run(tab, TRUE, TRUE);
+}
+
+static void action_search_direction(GSimpleAction *action, GVariant *parameter, gpointer data)
+{
+    (void)parameter; TioApp *app = data;
+    if (!app->active) return;
+    gtk_search_bar_set_search_mode(app->active->search_bar, TRUE);
+    search_step(app->active, g_str_equal(g_action_get_name(G_ACTION(action)), "search-next"));
 }
 
 static void action_select_tab(GSimpleAction *action, GVariant *parameter, gpointer data)
@@ -4031,6 +4161,8 @@ static void install_shortcuts(GtkApplication *application, TioApp *app)
         {.name = "connect", .activate = action_connect},
         {.name = "disconnect", .activate = action_disconnect},
         {.name = "search", .activate = action_search},
+        {.name = "search-next", .activate = action_search_direction},
+        {.name = "search-previous", .activate = action_search_direction},
         {.name = "select-tab", .activate = action_select_tab, .parameter_type = "i"},
         {.name = "new-tab", .activate = action_new_tab},
         {.name = "close-tab", .activate = action_close_tab},
@@ -4059,6 +4191,8 @@ static void install_shortcuts(GtkApplication *application, TioApp *app)
         {"win.copy", "<Control><Shift>c"},
         {"win.paste", "<Control><Shift>v"},
         {"win.search", "<Control><Shift>f"},
+        {"win.search-next", "F3"},
+        {"win.search-previous", "<Shift>F3"},
         {"win.connect", "F5"},
         {"win.disconnect", "F6"},
         {"win.new-tab", "<Control>t"},
@@ -4187,6 +4321,9 @@ static void tio_tab_free(TioTab *tab)
         return;
     }
     g_clear_handle_id(&tab->highlight_cursor_timer, g_source_remove);
+    tab->search_disposed = TRUE;
+    g_clear_handle_id(&tab->search_refresh, g_source_remove);
+    g_clear_pointer(&tab->search_query_key, g_free);
 
     if (tab->quick_window) {
         GtkWidget *quick = tab->quick_window;
@@ -4638,6 +4775,7 @@ static void apply_imported_settings(TioTab *tab)
 {
     tio_highlighter_rules(tab->highlighter, tab->app->settings.highlight_rules, NULL);
     apply_theme(tab->app->settings.theme);
+    apply_console_fonts(tab->app);
     gtk_drop_down_set_selected(tab->app->theme_dropdown,
                                value_index(theme_values, tab->app->settings.theme, 0));
     gtk_drop_down_set_selected(tab->app->language_dropdown,
@@ -5377,10 +5515,19 @@ static GtkWidget *build_search_bar(TioTab *tab)
     tab->search_regex_toggle = GTK_TOGGLE_BUTTON(gtk_toggle_button_new_with_label(".*"));
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->search_regex_toggle), _("Regular expression"));
     gtk_box_append(GTK_BOX(box), GTK_WIDGET(tab->search_regex_toggle));
+    tab->search_feedback = GTK_LABEL(gtk_label_new(""));
+    gtk_label_set_ellipsize(tab->search_feedback, PANGO_ELLIPSIZE_END);
+    gtk_label_set_max_width_chars(tab->search_feedback, 28);
+    gtk_box_append(GTK_BOX(box), GTK_WIDGET(tab->search_feedback));
+    GtkEventController *search_keys = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(search_keys, GTK_PHASE_CAPTURE);
+    g_signal_connect(search_keys, "key-pressed", G_CALLBACK(on_search_key), tab);
+    gtk_widget_add_controller(GTK_WIDGET(tab->search_entry), search_keys);
 
     gtk_search_bar_set_child(tab->search_bar, box);
     gtk_search_bar_connect_entry(tab->search_bar, GTK_EDITABLE(tab->search_entry));
     gtk_search_bar_set_show_close_button(tab->search_bar, TRUE);
+    g_signal_connect(tab->search_bar, "notify::search-mode-enabled", G_CALLBACK(on_search_visibility), tab);
 
     g_signal_connect(tab->search_entry, "search-changed", G_CALLBACK(on_search_changed), tab);
     g_signal_connect(tab->search_entry, "activate", G_CALLBACK(on_search_activate), tab);
@@ -5807,6 +5954,7 @@ static TioTab *tio_tab_new(TioApp *app)
     g_signal_connect(tab->terminal, "child-exited", G_CALLBACK(on_child_exited), tab);
     g_signal_connect(tab->terminal, "commit", G_CALLBACK(on_terminal_commit), tab);
     g_signal_connect(tab->terminal, "selection-changed", G_CALLBACK(on_terminal_selection_changed), tab);
+    g_signal_connect(gtk_text_view_get_buffer(tab->highlight_view), "changed", G_CALLBACK(on_search_buffer_changed), tab);
     g_signal_connect(gtk_text_view_get_buffer(tab->highlight_view), "notify::has-selection",
                      G_CALLBACK(on_highlight_selection_changed), tab);
     GtkAdjustment *highlight_adjustment =
@@ -5993,6 +6141,12 @@ static TioTab *tio_app_add_tab(TioApp *app)
 {
     TioTab *tab = tio_tab_new(app);
     g_ptr_array_add(app->tabs, tab);
+    apply_console_fonts(app);
+    GtkEventController *zoom = gtk_event_controller_scroll_new(
+        GTK_EVENT_CONTROLLER_SCROLL_VERTICAL | GTK_EVENT_CONTROLLER_SCROLL_DISCRETE);
+    gtk_event_controller_set_propagation_phase(zoom, GTK_PHASE_CAPTURE);
+    g_signal_connect(zoom, "scroll", G_CALLBACK(on_console_zoom), tab);
+    gtk_widget_add_controller(GTK_WIDGET(tab->terminal_stack), zoom);
 
     GtkWidget *label_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     tab->tab_label = GTK_LABEL(gtk_label_new(""));

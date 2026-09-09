@@ -1364,3 +1364,18 @@ msgstr "寫入"
 
 msgid "Loading BlueZ…"
 msgstr "正在載入 BlueZ…"
+
+msgid "Search pattern is too long"
+msgstr "搜尋運算式過長"
+
+msgid "Invalid search pattern"
+msgstr "搜尋運算式無效"
+
+msgid "Match found"
+msgstr "找到符合項目"
+
+msgid "Search text is too large"
+msgstr "搜尋文字過大"
+
+msgid "Search limit reached; refine the pattern"
+msgstr "搜尋達到上限，請縮小範圍"

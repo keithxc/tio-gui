@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "highlighter.h"
 #include "payload.h"
+#include "console_search.h"
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #elif defined(G_OS_WIN32)
@@ -72,6 +73,11 @@ typedef struct {
     GtkButton *connect;
     GtkTextView *view;
     GtkSearchEntry *search;
+    GtkCheckButton *search_case, *search_regex;
+    GtkLabel *search_feedback;
+    guint search_refresh;
+    gboolean searching;
+    gchar *search_query_key;
     GtkScrolledWindow *scroll;
     GtkEntry *quick_text[4];
     GtkCheckButton *quick_hex[4];
@@ -309,18 +315,60 @@ static void refresh_clicked(GtkButton *b, gpointer data)
         text(tab->device, devices[0]); gtk_drop_down_set_selected(tab->ports, 0);
     }
 }
+static void serial_search(Tab *tab, gboolean forward, gboolean reset)
+{
+    if (!tab->view) return;
+    const char *query = gtk_editable_get_text(GTK_EDITABLE(tab->search));
+    g_autofree gchar *key = g_strdup_printf("%d:%d:%s", checked(tab->search_case), checked(tab->search_regex), query);
+    if (!tab->searching || (!reset && g_strcmp0(key, tab->search_query_key))) reset = TRUE;
+    g_free(tab->search_query_key); tab->search_query_key = g_strdup(key);
+    tab->searching = *query != 0;
+    if (*query) gtk_check_button_set_active(tab->follow, FALSE);
+    tio_console_search(tab->view, query, checked(tab->search_case), checked(tab->search_regex),
+                       forward, reset, tab->search_feedback, GTK_WIDGET(tab->search));
+}
+static gboolean refresh_serial_search(gpointer data)
+{
+    Tab *tab = data; tab->search_refresh = 0;
+    if (tab->searching) tio_console_search(tab->view,
+        gtk_editable_get_text(GTK_EDITABLE(tab->search)), checked(tab->search_case), checked(tab->search_regex),
+        TRUE, TIO_SEARCH_REFRESH, tab->search_feedback, GTK_WIDGET(tab->search));
+    return G_SOURCE_REMOVE;
+}
+static void serial_search_buffer_changed(GtkTextBuffer *buffer, gpointer data)
+{
+    (void)buffer; Tab *tab = data;
+    if (!tab->closing && tab->searching && !tab->search_refresh)
+        tab->search_refresh = g_timeout_add(250, refresh_serial_search, tab);
+}
 static void search_next(GtkWidget *widget, gpointer data)
+{ (void)widget; serial_search(data, TRUE, FALSE); }
+static void search_previous(GtkWidget *widget, gpointer data)
+{ (void)widget; serial_search(data, FALSE, FALSE); }
+static void search_changed(GtkWidget *widget, gpointer data)
 {
     (void)widget; Tab *tab = data;
-    const char *query = gtk_editable_get_text(GTK_EDITABLE(tab->search));
-    if (!*query) return;
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(tab->view);
-    GtkTextIter from, start, end;
-    if (!gtk_text_buffer_get_selection_bounds(buffer, &start, &from)) gtk_text_buffer_get_start_iter(buffer, &from);
-    gboolean found = gtk_text_iter_forward_search(&from, query, GTK_TEXT_SEARCH_TEXT_ONLY | GTK_TEXT_SEARCH_CASE_INSENSITIVE, &start, &end, NULL);
-    if (!found) { gtk_text_buffer_get_start_iter(buffer, &from); found = gtk_text_iter_forward_search(&from, query, GTK_TEXT_SEARCH_TEXT_ONLY | GTK_TEXT_SEARCH_CASE_INSENSITIVE, &start, &end, NULL); }
-    if (found) { gtk_check_button_set_active(tab->follow, FALSE); gtk_text_buffer_select_range(buffer, &start, &end); gtk_text_view_scroll_to_iter(tab->view, &start, 0.1, FALSE, 0, 0); }
-    else set_status(tab, "Text not found");
+    g_autofree gchar *key = g_strdup_printf("%d:%d:%s", checked(tab->search_case), checked(tab->search_regex),
+        gtk_editable_get_text(GTK_EDITABLE(tab->search)));
+    if (g_strcmp0(key, tab->search_query_key)) serial_search(tab, TRUE, TRUE);
+}
+static gboolean search_key(GtkEventControllerKey *controller, guint key, guint code,
+                           GdkModifierType state, gpointer data)
+{
+    (void)controller; (void)code; Tab *tab = data;
+    if (key == GDK_KEY_Return || key == GDK_KEY_KP_Enter || key == GDK_KEY_F3) {
+        serial_search(tab, !(state & GDK_SHIFT_MASK), FALSE); return TRUE;
+    }
+    if (key == GDK_KEY_Escape) {
+        tab->searching = FALSE;
+        g_free(tab->search_query_key);
+        tab->search_query_key = g_strdup_printf("%d:%d:%s", checked(tab->search_case), checked(tab->search_regex),
+            gtk_editable_get_text(GTK_EDITABLE(tab->search)));
+        tio_console_search(tab->view, "", FALSE, FALSE, TRUE, TRUE,
+                           tab->search_feedback, GTK_WIDGET(tab->search));
+        gtk_widget_grab_focus(GTK_WIDGET(tab->view)); return TRUE;
+    }
+    return FALSE;
 }
 static void paste_done(GObject *source, GAsyncResult *result, gpointer data)
 {
@@ -333,7 +381,12 @@ static void paste_done(GObject *source, GAsyncResult *result, gpointer data)
 static gboolean key_pressed(GtkEventControllerKey *controller, guint key, guint code, GdkModifierType state, gpointer data)
 {
     (void)controller; (void)code; Tab *tab = data;
+    if (key == GDK_KEY_F3) { serial_search(tab, !(state & GDK_SHIFT_MASK), FALSE); return TRUE; }
     gboolean control = (state & GDK_CONTROL_MASK) != 0;
+    if (control && (state & GDK_SHIFT_MASK) && (key == GDK_KEY_f || key == GDK_KEY_F)) {
+        gtk_widget_grab_focus(GTK_WIDGET(tab->search));
+        gtk_editable_select_region(GTK_EDITABLE(tab->search), 0, -1); return TRUE;
+    }
     gboolean copy_modifier = control && (state & GDK_SHIFT_MASK);
 #ifdef __APPLE__
     copy_modifier = copy_modifier || (state & GDK_META_MASK);
@@ -385,7 +438,18 @@ static void input_focus_leave(GtkEventControllerFocus *controller, gpointer data
 static void committed(GtkIMContext *context, const char *value, gpointer data) { (void)context; send_text(data, value, FALSE, 0); }
 static gboolean scroll_console(GtkEventControllerScroll *controller, double dx, double dy, gpointer data)
 {
-    (void)controller; (void)dx; Tab *tab = data;
+    (void)dx; Tab *tab = data;
+    if (gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(controller)) & GDK_CONTROL_MASK) {
+        if (dy == 0) return TRUE;
+        tab->app->settings.font_size = (guint)CLAMP((gint)tab->app->settings.font_size + (dy < 0 ? 1 : -1), 6, 40);
+        for (guint i = 0; i < tab->app->tabs->len; i++) {
+            Tab *other = g_ptr_array_index(tab->app->tabs, i);
+            tio_console_font(GTK_WIDGET(other->view), tab->app->settings.font_size);
+        }
+        g_autoptr(GError) error = NULL;
+        if (!save(tab->app, &error)) set_status(tab, error->message);
+        return TRUE;
+    }
     if (dy < 0) gtk_check_button_set_active(tab->follow, FALSE);
     return FALSE;
 }
@@ -421,6 +485,8 @@ static void tab_free(Tab *tab)
 {
     tab->closing = TRUE; g_object_set_data(G_OBJECT(tab->page), "tab", NULL);
     if (tab->timer) g_source_remove(tab->timer);
+    g_clear_handle_id(&tab->search_refresh, g_source_remove);
+    g_clear_pointer(&tab->search_query_key, g_free);
     stop_tab(tab); tio_highlighter_free(tab->highlighter); tio_session_config_clear(&tab->config); g_free(tab);
 }
 static void remove_tab(Tab *tab)
@@ -489,11 +555,29 @@ static void new_tab(App *app, const TioSessionConfig *config)
     for (guint i = 0; i < 5; i++) { GtkWidget *b = button(options, lines[i], G_CALLBACK(line_clicked), tab); g_object_set_data(G_OBJECT(b), "line", GUINT_TO_POINTER(i)); }
     GtkWidget *searchrow = row(); append(root, searchrow);
     tab->search = GTK_SEARCH_ENTRY(gtk_search_entry_new()); gtk_widget_set_hexpand(GTK_WIDGET(tab->search), TRUE); append(searchrow, GTK_WIDGET(tab->search));
-    g_signal_connect(tab->search, "activate", G_CALLBACK(search_next), tab); button(searchrow, "Find next", G_CALLBACK(search_next), tab);
+    g_signal_connect(tab->search, "activate", G_CALLBACK(search_next), tab);
+    g_signal_connect(tab->search, "search-changed", G_CALLBACK(search_changed), tab);
+    button(searchrow, "↑", G_CALLBACK(search_previous), tab);
+    button(searchrow, "↓", G_CALLBACK(search_next), tab);
+    tab->search_case = check(searchrow, "Aa", FALSE);
+    tab->search_regex = check(searchrow, ".*", FALSE);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(tab->search_case), "Match case");
+    gtk_widget_set_tooltip_text(GTK_WIDGET(tab->search_regex), "Regular expression");
+    g_signal_connect(tab->search_case, "toggled", G_CALLBACK(search_changed), tab);
+    g_signal_connect(tab->search_regex, "toggled", G_CALLBACK(search_changed), tab);
+    tab->search_feedback = GTK_LABEL(gtk_label_new("")); append(searchrow, GTK_WIDGET(tab->search_feedback));
+    gtk_label_set_ellipsize(tab->search_feedback, PANGO_ELLIPSIZE_END);
+    gtk_label_set_max_width_chars(tab->search_feedback, 28);
+    GtkEventController *search_keys = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(search_keys, GTK_PHASE_CAPTURE);
+    g_signal_connect(search_keys, "key-pressed", G_CALLBACK(search_key), tab);
+    gtk_widget_add_controller(GTK_WIDGET(tab->search), search_keys);
     tab->view = GTK_TEXT_VIEW(gtk_text_view_new()); gtk_text_view_set_editable(tab->view, FALSE);
     gtk_text_view_set_monospace(tab->view, TRUE); gtk_text_view_set_cursor_visible(tab->view, FALSE);
     gtk_text_view_set_wrap_mode(tab->view, GTK_WRAP_CHAR); gtk_widget_add_css_class(GTK_WIDGET(tab->view), "serial-console");
+    tio_console_font(GTK_WIDGET(tab->view), app->settings.font_size);
     tab->highlighter = tio_highlighter_new(gtk_text_view_get_buffer(tab->view));
+    g_signal_connect(gtk_text_view_get_buffer(tab->view), "changed", G_CALLBACK(serial_search_buffer_changed), tab);
     tab->scroll = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new()); gtk_widget_set_vexpand(GTK_WIDGET(tab->scroll), TRUE);
     gtk_scrolled_window_set_child(tab->scroll, GTK_WIDGET(tab->view)); append(root, GTK_WIDGET(tab->scroll));
     GtkEventController *keys = gtk_event_controller_key_new(); gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
@@ -507,7 +591,7 @@ static void new_tab(App *app, const TioSessionConfig *config)
     gtk_widget_add_controller(GTK_WIDGET(tab->view), focus);
     g_object_unref(im);
     g_signal_connect(keys, "key-pressed", G_CALLBACK(key_pressed), tab); gtk_widget_add_controller(GTK_WIDGET(tab->view), keys);
-    GtkEventController *scroll = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    GtkEventController *scroll = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL | GTK_EVENT_CONTROLLER_SCROLL_DISCRETE);
     gtk_event_controller_set_propagation_phase(scroll, GTK_PHASE_CAPTURE);
     g_signal_connect(scroll, "scroll", G_CALLBACK(scroll_console), tab); gtk_widget_add_controller(GTK_WIDGET(tab->view), scroll);
     GtkWidget *sendrow = row(); append(root, sendrow);

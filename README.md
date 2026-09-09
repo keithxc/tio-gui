@@ -299,3 +299,14 @@ regular-expression rules can be layered on after the safe defaults.
 ## License
 
 GPL-3.0-only. See `LICENSE`.
+
+
+Console reading controls: hold Ctrl and scroll the mouse wheel to change the font
+size (6–40pt). The size is shared across tabs and remembered after restarting.
+Ctrl+Shift+F opens search in the current terminal/highlight view. Type to locate,
+use Enter/F3 for the next match and Shift+Enter/Shift+F3 for the previous match;
+Escape closes search. Case-sensitive and regular-expression modes are available.
+The highlight view marks all matches and displays current/total, refreshing for
+new output without moving your reading position. Search pauses following; use
+Back to bottom to resume. Ordinary terminal mode uses VTE's native search and
+reports whether a match was found.

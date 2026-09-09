@@ -1369,3 +1369,18 @@ msgstr "Schreiben"
 
 msgid "Loading BlueZ…"
 msgstr "BlueZ wird geladen…"
+
+msgid "Search pattern is too long"
+msgstr "Suchmuster ist zu lang"
+
+msgid "Invalid search pattern"
+msgstr "Ungültiges Suchmuster"
+
+msgid "Match found"
+msgstr "Treffer gefunden"
+
+msgid "Search text is too large"
+msgstr "Suchtext ist zu groß"
+
+msgid "Search limit reached; refine the pattern"
+msgstr "Suchgrenze erreicht; Muster eingrenzen"

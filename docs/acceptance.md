@@ -32,11 +32,14 @@ UI additions settle.
 
 ## Remaining work
 
-The authoritative feature list is `../tio-gui-todo.md` in the workspace.
-Next: saved send sequences with run-once, loop, pause and stop. Then serial line
-controls, reconnect controls, About/diagnostics, raw-stream analysis, recording,
-export/rotation, and remaining long-term backlog items. Do not mark unsupported
-or untested features complete merely to close the list.
+The authoritative feature list is the workspace file `../tio-gui-todo.md`
+(relative to the repository root). The original sequence, serial controls,
+analysis and recording backlog is covered by the dated acceptance sections below.
+The 2026-09-09 search and font zoom follow-up is documented at the end of this file.
+Native Windows/macOS edition acceptance and limitations are tracked in
+`serial-portable.md`; physical serial, RS-485, CAN and BLE acceptance remains
+separate from software tests. Do not mark unsupported or untested features
+complete merely to close the list.
 
 ## Send sequences — 2026-09-08
 
@@ -554,3 +557,51 @@ Validation:
   .cache/build/keyboard-test`: real GTK keyboard events reached the VTE PTY with
   the expected text, Enter, Tab, Escape, Up and Ctrl-C bytes while caret handling
   was enabled.
+
+
+## Search and persistent font zoom — 2026-09-09
+
+Interaction references (independent implementation):
+[VS Code terminal find](https://code.visualstudio.com/docs/terminal/basics#_find),
+[VS Code find navigation](https://code.visualstudio.com/docs/editing/codebasics#_find-and-replace),
+and [GNOME Terminal search](https://help.gnome.org/gnome-terminal/txt-search.html).
+These inform match highlighting, Enter/Shift+Enter navigation, case/regex options
+and wrapping. Persisting console font size is the user's explicit requirement.
+
+- Ctrl+wheel changes console font size by one point, bounded to 6–40pt, saves it
+  immediately, and applies it to existing/new tabs. VTE and the highlight view
+  use the same point size. Native serial stores it in its separate `serial.ini`.
+- Linux searches whichever view is displayed. Typing locates a result;
+  Enter/Shift+Enter and F3/Shift+F3 navigate. Ctrl+Shift+F focuses the query without
+  toggling a visible search bar closed. Plain serial control characters are kept.
+- Highlight/native consoles show all matches and current/total. Background text
+  changes refresh at most every 250ms without changing the selection or scrolling
+  to another match. Explicit search pauses following; Back to bottom/Follow
+  resumes it. Closing Linux search clears its tags and pending refresh.
+- VTE retains its native search engine and shows found/no match rather than a
+  fabricated total. Errors appear beside the query. Log regex searches cap the
+  pattern at 4096 bytes, text at 8 Mi characters, results at 10,000, PCRE matching
+  at 50ms, match steps at 10,000, depth at 100 and heap at 1 MiB. VTE patterns
+  carry match/depth limits. Limit failures ask for a narrower pattern; zero-width
+  matches are omitted from the line console's visible results.
+- Added five messages in simplified/traditional Chinese, Japanese and German.
+
+Validation: all 10 Linux CTest suites and three native serial CTest suites passed.
+GTK `/console/search-zoom` covers Chinese, case sensitivity, regex, invalid/no
+matches, wrapping, Shift+Enter, an adversarial regex, new RX preserving the current
+result, VTE/highlight switching, tab isolation, new-tab font inheritance and
+settings reload. `tests/search_zoom_acceptance.py` sends actual Ctrl+wheel events
+through xdotool to the GTK window and verifies the displayed font and saved size.
+The full GTK quick-editor suite passed its runnable cases (external harness and
+localized-layout cases retain their explicit skips). Native serial GTK tests
+also passed real PTY transport/logging/lifecycle plus new search and persistence
+checks. Screenshot: `.cache/search-zoom/search-zoom.png` (local, not versioned).
+
+This round runs native serial UI tests on Linux; it does not establish new
+Windows/macOS installation, IME or physical serial hardware acceptance.
+
+The final Nix package built successfully and the KDE launcher resolves to it.
+The installed derivation's four changed implementation files were compared
+byte-for-byte with the workspace, and the launcher passed `--help`. Existing
+serial sessions were left running; close and reopen to load the new build.
+All four translation catalogs pass `msgfmt --check` with 435 translated entries.

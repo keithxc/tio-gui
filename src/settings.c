@@ -403,6 +403,7 @@ void tio_settings_init(TioSettings *settings)
     *settings = (TioSettings){
         .language = g_strdup("system"),
         .theme = g_strdup("system"),
+        .font_size = 10,
         .log_warning_mb = 256,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
@@ -433,6 +434,8 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
 
     replace_string_from_key(key_file, "general", "language", &settings->language);
     replace_string_from_key(key_file, "general", "theme", &settings->theme);
+    replace_uint_from_key(key_file, "general", "font-size", &settings->font_size, 40);
+    settings->font_size = CLAMP(settings->font_size, 6, 40);
     replace_string_from_key(key_file, "general", "active-profile", &settings->active_profile);
     replace_boolean_from_key(key_file, "general", "show-all-ttys", &settings->show_all_ttys);
     replace_boolean_from_key(key_file,
@@ -511,6 +514,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     g_autoptr(GKeyFile) key_file = g_key_file_new();
     g_key_file_set_string(key_file, "general", "language", settings->language);
     g_key_file_set_string(key_file, "general", "theme", settings->theme);
+    g_key_file_set_integer(key_file, "general", "font-size", (gint)settings->font_size);
     g_key_file_set_string(key_file,
                           "general",
                           "active-profile",
@@ -709,6 +713,7 @@ gboolean tio_settings_export_portable(const TioSettings *settings, const char *p
     make_session_portable(&portable.defaults);
     replace_string(&portable.language, settings->language);
     replace_string(&portable.theme, settings->theme);
+    portable.font_size = settings->font_size;
     portable.log_warning_mb = settings->log_warning_mb;
     for (guint i = 0; i < settings->profiles->len; ++i) {
         TioProfile *profile = g_ptr_array_index(settings->profiles, i);

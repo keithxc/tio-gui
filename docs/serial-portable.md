@@ -28,6 +28,10 @@ Security if Gatekeeper blocks it. Do not disable system-wide security checks.
   bytes. Ctrl-Shift-C/V copies/pastes; macOS also supports Command-C/V.
 - UTF-8 line console with semantic highlighting, progress-line updates, HEX
   display, search, selectable text, local echo and a Follow switch.
+- Ctrl+wheel adjusts the console font (6–40pt), shared by tabs and saved on exit
+  or immediately when zoomed. Ctrl+Shift+F focuses search from the console;
+  Enter/F3 and Shift+Enter/Shift+F3 navigate with wrap-around. Search supports
+  case/regex, highlights matches and shows current/total while pausing Follow.
 - Byte-exact received logs, appended to the selected file; changing display to
   HEX does not change the logged bytes. TX counters count confirmed writes.
 - Same-port reconnect every second; queued sends are discarded after disconnect
@@ -76,7 +80,7 @@ settings and user-selected logs.
 
 ## Rebuilding
 
-On macOS, install build dependencies `brew install gtk4 pkgconf cmake ninja`:
+On macOS, install build dependencies `brew install gtk4 pcre2 pkgconf cmake ninja`:
 
 ```sh
 cmake -S . -B build -G Ninja -DTIO_GUI_SERIAL_ONLY=ON -DCMAKE_BUILD_TYPE=Release \

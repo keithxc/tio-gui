@@ -235,7 +235,7 @@ if(TIO_GUI_XGETTEXT)
             --msgid-bugs-address=https://github.com/keithxc/tio-gui/issues
             --no-location
             -o "${CMAKE_CURRENT_SOURCE_DIR}/po/tio-gui.pot"
-            src/main.c src/settings.c src/analyzer.c src/plugin_ui.c
+            src/main.c src/console_search.h src/settings.c src/analyzer.c src/plugin_ui.c
             src/network_ui.c src/modbus_ui.c src/mqtt_ui.c src/can_ui.c src/ble.c
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Regenerating po/tio-gui.pot"
