@@ -4,6 +4,9 @@
 #include "payload.h"
 #include <libintl.h>
 #define _(s) gettext(s)
+#ifdef TIO_NATIVE_I18N
+#include "native_i18n.h"
+#endif
 typedef struct {
     GtkWidget *window, *run;
     GtkEntry *host;

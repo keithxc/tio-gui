@@ -35,11 +35,12 @@ int main(int argc, char **argv)
     app.application = gtk_application_new("io.github.keithxc.tio_gui.serial.test", G_APPLICATION_NON_UNIQUE);
     g_assert_true(g_application_register(G_APPLICATION(app.application), NULL, NULL));
     g_test_message("activate");
-    activate(app.application, &app); Tab *tab = g_ptr_array_index(app.tabs, 0);
+    activate(app.application, &app); spin(300); Tab *tab = g_ptr_array_index(app.tabs, 0);
     g_assert_cmpstr(gtk_button_get_label(tab->connect), ==, "连接");
     save_layout(app.window, "native-main.png");
-    quick_edit(NULL, tab); save_layout(tab->quick_window, "native-quick.png");
-    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE);
+    /* Let AppKit finish mapping each window before programmatically hiding it. */
+    quick_edit(NULL, tab); spin(300); save_layout(tab->quick_window, "native-quick.png");
+    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300);
     g_assert_false(gtk_widget_get_visible(tab->search_row));
     show_search(NULL, tab); g_assert_true(gtk_widget_get_visible(tab->search_row));
     search_key(NULL, GDK_KEY_Escape, 0, 0, tab);
@@ -79,11 +80,11 @@ int main(int argc, char **argv)
     gtk_drop_down_set_selected(app.language, 0);
     /* Closing the quick editor discards drafts, even if preferences are saved. */
     g_autofree gchar *original_quick = g_strdup(tab->config.quick_payloads[0]);
-    quick_edit(NULL, tab); text(tab->quick_text[0], "discard this draft");
-    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); g_assert_true(save(&app, NULL));
+    quick_edit(NULL, tab); spin(300); text(tab->quick_text[0], "discard this draft");
+    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300); g_assert_true(save(&app, NULL));
     g_assert_cmpstr(tab->config.quick_payloads[0], ==, original_quick);
-    quick_edit(NULL, tab); g_assert_cmpstr(entry(tab->quick_text[0]), ==, original_quick);
-    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE);
+    quick_edit(NULL, tab); spin(300); g_assert_cmpstr(entry(tab->quick_text[0]), ==, original_quick);
+    gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300);
     g_assert_false(gtk_widget_get_sensitive(GTK_WIDGET(tab->device)));
     g_assert_true(gtk_widget_get_sensitive(tab->advanced));
     g_test_message("transport");

@@ -9,13 +9,19 @@ typedef struct {
     guint parity; /* none, odd, even */
     guint flow;   /* none, RTS/CTS, XON/XOFF */
     gboolean reconnect;
+    guint dtr_default, rts_default; /* unchanged, low, high */
+    guint output_delay, output_line_delay; /* milliseconds */
+    guint auto_connect; /* direct, new device, newest device */
+    const char *exclude_devices; /* optional path regular expression */
+    const char *device_id; /* optional stable macOS USB identity */
 } TioNativeConfig;
-typedef enum { TIO_NATIVE_STATUS, TIO_NATIVE_RX, TIO_NATIVE_TX } TioNativeEventKind;
+typedef enum { TIO_NATIVE_STATUS, TIO_NATIVE_RX, TIO_NATIVE_TX, TIO_NATIVE_DONE } TioNativeEventKind;
 typedef struct {
     TioNativeEventKind kind;
     GBytes *bytes;
     gchar *message;
     gboolean connected;
+    gchar *device;
 } TioNativeEvent;
 
 /* All public calls belong to the UI thread. Only the worker touches the port.
@@ -31,3 +37,10 @@ void tio_native_finish(TioNativeSerial *serial);
 gboolean tio_native_pending(TioNativeSerial *serial);
 void tio_native_event_free(TioNativeEvent *event);
 void tio_native_stop(TioNativeSerial *serial);
+
+/* Worker queue drained; safe to advance a sequence. */
+gboolean tio_native_idle(TioNativeSerial *serial);
+gboolean tio_native_pulse(TioNativeSerial *serial, guint line, guint milliseconds, GError **error);
+
+/* NULL for devices without a stable USB serial identity. Caller owns string. */
+gchar *tio_native_device_identity(const char *device);

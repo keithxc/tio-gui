@@ -8,11 +8,14 @@
 
 A standalone **Windows/macOS serial edition** is available through
 `-DTIO_GUI_SERIAL_ONLY=ON` (the default on those platforms). It uses native serial
-APIs and a GTK line console, and includes packaging scripts for Windows NSIS and
-macOS DMG. See [installation, scope and hardware checks](docs/serial-portable.md).
+APIs. **macOS 0.4.0** brings the Linux serial tools into the shared workspace,
+including sequences, CRC/delays, recording/replay, analysis/plugins, Modbus RTU,
+file transfers and a libvterm terminal. Developer ID signed and notarized DMG/ZIP
+packages are available for Apple Silicon/macOS 26+. Windows retains its 0.3.7
+frontend and NSIS installer. See [installation, scope and hardware checks](docs/serial-portable.md).
 The Linux tio/VTE edition described below remains the default Linux build.
 
-Version 0.3.7 targets x86-64 Linux with tio 3.9. Software acceptance covers real
+The Linux baseline validated in 0.3.7 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
 hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 
@@ -122,7 +125,8 @@ hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 - A second launch opens a session in the running window instead of a competing one
 - Install a Wayland-compatible desktop entry and branded `tio` application icon
 
-SSH, SFTP, Windows, macOS, and a general-purpose terminal emulator are deliberately outside the first release.
+SSH/SFTP and network-only tool parity are outside the native serial release.
+See the native edition document for macOS driver and terminal boundaries.
 
 ## Build on NixOS
 

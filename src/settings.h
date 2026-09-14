@@ -61,6 +61,7 @@ typedef struct {
     TioSessionConfig defaults;
     gchar *language;
     gchar *theme; /* system, light or dark */
+    guint native_tools_version; /* native settings migration; Linux leaves this alone */
     guint font_size; /* console points, 6–40; shared across tabs */
     gchar *active_profile;
     gboolean show_all_ttys;

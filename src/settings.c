@@ -435,6 +435,7 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
     replace_string_from_key(key_file, "general", "language", &settings->language);
     replace_string_from_key(key_file, "general", "theme", &settings->theme);
     replace_uint_from_key(key_file, "general", "font-size", &settings->font_size, 40);
+    replace_uint_from_key(key_file, "general", "native-tools-version", &settings->native_tools_version, 1);
     settings->font_size = CLAMP(settings->font_size, 6, 40);
     replace_string_from_key(key_file, "general", "active-profile", &settings->active_profile);
     replace_boolean_from_key(key_file, "general", "show-all-ttys", &settings->show_all_ttys);
@@ -515,6 +516,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     g_key_file_set_string(key_file, "general", "language", settings->language);
     g_key_file_set_string(key_file, "general", "theme", settings->theme);
     g_key_file_set_integer(key_file, "general", "font-size", (gint)settings->font_size);
+    g_key_file_set_integer(key_file, "general", "native-tools-version", (gint)settings->native_tools_version);
     g_key_file_set_string(key_file,
                           "general",
                           "active-profile",

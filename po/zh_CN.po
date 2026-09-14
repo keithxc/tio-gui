@@ -1498,3 +1498,78 @@ msgstr "接收 %s 字节   发送 %s 字节"
 
 msgid "Serial lines"
 msgstr "串口控制线"
+
+msgid "Append log"
+msgstr "追加日志"
+
+msgid "Auto-connect"
+msgstr "自动选择设备"
+
+msgid "Byte delay (ms)"
+msgstr "字节间隔（毫秒）"
+
+msgid "Choose an empty receive directory to protect existing files"
+msgstr "请选择空文件夹接收，避免覆盖已有文件"
+
+msgid "DTR pulse"
+msgstr "DTR 脉冲"
+
+msgid "Defaults and output delays apply on the next connection. RS-485 automatic direction requires an adapter with hardware auto-direction on macOS."
+msgstr "默认电平和发送延迟在下次连接时生效。macOS 下 RS-485 自动方向需要转换器硬件支持。"
+
+msgid "Direct"
+msgstr "指定设备"
+
+msgid "Exclude devices (regex)"
+msgstr "排除设备（正则表达式）"
+
+msgid "Export portable configuration…"
+msgstr "导出便携配置…"
+
+msgid "New device"
+msgstr "新插入设备"
+
+msgid "Open recording / replay…"
+msgstr "打开录制 / 回放…"
+
+msgid "Protocol"
+msgstr "协议"
+
+msgid "RTS pulse"
+msgstr "RTS 脉冲"
+
+msgid "Receive into folder…"
+msgstr "接收到文件夹…"
+
+msgid "Reconnect and device selection"
+msgstr "重连与设备选择"
+
+msgid "Serial line defaults"
+msgstr "串口信号默认设置"
+
+msgid "Session defaults"
+msgstr "会话默认设置"
+
+msgid "Strip ANSI escapes in log"
+msgstr "日志中移除 ANSI 转义序列"
+
+msgid "Time"
+msgstr "时分秒"
+
+msgid "Time since previous line"
+msgstr "与上一行的时间差"
+
+msgid "Time since start"
+msgstr "自连接开始的时间"
+
+msgid "USB adapters with a unique serial number reconnect by identity. Others retry the same path. New/latest selects a device when Connect is pressed."
+msgstr "带唯一序列号的 USB 转换器按身份重连；其他设备重试相同路径。点击连接后可等待新设备或选择最近出现的设备。"
+
+msgid "Receive log"
+msgstr "接收日志"
+
+msgid "Font size"
+msgstr "字号"
+
+msgid "Restore tabs on startup"
+msgstr "启动时恢复标签页"

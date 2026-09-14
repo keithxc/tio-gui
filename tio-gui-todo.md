@@ -1,6 +1,6 @@
 # tio-gui 待办与优化建议
 
-> 2026-09-09 复核，代码基线：`2a80404`（0.3.6）。
+> 2026-09-14 复核，macOS 0.4.0 串口功能对齐与正式签名发布。
 > 本文件仅保留未完成事项和待评估建议；已完成条目及过期发布状态已清除。
 > 历史验收见 [软件验收记录](docs/acceptance.md)、[原生串口版说明](docs/serial-portable.md) 和 [0.3.6 发布记录](docs/releases/v0.3.6.md)。
 > 功能实现保持 clean-room，不复制参考项目代码。
@@ -49,10 +49,10 @@
 
 ## P3 — 产品范围候选（待决定，不视为缺陷）
 
-- [ ] 评估原生串口版按 USB 稳定身份重连：当前只按相同 COM 号或 `/dev/cu.*` 路径重连，名称变化需重新选择。
-- [ ] 评估 macOS 更低系统版本/Intel 支持，以及 macOS 公证、Windows 发布者签名；当前包为 Apple Silicon/macOS 26+，macOS 使用 ad-hoc 签名。
-- [ ] 明确两版功能对齐的优先级：原生版目前不含发送序列、CRC/延迟快捷发送、协议工具、插件和文件传输等 Linux 功能。
-- [ ] 如确有使用需求，再评估完整 VT/宽字符终端语义、MQTT TLS/QoS 2；这些属于扩展范围，不能直接当作当前版本遗漏。
+- [ ] 评估 Windows 原生串口版按 USB 稳定身份重连；macOS 0.4.0 已实现身份匹配，仍待实体适配器拔插验收。
+- [ ] 评估 macOS 更低系统版本/Intel 支持，以及 Windows 发布者签名；macOS 0.4.0 已采用 Developer ID 签名和 Apple 公证，当前包为 Apple Silicon/macOS 26+。
+- [ ] 按实际需求评估 Windows 功能对齐；macOS 已补齐发送序列、CRC/延迟快捷发送、Modbus、插件和文件传输，见 [0.4.0 验收](docs/macos-0.4.0-acceptance.md)。
+- [ ] 如确有使用需求，再评估终端鼠标上报、更长滚屏缓存、Windows VT/宽字符语义及 MQTT TLS/QoS 2；macOS 0.4.0 已接入 libvterm。
 
 ## 维护约定
 

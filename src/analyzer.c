@@ -6,6 +6,9 @@
 #include <math.h>
 #include <string.h>
 #define _(s) gettext(s)
+#ifdef TIO_NATIVE_I18N
+#include "native_i18n.h"
+#endif
 
 typedef struct { double x, y; } Point;
 typedef struct {

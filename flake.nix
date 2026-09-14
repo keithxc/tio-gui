@@ -13,6 +13,11 @@
       pkgs = import nixpkgs { inherit system; };
       version = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
     in {
+      devShells.aarch64-darwin.default = import ./nix/macos-shell.nix {
+        pkgs = import nixpkgs { system = "aarch64-darwin"; };
+        nixpkgsRevision = nixpkgs.rev or null;
+      };
+
       packages.${system} = {
         default = pkgs.stdenv.mkDerivation {
           pname = "tio-gui";

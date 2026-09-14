@@ -1,140 +1,123 @@
-# Native serial edition — Windows and macOS
+# Native serial editions
 
-This edition connects directly to the operating system's serial API. It includes
-GTK and its runtime libraries and does not require tio, MSYS2, Homebrew or Nix on
-the computer where it is installed. Linux's original tio/VTE edition is still
-available through the default Linux build.
+## macOS 0.4.0
 
-## Installation
+Download `tio-gui-0.4.0-macos-arm64.dmg`, open it and drag **tio-gui.app** into
+Applications. The ZIP contains the same application. Requires Apple Silicon and
+macOS 26 or newer. Intel is not included. GTK, libvterm, lrzsz, Lua and QuickJS
+are bundled; the destination Mac needs no Homebrew, Nix or development tools.
 
-- Windows x86-64: run `tio-gui-0.3.7-windows-x86_64-setup.exe`. Installation is per
-  user, with Start menu/Desktop shortcuts and an entry in installed applications.
-- macOS Apple Silicon: open `tio-gui-0.3.7-macos-arm64.dmg` and drag tio-gui to
-  Applications. The current Homebrew-based package requires macOS 26 or later.
-  Intel is not included in this build.
+The release application and disk image use Developer ID Application signing,
+hardened runtime and Apple notarization. Keep the existing bundle identity
+`io.github.keithxc.tio_gui.serial`; this is a direct-download application.
 
-These test packages have no paid publisher certificate. The macOS app has an
-ad-hoc signature, not Apple notarization. Windows may show an unknown-publisher
-prompt. On macOS, approve the trusted download in System Settings → Privacy &
-Security if Gatekeeper blocks it. Do not disable system-wide security checks.
+### Serial workspace
 
-## Appearance and language
+The compact connection, options, search, console, send and quick-button rows use
+the same constructors as Linux. The sequence editor is shared source. Native OS
+window decoration and font metrics may differ.
 
-The native edition uses the same compact connection/console/send layout as the
-Linux edition. Connection and logging options are collapsed; line controls are
-in a menu, and Search or Ctrl+Shift+F opens the search row (Escape closes it).
-The gear in the tab bar opens application settings.
+- Independent, reorderable tabs; right-click or double-click a name to rename it.
+- Port discovery, manual paths, standard/custom baud, 5–8 bits, 1/2 stops,
+  none/odd/even parity, none/RTS-CTS/XON-XOFF flow control.
+- Direct/new/latest device selection, path exclusion regex, reconnect and optional
+  connection notifications/sound. Unique USB serial identities are obtained through
+  IOKit; adapters without them retry the same path. Ambiguous identities are not
+  silently assigned to another adapter.
+- DTR/RTS defaults, low/high/pulse controls, Break, character and line send delays.
+- Text/HEX sends, line endings, history, four editable quick buttons with CRC-8,
+  CRC-16/MODBUS or CRC-32, delay, control-character inserts and exact byte preview.
+  Button groups and named sequences import/export through compatible settings.
+- The Linux sequence editor: reorder steps, save/load/delete, loop, pause/resume,
+  stop, per-step CRC/endings/delay. Disconnect cancels pending work; it is never
+  replayed on reconnect. Manual sends are blocked while a transfer owns the port.
+- Semantic highlighted logs and a libvterm terminal view, with ANSI colors,
+  cursor addressing, alternate screen, UTF-8, application cursor keys and
+  bracketed paste. Ctrl+wheel changes font size; search supports case/regex,
+  previous/next matches and a counter. Search operates on the highlighted log.
+- Received-file logging with append/replace, optional ANSI stripping and five
+  timestamp styles. Old native installations retain append/raw-log behavior.
+  Binary `.tiocap` recording always preserves exact RX/TX bytes and input/events,
+  with size/time rotation, retention, disk bounds and replay. Closing waits for
+  pending recording writes.
+- The same log analyzer, level/regex filtering, field extraction, CSV export,
+  graphs, replay, custom highlight rules and side-by-side session comparison.
+- XMODEM-CRC/YMODEM/ZMODEM send and receive, cancellation and timeout. Receives
+  require an empty directory. Terminal input is excluded while a transfer owns
+  the stream; final serial writes are drained before releasing it.
+- Modbus RTU function codes 1–6 on the active serial session, using the same
+  request/validation UI and engine as Linux.
+- Lua and JavaScript analysis plugins in separate sandboxed processes with a
+  two-second deadline, 64 KiB source/input/output limits and resident-memory
+  monitoring. No serial API is exposed to plugins.
+- Named profiles, full/portable configuration import/export, migration from
+  Linux configuration files, optional disconnected tab restoration, Chinese/
+  English and system/light/dark appearance. Import requires disconnected sessions
+  and keeps a `.before-import` backup.
 
-Windows packages include a private Noto Sans SC fallback font (SIL OFL 1.1), so
-Chinese text remains readable on minimal English installations without changing
-the system font installation. Font source URLs and checksums ship with the package.
+Shortcuts follow Linux: Ctrl+T/W, Ctrl+PageUp/PageDown, Alt+1…9, F5/F6,
+Ctrl+Shift+L/C/V/F and F3/Shift+F3. macOS also accepts Command+T/W/C/V.
+Plain Ctrl+C still sends the interrupt byte to the serial peer.
 
-The workspace and appearance settings are built from the same UI constructors as
-Linux (`src/workspace_ui.h`). Missing backend capabilities remove their actions;
-shared controls keep the same order, spacing and style. OS fonts, DPI and window
-decoration still follow the desktop. Quick sends sit below the send row; Customize
-opens their editor. Search uses Ctrl+Shift+F, with Enter/F3 navigation.
+### Platform and verification boundaries
 
-Theme defaults to Follow system, with Light and Dark overrides applied immediately
-and saved in `serial.ini`. On Windows the system choice follows the user's app
-color preference, including changes while the application is open. The console
-uses the Linux edition's existing dark log palette. New/legacy native installations
-default to simplified Chinese; English can be selected in settings and takes effect
-immediately. Changing language does not interrupt an active serial connection.
+RS-485 kernel configuration is a Linux driver interface. On macOS use an adapter
+with hardware automatic direction; this application does not emulate timing-critical
+RS-485 direction in the UI. Driver names and tio-specific device IDs are Linux
+concepts; native selection uses path regex and USB identity. Electrical framing,
+custom baud rates, DTR/RTS levels, pulses, real USB unplug/replug and identity
+matching still need a physical adapter test. No adapter was attached for this release.
 
-Normal client-decorated windows use matching top/bottom corner radii and clip the
-content at the bottom; maximized/fullscreen windows use square corners.
+The terminal is implemented with libvterm, not VTE. Its primary-screen scrollback
+is bounded to 2,000 lines/512 KiB; the highlighted log retains its separate larger
+limit. Terminal mouse reporting and OS clipboard escape commands are not exposed.
+CAN, BLE and network-only tools are outside this **serial** release.
+Chinese IME candidate interaction requires a separate manual check; UTF-8 commit
+and literal-backslash transport are covered by software tests.
 
-## Included
+Receive queues and display history are bounded. Overflow or failed log writes
+stop the session rather than silently claiming lossless capture. Validate sustained
+rates on your own adapter and storage before using this for acquisition.
 
-- Multiple independent serial tabs; refresh detected ports or enter a port name.
-- Custom baud rate, 5–8 data bits, 1/2 stop bits, none/odd/even parity, none/RTS-CTS/
-  XON-XOFF flow control. Unsupported driver settings report an error.
-- Text/HEX sends, none/LF/CR/CRLF endings, four editable quick sends.
-- Direct console typing, UTF-8 input, arrow keys, Ctrl-C and other Ctrl-letter
-  bytes. Ctrl-Shift-C/V copies/pastes; macOS also supports Command-C/V.
-- UTF-8 line console with semantic highlighting, progress-line updates, HEX
-  display, search, selectable text, local echo and a Follow switch.
-- Ctrl+wheel adjusts the console font (6–40pt), shared by tabs and saved on exit
-  or immediately when zoomed. Ctrl+Shift+F focuses search from the console;
-  Enter/F3 and Shift+Enter/Shift+F3 navigate with wrap-around. Search supports
-  case/regex, highlights matches and shows current/total while pausing Follow.
-- Byte-exact received logs, appended to the selected file; changing display to
-  HEX does not change the logged bytes. TX counters count confirmed writes.
-- Same-port reconnect every second; queued sends are discarded after disconnect
-  and never replayed automatically. Opening the app restores tabs disconnected.
-- DTR/RTS low/high controls; manual RTS is disabled by the backend with RTS/CTS.
-- Send a 250 ms Break, with driver support checked when requested.
-- Named profiles; save a name and use “Open in new tab” to reopen it.
+### Rebuilding and verification
 
-## Boundaries
-
-This is a line-oriented serial console, not a full VT terminal. Full-screen
-programs such as vim/top are not supported. CAN, BLE, network/protocol tools,
-script plugins, file-transfer protocols, RS-485 automation, DTR/RTS pulses,
-timestamp formatting, send sequences and Linux profile/device-ID migration are
-outside this edition. Logs contain received bytes only, without timestamps.
-Quick sends have their own line endings, without CRC or delay.
-
-Opening a serial port may assert DTR/RTS according to the driver. Hardware flow
-control, nonstandard baud rates, framing and line levels require real hardware
-verification. Reconnect uses the same COM number or `/dev/cu.*` path, not a USB
-serial-number identity; select the port again if its name changes.
-
-The display keeps at most 10,000 lines / 16 KiB per line. The worker's receive
-queue is bounded to 8 MiB and stops the session on overflow. A log write failure
-stops the session and reports the failure. Never use this debugging tool as a
-guaranteed lossless high-speed acquisition system without validating the rate.
-
-Settings are in `serial.ini` under GLib's user configuration directory in the
-`tio-gui` folder, separate from Linux's `config.ini`. Uninstalling preserves
-settings and user-selected logs.
-
-## Hardware acceptance
-
-1. Attach the USB serial adapter to the VM (Windows) or Mac and install its driver
-   if needed. Click Refresh and select the port. Start with 115200, 8N1, no flow.
-2. Check interactive command input, Enter, Ctrl-C, arrow keys and UTF-8 output.
-3. Send HEX `00 11 13 14 7F 80 FF` to a loopback/known peer and verify exact bytes.
-4. Enable a log, receive data, switch HEX on/off, disconnect and inspect the file.
-5. Unplug/replug with Auto reconnect enabled. Verify received data resumes and
-   commands queued before unplug are not replayed.
-6. Open two tabs on different adapters; close a connected tab and cancel/accept
-   the prompt. Check the other tab continues receiving.
-7. Check your required baud rates, parity, RTS/CTS and DTR/RTS on actual hardware.
-8. Install and launch from a path containing spaces, then uninstall. Confirm logs
-   and settings remain and that no development tools are required to launch.
-
-## Rebuilding
-
-On macOS, install build dependencies `brew install gtk4 pcre2 pkgconf cmake ninja gettext python`:
+All third-party build tools and runtime libraries are managed by the Nix
+`devShell`; the maintainer's `mynix#tio-gui` imports this same shell definition
+with mynix's locked nixpkgs. Apple Clang/SDK, codesign, notarytool and hdiutil
+remain system tools. `TIO_MACOS_RUNTIME` supplies the packager with exact Nix
+runtime paths and source/license metadata. The resulting app contains relocated
+libraries, with no Nix or Homebrew runtime requirement. The packager retains a
+Homebrew fallback for other builders; the 0.4.0 release is built through mynix.
 
 ```sh
-export PATH="$(brew --prefix gettext)/bin:$PATH"
-cmake -S . -B build -G Ninja -DTIO_GUI_SERIAL_ONLY=ON -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
-cmake --build build
-ctest --test-dir build --output-on-failure
-python3 packaging/package-macos.py build dist
+# Uses the project's pinned Nix packages. On the maintainer's machines:
+# nix develop /path/to/mynix#tio-gui
+nix develop
+cmake -S . -B build-nix -G Ninja -DTIO_GUI_SERIAL_ONLY=ON \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/clang \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
+cmake --build build-nix
+ctest --test-dir build-nix --output-on-failure
+python3 packaging/package-macos.py build-nix dist \
+  --identity "$TIO_SIGN_IDENTITY" --notary-profile "$TIO_NOTARY_PROFILE"
 ```
 
-For Windows cross builds on Linux, provide MinGW gcc/objdump, pkg-config, CMake,
-Ninja, NSIS, glib-compile-schemas, Python and zstd:
+Signing credentials stay in the local keychain. Without the signing arguments,
+the packager creates an ad-hoc development package. Release publishing requires
+Developer ID verification, accepted notarization, stapled tickets, Gatekeeper
+checks, clean-environment bundle checks and uploaded checksum verification.
+The final verification record is in [macOS 0.4.0 acceptance](macos-0.4.0-acceptance.md).
 
-```sh
-python3 packaging/fetch-mingw.py .cache/mingw
-python3 packaging/build-windows.py .cache/mingw .cache/serial-windows dist
-```
+## Windows 0.3.7
 
-On NixOS, `nix-shell packaging/windows-shell.nix` provides those tools and the
-MinGW compiler's additional mcfgthread runtime. The original Linux build remains
-available with `-DTIO_GUI_SERIAL_ONLY=OFF`.
-
-The fetched package manifest records versions, URLs and verified SHA256 hashes.
-Packaging fails if a non-system DLL dependency cannot be bundled. The Mac packager
-rewrites and audits dynamic-library paths before signing and creating the DMG.
-Software tests cover PTY binary transport, disconnection and same-path reconnect
-on Unix, plus invalid settings, absent ports, payloads and display parsing.
+The existing per-user NSIS installer remains available in the 0.3.7 release.
+Its native frontend is retained separately; this macOS release does not change
+Windows UI scope or replace Windows assets. It includes serial framing, direct
+input, text/HEX sends, four basic quick buttons, raw receive logs, profiles,
+search, zoom, Chinese/English, themes and same-COM reconnect. It remains a line
+console without the additional macOS serial tools listed above. Windows packages
+have no publisher certificate. Real Windows driver/hardware acceptance remains
+separate from the existing Wine/package smoke checks.
 
 ## macOS acceptance — 2026-09-09
 
