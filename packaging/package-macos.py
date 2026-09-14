@@ -8,6 +8,7 @@ import plistlib
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # Nix also provides xcrun/otool shims for its SDK. Distribution tools must use
 # the installed Apple toolchain, especially notarytool and codesign.
@@ -28,7 +29,13 @@ build = args.build.resolve()
 output = args.output.resolve()
 output.mkdir(parents=True, exist_ok=True)
 version = (repo / "VERSION").read_text().strip()
-stage = build / "dmg-stage"
+with (build / "tio-gui.app/Contents/Info.plist").open("rb") as file:
+    build_info = plistlib.load(file)
+if build_info.get("CFBundleShortVersionString") != version or build_info.get("CFBundleVersion") != version:
+    raise SystemExit("Built app version does not match VERSION; reconfigure and rebuild before packaging")
+# Each packaging attempt gets a fresh workspace. macOS can protect a previously
+# signed/launched bundle against in-place changes through App Management.
+stage = Path(tempfile.mkdtemp(prefix=f"dmg-stage-{version}-", dir=build))
 def writable_tree(root):
     if not root.exists(): return
     for path in [root, *root.rglob("*")]:
@@ -39,11 +46,8 @@ def copy_tree(source, target):
     shutil.copytree(source, target, dirs_exist_ok=True)
     writable_tree(target)
 
-if stage.exists():
-    writable_tree(stage)
-    shutil.rmtree(stage)
-stage.mkdir()
 app = stage / "tio-gui.app"
+(output / "app-bundle-path.txt").write_text(str(app) + "\n")
 shutil.copytree(build / "tio-gui.app", app)
 contents = app / "Contents"
 resources = contents / "Resources"

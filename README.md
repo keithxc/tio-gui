@@ -8,7 +8,7 @@
 
 A standalone **Windows/macOS serial edition** is available through
 `-DTIO_GUI_SERIAL_ONLY=ON` (the default on those platforms). It uses native serial
-APIs. **macOS 0.4.0** brings the Linux serial tools into the shared workspace,
+APIs. **macOS 0.4.1** brings the Linux serial tools into the shared workspace,
 including sequences, CRC/delays, recording/replay, analysis/plugins, Modbus RTU,
 file transfers and a libvterm terminal. Developer ID signed and notarized DMG/ZIP
 packages are available for Apple Silicon/macOS 26+. Windows retains its 0.3.7

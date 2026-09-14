@@ -25,6 +25,7 @@
 #include "workspace_ui.h"
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#include <CoreFoundation/CoreFoundation.h>
 #elif defined(G_OS_WIN32)
 #include <windows.h>
 #endif
@@ -252,10 +253,30 @@ static void native_language(const char *language)
 {
     native_chinese = g_strcmp0(language, "en") != 0;
 }
+#ifdef __APPLE__
+static gboolean macos_system_dark(void)
+{
+    /* Read the global preference, not GTK/NSApp's possibly forced appearance.
+     * Synchronize the read cache so an OS appearance change is visible while
+     * the application remains open. No preferences are written here. */
+    CFPreferencesSynchronize(kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFPropertyListRef value = CFPreferencesCopyValue(CFSTR("AppleInterfaceStyle"),
+        kCFPreferencesAnyApplication, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    gboolean dark = value && CFGetTypeID(value) == CFStringGetTypeID() && CFEqual(value, CFSTR("Dark"));
+    if (value) CFRelease(value);
+    return dark;
+}
+#endif
 static void native_theme(App *app)
 {
     GtkSettings *settings = gtk_settings_get_default();
     if (!g_strcmp0(app->settings.theme, "system")) {
+#ifdef __APPLE__
+        gboolean dark = macos_system_dark(), current = FALSE;
+        g_object_get(settings, "gtk-application-prefer-dark-theme", &current, NULL);
+        if (current != dark) g_object_set(settings, "gtk-application-prefer-dark-theme", dark, NULL);
+        return;
+#endif
 #ifdef G_OS_WIN32
         /* GTK's Win32 backend does not consistently expose the Windows app
          * color preference through GtkSettings. Read the user preference. */
@@ -275,7 +296,7 @@ static void native_theme(App *app)
     else g_object_set(settings, "gtk-application-prefer-dark-theme",
                       !g_strcmp0(app->settings.theme, "dark"), NULL);
 }
-#ifdef G_OS_WIN32
+#if defined(G_OS_WIN32) || defined(__APPLE__)
 static gboolean poll_system_theme(gpointer data)
 {
     App *app = data;
@@ -1207,7 +1228,7 @@ static void activate(GtkApplication *application, gpointer data)
     tio_workspace_install_css();
     if (app->settings.restore_tabs) for (guint i = 0; i < app->settings.tab_configs->len; i++) new_tab(app, g_ptr_array_index(app->settings.tab_configs, i));
     if (!app->tabs->len) new_tab(app, &app->settings.defaults);
-#ifdef G_OS_WIN32
+#if defined(G_OS_WIN32) || defined(__APPLE__)
     app->system_theme_timer = g_timeout_add_seconds(1, poll_system_theme, app);
 #endif
     gtk_window_present(app->window);

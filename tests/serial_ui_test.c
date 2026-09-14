@@ -54,6 +54,22 @@ int main(int argc, char **argv)
     g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
     g_assert_false(dark);
     gtk_drop_down_set_selected(app.theme, 0);
+#ifdef __APPLE__
+    /* Exercise the actual macOS preference without changing the user's theme. */
+    gboolean system_dark = macos_system_dark();
+    g_test_message("macOS system dark preference: %s", system_dark ? "yes" : "no");
+    g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
+    g_assert_cmpint(dark, ==, system_dark);
+    g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", !system_dark, NULL);
+    spin(2200); /* The running application's timer must restore system appearance. */
+    g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
+    g_assert_cmpint(dark, ==, system_dark);
+    gtk_drop_down_set_selected(app.theme, system_dark ? 1 : 2);
+    poll_system_theme(&app);
+    g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
+    g_assert_cmpint(dark, ==, !system_dark); /* An explicit choice stays explicit. */
+    gtk_drop_down_set_selected(app.theme, 0);
+#endif
     g_test_message("language");
     gtk_drop_down_set_selected(app.language, 1);
     TioSettings prefs; tio_settings_init(&prefs);
