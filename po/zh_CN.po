@@ -1573,3 +1573,12 @@ msgstr "字号"
 
 msgid "Restore tabs on startup"
 msgstr "启动时恢复标签页"
+
+msgid "Connection"
+msgstr "连接"
+
+msgid "Reconnect"
+msgstr "重连"
+
+msgid "Recording"
+msgstr "录制"

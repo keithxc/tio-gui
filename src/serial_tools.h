@@ -48,8 +48,8 @@ static GtkSpinButton *tool_spin(GtkWidget *box, const char *label, guint maximum
 }
 static GtkWidget *tool_section(Tab *tab, const char *title)
 {
-    GtkWidget *exp = gtk_expander_new(title), *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
-    gtk_expander_set_child(GTK_EXPANDER(exp), box); append(tab->advanced, exp); return box;
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8); gtk_widget_add_css_class(box, "settings-card");
+    gtk_stack_add_titled(tab->settings_stack, box, NULL, title); return box;
 }
 static void tools_snapshot(Tab *tab)
 {
@@ -252,51 +252,65 @@ static void rename_tab(GtkGestureClick *gesture, int presses, double x, double y
     rename->name = field(box, _("Name"), tab->config.tab_name, 24); gtk_entry_set_max_length(rename->name, 128);
     button(box, _("Save"), G_CALLBACK(rename_apply), rename); gtk_window_present(rename->window);
 }
+static GtkWidget *tool_hint(GtkWidget *box, const char *message)
+{
+    GtkWidget *hint = gtk_label_new(message); gtk_label_set_wrap(GTK_LABEL(hint), TRUE); gtk_label_set_xalign(GTK_LABEL(hint), 0);
+    gtk_widget_add_css_class(hint, "settings-hint"); append(box, hint); return hint;
+}
 static void tools_controls(Tab *tab)
 {
-    GtkWidget *box = tool_section(tab, _("Reconnect and device selection")), *r = row(); append(box, r);
-    const char *strategies[] = {_("Direct"), _("New device"), _("Latest device"), NULL};
-    tab->auto_connect = dropdown(r, _("Auto-connect"), strategies, MIN(tab->config.auto_connect, 2));
-    r = row(); append(box, r); tab->exclude_devices = field(r, _("Exclude devices (regex)"), tab->config.exclude_devices, 24);
-    r = row(); append(box, r); tab->connection_notify = check(r, _("Desktop notifications"), tab->config.connection_notify);
-    tab->connection_sound = check(r, _("Connection sound"), tab->config.connection_sound);
-    GtkWidget *identity_hint = gtk_label_new(_("USB adapters with a unique serial number reconnect by identity. Others retry the same path. New/latest selects a device when Connect is pressed."));
-    gtk_label_set_wrap(GTK_LABEL(identity_hint), TRUE); append(box, identity_hint);
-    box = tool_section(tab, _("Session defaults")); r = row(); append(box, r);
+    /* Same order and grouping as the Linux session panel. */
+    GtkWidget *box = tool_section(tab, _("Session")), *r = row(); append(box, r);
     const char *formats[] = {_("Time"), _("Time since start"), _("Time since previous line"), "ISO 8601", "Epoch", NULL};
     const char *ids[] = {"24hour", "24hour-start", "24hour-delta", "iso8601", "epoch"}; guint selected = 0;
     for (guint i = 0; i < 5; i++) if (!g_strcmp0(ids[i], tab->config.timestamp_format)) selected = i;
     tab->timestamp_format = dropdown(r, _("Timestamp format"), formats, selected);
     r = row(); append(box, r);
-    tab->byte_delay = tool_spin(r, _("Byte delay (ms)"), 60000, tab->config.output_delay);
+    tab->byte_delay = tool_spin(r, _("Character delay (ms)"), 60000, tab->config.output_delay);
     tab->line_delay = tool_spin(r, _("Line delay (ms)"), 60000, tab->config.output_line_delay);
     r = row(); append(box, r);
     tab->log_append = check(r, _("Append log"), tab->config.log_append);
     tab->log_strip = check(r, _("Strip ANSI escapes in log"), tab->config.log_strip);
-    box = tool_section(tab, _("Serial line defaults")); r = row(); append(box, r);
+    box = tool_section(tab, _("Serial lines")); r = row(); append(box, r);
     const char *defaults[] = {_("Unchanged"), _("Low"), _("High"), NULL};
-    tab->dtr_default = dropdown(r, "DTR", defaults, tab->config.dtr_default);
-    tab->rts_default = dropdown(r, "RTS", defaults, tab->config.rts_default);
+    tab->dtr_default = dropdown(r, _("DTR on connect"), defaults, tab->config.dtr_default);
+    tab->rts_default = dropdown(r, _("RTS on connect"), defaults, tab->config.rts_default);
     tab->pulse_ms = tool_spin(r, _("Pulse (ms)"), 10000, tab->config.line_pulse_ms);
     gtk_spin_button_set_range(tab->pulse_ms, 1, 10000);
     r = row(); append(box, r);
-    button(r, _("DTR pulse"), G_CALLBACK(pulse_clicked), tab);
-    GtkWidget *b = button(r, _("RTS pulse"), G_CALLBACK(pulse_clicked), tab);
-    g_object_set_data(G_OBJECT(b), "pulse-line", GUINT_TO_POINTER(1));
-    GtkWidget *hint = gtk_label_new(_("Defaults and output delays apply on the next connection. RS-485 automatic direction requires an adapter with hardware auto-direction on macOS."));
-    gtk_label_set_wrap(GTK_LABEL(hint), TRUE); append(box, hint);
-    button(tab->advanced, _("Modbus RTU…"), G_CALLBACK(modbus_rtu), tab);
+    /* line_clicked decodes action / 2 as the line (DTR, RTS, Break) and action % 2 as the level. */
+    const char *names[] = {_("Send Break"), _("DTR Low"), _("DTR High"), NULL, _("RTS Low"), _("RTS High"), NULL};
+    const gint actions[] = {4, 0, 1, -1, 2, 3, -2};
+    for (guint i = 0; i < G_N_ELEMENTS(actions); i++) {
+        GtkWidget *b;
+        if (actions[i] >= 0) {
+            b = button(r, names[i], G_CALLBACK(line_clicked), tab); g_object_set_data(G_OBJECT(b), "line", GINT_TO_POINTER(actions[i]));
+        } else {
+            b = button(r, actions[i] == -1 ? _("DTR Pulse") : _("RTS Pulse"), G_CALLBACK(pulse_clicked), tab);
+            g_object_set_data(G_OBJECT(b), "pulse-line", GUINT_TO_POINTER(actions[i] == -2));
+        }
+    }
+    tool_hint(box, _("Defaults and output delays apply on the next connection. RS-485 automatic direction requires an adapter with hardware auto-direction on macOS."));
+    box = tool_section(tab, _("Reconnect")); r = row(); append(box, r);
+    append(r, GTK_WIDGET(tab->reconnect));
+    const char *strategies[] = {_("Same device"), _("Next new device"), _("Latest device"), NULL};
+    tab->auto_connect = dropdown(r, NULL, strategies, MIN(tab->config.auto_connect, 2));
+    r = row(); append(box, r); tab->exclude_devices = field(r, _("Exclude devices (regex)"), tab->config.exclude_devices, 24);
+    gtk_widget_set_hexpand(GTK_WIDGET(tab->exclude_devices), TRUE);
+    r = row(); append(box, r); tab->connection_notify = check(r, _("Desktop notifications"), tab->config.connection_notify);
+    tab->connection_sound = check(r, _("Connection sound"), tab->config.connection_sound);
+    tool_hint(box, _("USB adapters with a unique serial number reconnect by identity. Others retry the same path. New/latest selects a device when Connect is pressed."));
+    button(tab->settings_actions, _("Modbus RTU…"), G_CALLBACK(modbus_rtu), tab);
     box = tool_section(tab, _("File transfer")); r = row(); append(box, r);
     const char *protocols[] = {"XMODEM-CRC", "YMODEM", "ZMODEM", NULL};
     tab->transfer_protocol = dropdown(r, _("Protocol"), protocols, 0);
     tab->transfer_timeout = tool_spin(r, _("Timeout (s)"), 86400, 120);
     gtk_spin_button_set_range(tab->transfer_timeout, 1, 86400);
     r = row(); append(box, r); button(r, _("Send file…"), G_CALLBACK(transfer_choose), tab);
-    b = button(r, _("Receive into folder…"), G_CALLBACK(transfer_choose), tab); g_object_set_data(G_OBJECT(b), "receive", GINT_TO_POINTER(1));
+    GtkWidget *b = button(r, _("Receive into folder…"), G_CALLBACK(transfer_choose), tab); g_object_set_data(G_OBJECT(b), "receive", GINT_TO_POINTER(1));
     button(r, _("Cancel transfer"), G_CALLBACK(transfer_cancel), tab);
-    tab->transfer_status = GTK_LABEL(gtk_label_new(_("Choose an empty receive directory to protect existing files")));
-    gtk_label_set_wrap(tab->transfer_status, TRUE); append(box, GTK_WIDGET(tab->transfer_status));
-    box = tool_section(tab, _("Recording / safe rotation")); r = row(); append(box, r);
+    tab->transfer_status = GTK_LABEL(tool_hint(box, _("Choose an empty receive directory to protect existing files")));
+    box = tool_section(tab, _("Recording")); r = row(); append(box, r);
     tab->capture_part_spin = tool_spin(r, _("Part MiB"), 128, MAX(1, tab->config.capture_part_mb));
     gtk_spin_button_set_range(tab->capture_part_spin, 1, 128);
     tab->capture_time_spin = tool_spin(r, _("Part seconds (0=off)"), 86400, tab->config.capture_part_seconds);
@@ -305,8 +319,9 @@ static void tools_controls(Tab *tab)
     gtk_spin_button_set_range(tab->capture_keep_spin, 1, 1000);
     tab->capture_disk_spin = tool_spin(r, _("Disk MiB"), 1048576, MAX(1, tab->config.capture_disk_mb));
     gtk_spin_button_set_range(tab->capture_disk_spin, 1, 1048576);
-    tab->capture_button = GTK_BUTTON(button(box, _("Start recording…"), G_CALLBACK(on_capture_clicked), tab));
-    tab->capture_label = GTK_LABEL(gtk_label_new("")); gtk_label_set_wrap(tab->capture_label, TRUE); append(box, GTK_WIDGET(tab->capture_label));
+    r = row(); append(box, r);
+    tab->capture_button = GTK_BUTTON(button(r, _("Start recording…"), G_CALLBACK(on_capture_clicked), tab));
+    tab->capture_label = GTK_LABEL(tool_hint(box, ""));
 }
 static void history_use(GtkButton *b, gpointer data) { Tab *tab = data; text(tab->send, gtk_button_get_label(b)); }
 static void history_visible(GObject *object, GParamSpec *spec, gpointer data)
@@ -659,15 +674,44 @@ static void font_changed(GtkSpinButton *spin, gpointer data)
     }
     g_autoptr(GError) error = NULL; if (!save(app, &error)) g_warning("%s", error->message);
 }
+static GtkWidget *tools_card(GtkWidget *box, const char *title)
+{
+    GtkWidget *label = gtk_label_new(title); gtk_label_set_xalign(GTK_LABEL(label), 0);
+    gtk_widget_add_css_class(label, "settings-section-title"); append(box, label);
+    GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6); gtk_widget_add_css_class(card, "settings-card"); append(box, card); return card;
+}
 static void tools_preferences(GtkWidget *box, App *app)
 {
-    GtkWidget *r = row(); append(box, r); app->font_size = tool_spin(r, _("Font size"), 40, app->settings.font_size);
-    gtk_spin_button_set_range(app->font_size, 6, 40); g_signal_connect(app->font_size, "value-changed", G_CALLBACK(font_changed), app);
-    app->restore_tabs = check(box, _("Restore tabs on startup"), app->settings.restore_tabs);
-    button(box, _("Open recording / replay…"), G_CALLBACK(replay_clicked), app);
-    button(box, _("Compare sessions"), G_CALLBACK(on_compare_sessions), app);
-    button(box, _("Custom highlight rules"), G_CALLBACK(on_highlight_rules), app);
-    button(box, _("Import settings…"), G_CALLBACK(settings_file), app);
-    GtkWidget *b = button(box, _("Export settings…"), G_CALLBACK(settings_file), app); g_object_set_data(G_OBJECT(b), "mode", GUINT_TO_POINTER(1));
-    b = button(box, _("Export portable configuration…"), G_CALLBACK(settings_file), app); g_object_set_data(G_OBJECT(b), "mode", GUINT_TO_POINTER(2));
+    GtkWidget *card = tools_card(box, _("General")), *r = row(); append(card, r);
+    GtkWidget *caption = gtk_label_new(_("Font size")); gtk_label_set_xalign(GTK_LABEL(caption), 0); gtk_widget_set_hexpand(caption, TRUE); append(r, caption);
+    app->font_size = GTK_SPIN_BUTTON(gtk_spin_button_new_with_range(6, 40, 1)); gtk_spin_button_set_value(app->font_size, app->settings.font_size);
+    append(r, GTK_WIDGET(app->font_size)); g_signal_connect(app->font_size, "value-changed", G_CALLBACK(font_changed), app);
+    app->restore_tabs = check(card, _("Reopen sessions on startup"), app->settings.restore_tabs);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(app->restore_tabs), _("Reopen the tabs that were open last time, without connecting"));
+    card = tools_card(box, _("Backup")); r = row(); append(card, r);
+    GtkWidget *b = button(r, _("Export settings…"), G_CALLBACK(settings_file), app); g_object_set_data(G_OBJECT(b), "mode", GUINT_TO_POINTER(1));
+    gtk_widget_set_hexpand(b, TRUE); gtk_widget_set_hexpand(button(r, _("Import settings…"), G_CALLBACK(settings_file), app), TRUE);
+    b = button(card, _("Export portable settings…"), G_CALLBACK(settings_file), app); g_object_set_data(G_OBJECT(b), "mode", GUINT_TO_POINTER(2));
+    gtk_widget_set_tooltip_text(b, _("Profiles, buttons and sequences; excludes local paths, device identities and send history"));
+    card = tools_card(box, _("About"));
+    g_autofree gchar *version = g_strdup_printf(_("Version %s"), TIO_GUI_VERSION);
+    GtkWidget *label = gtk_label_new(version); gtk_label_set_xalign(GTK_LABEL(label), 0); gtk_widget_add_css_class(label, "settings-version");
+    g_object_set_data(G_OBJECT(label), "user-content", GINT_TO_POINTER(1)); append(card, label);
+    tool_hint(card, _("A lightweight, reliable GUI for tio"));
+}
+/* Window-wide tools, the same entries as the Linux Tools menu minus network backends. */
+static GtkWidget *tools_menu(App *app)
+{
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2); tio_ui_margins(box, 6);
+    struct { const char *label; GCallback callback; } items[] = {
+        {_("Compare sessions…"), G_CALLBACK(on_compare_sessions)},
+        {_("Open recording / replay…"), G_CALLBACK(replay_clicked)},
+        {_("Custom highlight rules…"), G_CALLBACK(on_highlight_rules)},
+    };
+    for (guint i = 0; i < G_N_ELEMENTS(items); i++) {
+        GtkWidget *b = button(box, items[i].label, items[i].callback, app);
+        gtk_widget_add_css_class(b, "flat"); gtk_widget_add_css_class(b, "menu-item");
+        gtk_label_set_xalign(GTK_LABEL(gtk_button_get_child(GTK_BUTTON(b))), 0);
+    }
+    return box;
 }

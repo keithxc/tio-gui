@@ -96,6 +96,13 @@ int main(int argc, char **argv)
     gtk_window_destroy(GTK_WINDOW(tab->sequence_window)); spin(300);
     quick_edit(NULL, tab); screenshot(tab->quick_window, "macos-quick.png"); gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300);
     gtk_widget_set_visible(tab->workspace.advanced, TRUE); screenshot(app.window, "macos-advanced.png");
+    const char *pages[] = {"session", "lines", "reconnect", "transfer", "recording"}; guint page_index = 0;
+    for (GtkWidget *page = gtk_widget_get_next_sibling(gtk_stack_get_visible_child(tab->settings_stack)); page; page = gtk_widget_get_next_sibling(page), page_index++) {
+        gtk_stack_set_visible_child(tab->settings_stack, page);
+        g_autofree gchar *name = g_strdup_printf("macos-advanced-%s.png", pages[MIN(page_index, G_N_ELEMENTS(pages) - 1)]); screenshot(app.window, name);
+    }
+    g_assert_cmpuint(page_index, ==, G_N_ELEMENTS(pages));
+    gtk_stack_set_visible_child_name(tab->settings_stack, "connection");
     gtk_widget_set_visible(tab->workspace.advanced, FALSE); screenshot(app.window, "macos-main.png");
     gtk_check_button_set_active(tab->highlight_toggle, FALSE);
     const char *screen = "\033[?1049h\033[2J\033[HEmbedded Linux console\033[3;4H\033[32mCamera pipeline: running\033[0m\033[5;4H1920 x 1080  |  60 fps\033[7;4H中文终端 / UTF-8\033[?1h";

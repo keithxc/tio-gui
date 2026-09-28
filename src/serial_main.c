@@ -23,6 +23,7 @@
 #include "native_terminal.h"
 #include "console_search.h"
 #include "workspace_ui.h"
+#include "macos_window.h"
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #include <CoreFoundation/CoreFoundation.h>
@@ -97,7 +98,8 @@ typedef struct {
     GtkWindow *quick_window;
     GtkButton *send_button;
     GtkWidget *bottom_button;
-    GtkWidget *page, *controls, *advanced, *search_row;
+    GtkWidget *page, *controls, *advanced, *search_row, *settings_actions;
+    GtkStack *settings_stack;
     GtkLabel *title, *status, *counts;
     GtkEntry *device, *baud, *send, *log_path, *profile;
     GtkDropDown *saved_profiles, *auto_connect;
@@ -189,11 +191,11 @@ static void text(GtkEntry *e, const char *value) { gtk_editable_set_text(GTK_EDI
 static guint choice(GtkDropDown *d) { return gtk_drop_down_get_selected(d); }
 static gboolean checked(GtkCheckButton *b) { return gtk_check_button_get_active(b); }
 static void replace(gchar **destination, const char *value) { g_free(*destination); *destination = g_strdup(value ? value : ""); }
-static void append(GtkWidget *box, GtkWidget *widget) { gtk_box_append(GTK_BOX(box), widget); }
+static void append(GtkWidget *box, GtkWidget *widget) { if (box) gtk_box_append(GTK_BOX(box), widget); }
 static GtkWidget *row(void) { return tio_ui_row(8); }
 static GtkWidget *button(GtkWidget *box, const char *label, GCallback callback, gpointer data)
 {
-    GtkWidget *b = gtk_button_new_with_label(label); append(box, b);
+    GtkWidget *b = label ? gtk_button_new_with_label(label) : gtk_button_new(); append(box, b);
     g_signal_connect(b, "clicked", callback, data); return b;
 }
 static GtkEntry *field(GtkWidget *box, const char *label, const char *value, int width)
@@ -212,6 +214,13 @@ static GtkDropDown *dropdown(GtkWidget *box, const char *label, const char *cons
     if (label) append(box, gtk_label_new(label));
     GtkDropDown *d = GTK_DROP_DOWN(gtk_drop_down_new_from_strings(items));
     gtk_drop_down_set_selected(d, selected); append(box, GTK_WIDGET(d)); return d;
+}
+/* A right-aligned caption and its full-width control inside a settings grid. */
+static void grid_row(GtkWidget *grid, int top, const char *caption, GtkWidget *widget)
+{
+    GtkWidget *label = gtk_label_new(caption); gtk_label_set_xalign(GTK_LABEL(label), 1); gtk_widget_add_css_class(label, "dim-label");
+    gtk_grid_attach(GTK_GRID(grid), label, 0, top, 1, 1);
+    gtk_widget_set_hexpand(widget, TRUE); gtk_grid_attach(GTK_GRID(grid), widget, 1, top, 1, 1);
 }
 static void snapshot(Tab *tab)
 {
@@ -934,6 +943,16 @@ static void back_to_bottom(GtkButton *button_, gpointer data)
 {
     (void)button_; Tab *tab = data; gtk_check_button_set_active(tab->follow, TRUE); follow_bottom(tab);
 }
+static void claim_page_press(GtkGestureClick *gesture, int presses, double x, double y, gpointer data)
+{
+    /* Claim only presses on bare layout; claiming one aimed at a control
+     * would cancel that control's own gesture (e.g. a drop-down popup). */
+    (void)presses; (void)data;
+    GtkWidget *root = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+    for (GtkWidget *w = gtk_widget_pick(root, x, y, GTK_PICK_DEFAULT); w && w != root; w = gtk_widget_get_parent(w))
+        if (!GTK_IS_BOX(w) && !GTK_IS_GRID(w) && !GTK_IS_LABEL(w) && !GTK_IS_SEPARATOR(w)) return;
+    gtk_gesture_set_state(GTK_GESTURE(gesture), GTK_EVENT_SEQUENCE_CLAIMED);
+}
 static void new_tab(App *app, const TioSessionConfig *config)
 {
     Tab *tab = g_new0(Tab, 1); tab->app = app; tab->id = ++app->next_id;
@@ -942,6 +961,9 @@ static void new_tab(App *app, const TioSessionConfig *config)
     g_ptr_array_add(app->tabs, tab);
     tab->workspace = tio_workspace_ui_new(); GtkWidget *root = tab->workspace.root; tab->page = root;
     g_object_set_data(G_OBJECT(root), "tab", tab);
+    /* Blank page areas must not reach the title-bar window handle. */
+    GtkGesture *page_press = gtk_gesture_click_new(); g_signal_connect(page_press, "pressed", G_CALLBACK(claim_page_press), NULL);
+    gtk_widget_add_controller(root, GTK_EVENT_CONTROLLER(page_press));
     tab->connection = tio_connection_ui_new(tab->workspace.toolbar);
     tab->ports = tab->connection.device; g_object_set_data(G_OBJECT(tab->ports), "user-content", GINT_TO_POINTER(1)); tab->baud = tab->connection.custom_baud;
     tab->controls = GTK_WIDGET(tab->ports); tab->connect = tab->connection.connect;
@@ -962,44 +984,69 @@ static void new_tab(App *app, const TioSessionConfig *config)
     GtkWidget *exp = gtk_expander_new(_("Connection and logging")); append(options, exp);
     gtk_widget_set_valign(exp, GTK_ALIGN_CENTER);
     g_object_bind_property(exp, "expanded", tab->workspace.advanced, "visible", G_BINDING_SYNC_CREATE);
-    tab->advanced = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6); gtk_widget_add_css_class(tab->advanced, "settings-card");
+    tab->advanced = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6); gtk_widget_add_css_class(tab->advanced, "session-settings");
     append(tab->workspace.advanced, tio_ui_advanced_scroll(tab->advanced));
-    GtkWidget *profiles_menu = gtk_menu_button_new(); gtk_menu_button_set_label(GTK_MENU_BUTTON(profiles_menu), _("Profiles")); append(tab->advanced, profiles_menu);
+    /* One segmented panel: a page per group keeps the height fixed, like a
+     * macOS preferences pane, instead of a scrolling stack of expanders. */
+    GtkWidget *heading = row(); append(tab->advanced, heading);
+    tab->settings_stack = GTK_STACK(gtk_stack_new()); gtk_stack_set_vhomogeneous(tab->settings_stack, FALSE);
+    gtk_stack_set_transition_type(tab->settings_stack, GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+    GtkWidget *switcher = gtk_stack_switcher_new(); gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(switcher), tab->settings_stack);
+    gtk_widget_add_css_class(switcher, "settings-switcher"); gtk_widget_set_hexpand(switcher, TRUE); gtk_widget_set_halign(switcher, GTK_ALIGN_START);
+    GtkLayoutManager *segments = gtk_widget_get_layout_manager(switcher);
+    if (GTK_IS_BOX_LAYOUT(segments)) gtk_box_layout_set_homogeneous(GTK_BOX_LAYOUT(segments), FALSE);
+    append(heading, switcher);
+    tab->settings_actions = row(); append(heading, tab->settings_actions);
+    append(tab->advanced, GTK_WIDGET(tab->settings_stack));
+    GtkWidget *profiles_menu = gtk_menu_button_new(); gtk_menu_button_set_label(GTK_MENU_BUTTON(profiles_menu), _("Profiles"));
+    gtk_widget_set_tooltip_text(profiles_menu, _("Connection profiles"));
     GtkWidget *profiles_pop = gtk_popover_new(); GtkWidget *profiles = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6); tio_ui_margins(profiles, 8);
+    gtk_widget_set_size_request(profiles, 260, -1);
     gtk_popover_set_child(GTK_POPOVER(profiles_pop), profiles); gtk_menu_button_set_popover(GTK_MENU_BUTTON(profiles_menu), profiles_pop);
     tab->saved_profiles = GTK_DROP_DOWN(gtk_drop_down_new(NULL, NULL)); append(profiles, GTK_WIDGET(tab->saved_profiles));
     g_object_set_data(G_OBJECT(tab->saved_profiles), "user-content", GINT_TO_POINTER(1));
     tab->profile = field(profiles, _("Profile"), "", 24);
     g_signal_connect(tab->saved_profiles, "notify::selected", G_CALLBACK(profiles_selected), tab);
     profiles_refresh(tab);
+    append(profiles, gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
     button(profiles, _("Save"), G_CALLBACK(profile_save), tab); button(profiles, _("Open in new tab"), G_CALLBACK(profile_load), tab);
-    button(profiles, _("Delete profile"), G_CALLBACK(profile_delete), tab);
-    GtkWidget *manual = row(); append(tab->advanced, manual);
-    tab->device = field(manual, _("Device"), config->device, 18); gtk_widget_set_hexpand(GTK_WIDGET(tab->device), TRUE);
-    GtkWidget *framing = row(); append(tab->advanced, framing);
+    gtk_widget_add_css_class(button(profiles, _("Delete profile"), G_CALLBACK(profile_delete), tab), "destructive-action");
+    GtkWidget *card = gtk_grid_new(); gtk_widget_add_css_class(card, "settings-card");
+    gtk_stack_add_titled(tab->settings_stack, card, "connection", _("Connection"));
+    gtk_grid_set_column_spacing(GTK_GRID(card), 8); gtk_grid_set_row_spacing(GTK_GRID(card), 8);
+    tab->device = GTK_ENTRY(gtk_entry_new()); text(tab->device, config->device);
+    grid_row(card, 0, _("Device"), GTK_WIDGET(tab->device));
     const char *bits[] = {"5", "6", "7", "8", NULL}, *stops[] = {"1", "2", NULL};
     const char *parity[] = {_("None"), _("Odd"), _("Even"), NULL}, *flow[] = {_("None"), "RTS/CTS", "XON/XOFF", NULL};
-    tab->bits = dropdown(framing, _("Data bits"), bits, (guint)CLAMP(atoi(config->data_bits) - 5, 0, 3));
-    tab->stops = dropdown(framing, _("Stop bits"), stops, g_str_equal(config->stop_bits, "2"));
-    framing = row(); append(tab->advanced, framing);
-    tab->parity = dropdown(framing, _("Parity"), parity, g_str_equal(config->parity, "odd") ? 1 : g_str_equal(config->parity, "even") ? 2 : 0);
-    tab->flow = dropdown(framing, _("Flow"), flow, g_str_equal(config->flow, "hard") ? 1 : g_str_equal(config->flow, "soft") ? 2 : 0);
-    framing = row(); append(tab->advanced, framing);
-    tab->echo = check(framing, _("Local echo"), config->local_echo);
-    tab->hex_tx = check(framing, _("HEX send"), FALSE);
-    GtkWidget *logrow = row(); append(tab->advanced, logrow);
+    tab->bits = dropdown(NULL, NULL, bits, (guint)CLAMP(atoi(config->data_bits) - 5, 0, 3));
+    tab->stops = dropdown(NULL, NULL, stops, g_str_equal(config->stop_bits, "2"));
+    tab->parity = dropdown(NULL, NULL, parity, g_str_equal(config->parity, "odd") ? 1 : g_str_equal(config->parity, "even") ? 2 : 0);
+    tab->flow = dropdown(NULL, NULL, flow, g_str_equal(config->flow, "hard") ? 1 : g_str_equal(config->flow, "soft") ? 2 : 0);
+    /* Framing reads as one sentence: compact pairs packed from the left. */
+    GtkWidget *framing = tio_ui_row(14); grid_row(card, 1, _("Data bits"), framing);
+    GtkWidget *pairs[][2] = {{NULL, GTK_WIDGET(tab->bits)}, {gtk_label_new(_("Stop bits")), GTK_WIDGET(tab->stops)},
+        {gtk_label_new(_("Parity")), GTK_WIDGET(tab->parity)}, {gtk_label_new(_("Flow control")), GTK_WIDGET(tab->flow)}};
+    for (guint i = 0; i < G_N_ELEMENTS(pairs); i++) {
+        GtkWidget *pair = row(); append(framing, pair);
+        if (pairs[i][0]) { gtk_widget_add_css_class(pairs[i][0], "dim-label"); append(pair, pairs[i][0]); }
+        gtk_widget_set_size_request(pairs[i][1], i == 3 ? 130 : 96, -1); append(pair, pairs[i][1]);
+    }
+    GtkWidget *switches = row(); gtk_grid_attach(GTK_GRID(card), switches, 1, 2, 1, 1);
+    tab->echo = check(switches, _("Local echo"), config->local_echo);
+    tab->hex_tx = check(switches, _("HEX send"), FALSE);
+    GtkWidget *logrow = row();
     g_autoptr(GDateTime) now = g_date_time_new_now_local(); g_autofree gchar *stamp = g_date_time_format(now, "%Y%m%d-%H%M%S-%f");
     g_autofree gchar *name = g_strdup_printf("serial-%s.log", stamp);
     g_autofree gchar *default_log = g_build_filename(config->log_directory, name, NULL);
-    tab->log_path = field(logrow, _("Log filename"), *config->log_file ? config->log_file : default_log, 30);
-    gtk_widget_set_hexpand(GTK_WIDGET(tab->log_path), TRUE); button(logrow, _("Browse…"), G_CALLBACK(log_choose), tab);
-    GtkWidget *line_exp = gtk_expander_new(_("Serial lines")); append(tab->advanced, line_exp);
-    GtkWidget *line_box = row(); gtk_expander_set_child(GTK_EXPANDER(line_exp), line_box);
-    const char *lines[] = {_("DTR low"), _("DTR high"), _("RTS low"), _("RTS high"), _("Break")};
-    for (guint i = 0; i < 5; i++) { GtkWidget *b = button(line_box, lines[i], G_CALLBACK(line_clicked), tab); g_object_set_data(G_OBJECT(b), "line", GUINT_TO_POINTER(i)); }
-    tab->reconnect = check(tab->advanced, _("Auto reconnect"), config->reconnect);
+    tab->log_path = field(logrow, NULL, *config->log_file ? config->log_file : default_log, 30);
+    gtk_widget_set_hexpand(GTK_WIDGET(tab->log_path), TRUE);
+    GtkWidget *browse = button(logrow, NULL, G_CALLBACK(log_choose), tab); gtk_button_set_icon_name(GTK_BUTTON(browse), "document-open-symbolic");
+    gtk_widget_set_tooltip_text(browse, _("Browse…"));
+    grid_row(card, 3, _("Log filename"), logrow);
+    tab->reconnect = GTK_CHECK_BUTTON(gtk_check_button_new_with_label(_("Auto reconnect")));
+    gtk_check_button_set_active(tab->reconnect, config->reconnect);
     gtk_widget_set_tooltip_text(GTK_WIDGET(tab->reconnect), _("Retry the same port once per second; pending sends are discarded after disconnect"));
-    tools_controls(tab);
+    tools_controls(tab); append(tab->settings_actions, profiles_menu);
     tab->status = GTK_LABEL(gtk_label_new(_("Ready"))); gtk_label_set_xalign(tab->status, 0);
     gtk_label_set_ellipsize(tab->status, PANGO_ELLIPSIZE_END); gtk_widget_set_hexpand(GTK_WIDGET(tab->status), TRUE);
     tab->counts = GTK_LABEL(gtk_label_new("")); gtk_label_set_xalign(tab->counts, 1);
@@ -1141,6 +1188,35 @@ static void new_tab(App *app, const TioSessionConfig *config)
     g_signal_connect(tab->search_bar, "notify::search-mode-enabled", G_CALLBACK(search_mode_changed), tab);
     tab->timer = g_timeout_add(30, tick, tab); refresh_clicked(NULL, tab);
 }
+#ifdef __APPLE__
+/* macOS chrome: a 32pt tab strip doubling as the title bar, so the traffic
+ * lights sit vertically centred, plus tighter rows and rounded cards. */
+static void install_macos_css(void)
+{
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(provider,
+        "window.macos-unified notebook > header.top { min-height: 32px; padding: 0 6px 0 0; border-bottom: 1px solid alpha(@theme_fg_color, 0.10); box-shadow: none; background: alpha(@theme_fg_color, 0.035); }"
+        "window.macos-unified notebook > header.top > tabs { margin: 0; }"
+        "window.macos-unified notebook > header.top > tabs > tab { min-height: 24px; margin: 4px 2px; padding: 0 4px 0 10px; border-radius: 7px; box-shadow: none; opacity: 0.72; }"
+        "window.macos-unified notebook > header.top > tabs > tab:hover { background: alpha(@theme_fg_color, 0.06); opacity: 1; }"
+        "window.macos-unified notebook > header.top > tabs > tab:checked { background: alpha(@theme_fg_color, 0.11); box-shadow: none; opacity: 1; }"
+        "window.macos-unified notebook > header.top > tabs > tab button { min-width: 18px; min-height: 18px; padding: 0; border-radius: 5px; }"
+        "window.macos-unified notebook > header.top button, window.macos-unified notebook > header.top menubutton > button { min-height: 24px; min-width: 24px; padding: 0 7px; margin: 0; border-radius: 6px; background: none; box-shadow: none; border: none; }"
+        "window.macos-unified notebook > header.top button:hover, window.macos-unified notebook > header.top menubutton > button:hover { background: alpha(@theme_fg_color, 0.08); }"
+        "window.macos-unified notebook > header.top menubutton > button:checked { background: alpha(@theme_fg_color, 0.12); }"
+        "window.macos-unified .compact-controls button, window.macos-unified .compact-controls entry, window.macos-unified .compact-controls dropdown > button, window.macos-unified .compact-controls spinbutton { min-height: 24px; border-radius: 6px; }"
+        "window.macos-unified .compact-controls { font-size: 0.95em; }"
+        "window.macos-unified .terminal-frame { border-radius: 8px; border-color: alpha(@theme_fg_color, 0.14); }"
+        "window.macos-unified .session-settings { padding: 2px 0 6px 0; }"
+        "window.macos-unified .settings-switcher button { min-width: 0; padding: 0 12px; }"
+        "window.macos-unified stackswitcher.settings-switcher > button:checked, window.macos-unified stackswitcher.settings-switcher > button:checked:hover { background-color: @accent_bg_color; background-image: none; color: @accent_fg_color; }"
+        "window.macos-unified .settings-card { border-radius: 9px; padding: 10px 12px; }"
+        "popover .menu-item { padding: 4px 12px; min-height: 26px; border-radius: 6px; font-weight: normal; }"
+        "popover .settings-card { border-radius: 9px; }");
+    gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    g_object_unref(provider);
+}
+#endif
 static void add_clicked(GtkButton *b, gpointer data) { (void)b; App *app = data; new_tab(app, &app->settings.defaults); }
 static gboolean finish_quit(gpointer data)
 {
@@ -1212,20 +1288,42 @@ static void activate(GtkApplication *application, gpointer data)
     gtk_widget_add_css_class(GTK_WIDGET(app->window), "tio-workspace");
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0); gtk_window_set_child(app->window, root);
     gtk_widget_add_css_class(root, "workspace-content"); gtk_widget_set_overflow(root, GTK_OVERFLOW_HIDDEN);
+#ifndef __APPLE__
     GtkWidget *header = gtk_header_bar_new(); gtk_window_set_titlebar(app->window, header);
     gtk_header_bar_set_title_widget(GTK_HEADER_BAR(header), gtk_label_new("tio-gui"));
+#endif
     app->notebook = GTK_NOTEBOOK(gtk_notebook_new()); gtk_notebook_set_scrollable(app->notebook, TRUE);
     g_signal_connect(app->notebook, "page-reordered", G_CALLBACK(tabs_reordered), app);
-    gtk_notebook_set_show_border(app->notebook, FALSE); gtk_widget_set_vexpand(GTK_WIDGET(app->notebook), TRUE); append(root, GTK_WIDGET(app->notebook));
+    gtk_notebook_set_show_border(app->notebook, FALSE); gtk_widget_set_vexpand(GTK_WIDGET(app->notebook), TRUE);
     GtkWidget *actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    if (tio_macos_unified_titlebar(app->window)) {
+        /* The tab strip is the title bar: leave room for the traffic lights and
+         * let its empty area move the window. Pages claim their own clicks. */
+        GtkWidget *handle = gtk_window_handle_new(); gtk_window_handle_set_child(GTK_WINDOW_HANDLE(handle), GTK_WIDGET(app->notebook));
+        gtk_widget_set_vexpand(handle, TRUE); append(root, handle);
+        GtkWidget *lights = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0); gtk_widget_set_size_request(lights, 72, -1); append(actions, lights);
+        g_object_bind_property(app->window, "fullscreened", lights, "visible", G_BINDING_SYNC_CREATE | G_BINDING_INVERT_BOOLEAN);
+        gtk_widget_add_css_class(GTK_WIDGET(app->window), "macos-unified");
+    } else append(root, GTK_WIDGET(app->notebook));
+    GtkWidget *tools = gtk_menu_button_new(); gtk_menu_button_set_label(GTK_MENU_BUTTON(tools), _("Tools"));
+    GtkWidget *tools_popover = gtk_popover_new(); gtk_popover_set_has_arrow(GTK_POPOVER(tools_popover), FALSE);
+    gtk_widget_set_halign(tools_popover, GTK_ALIGN_START); gtk_popover_set_child(GTK_POPOVER(tools_popover), tools_menu(app));
+    gtk_menu_button_set_popover(GTK_MENU_BUTTON(tools), tools_popover); append(actions, tools);
     GtkWidget *settings = gtk_menu_button_new(); gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(settings), "emblem-system-symbolic");
     gtk_widget_set_tooltip_text(settings, _("Application settings"));
-    GtkWidget *popover = gtk_popover_new(); gtk_widget_set_halign(popover, GTK_ALIGN_START); gtk_popover_set_offset(GTK_POPOVER(popover), 12, 0); gtk_popover_set_child(GTK_POPOVER(popover), preferences(app));
+    GtkWidget *popover = gtk_popover_new(); gtk_widget_set_halign(popover, GTK_ALIGN_START); gtk_popover_set_offset(GTK_POPOVER(popover), 12, 0);
+    GtkWidget *preferences_scroll = gtk_scrolled_window_new(); gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(preferences_scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(preferences_scroll), 560);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(preferences_scroll), TRUE);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(preferences_scroll), preferences(app)); gtk_popover_set_child(GTK_POPOVER(popover), preferences_scroll);
     gtk_menu_button_set_popover(GTK_MENU_BUTTON(settings), popover); append(actions, settings);
     GtkWidget *add = gtk_button_new_from_icon_name("list-add-symbolic"); gtk_button_set_has_frame(GTK_BUTTON(add), FALSE);
     gtk_widget_set_tooltip_text(add, _("New session")); append(actions, add); g_signal_connect(add, "clicked", G_CALLBACK(add_clicked), app);
     gtk_notebook_set_action_widget(app->notebook, actions, GTK_PACK_START);
     tio_workspace_install_css();
+#ifdef __APPLE__
+    install_macos_css();
+#endif
     if (app->settings.restore_tabs) for (guint i = 0; i < app->settings.tab_configs->len; i++) new_tab(app, g_ptr_array_index(app->settings.tab_configs, i));
     if (!app->tabs->len) new_tab(app, &app->settings.defaults);
 #if defined(G_OS_WIN32) || defined(__APPLE__)
