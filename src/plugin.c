@@ -15,6 +15,16 @@
 #include <stdlib.h>
 #define PLUGIN_LIMIT 65536
 
+/* The syscall numbers below must match the native audit architecture. Reject
+ * unreviewed ABIs at build time rather than running plugins without a filter. */
+#if defined(__x86_64__) && !defined(__ILP32__)
+#define PLUGIN_AUDIT_ARCH AUDIT_ARCH_X86_64
+#elif defined(__aarch64__) && defined(__AARCH64EL__) && !defined(__ILP32__)
+#define PLUGIN_AUDIT_ARCH AUDIT_ARCH_AARCH64
+#else
+#error "Linux plugin sandbox supports only x86-64 and little-endian AArch64 LP64"
+#endif
+
 typedef struct { guint language; gchar *source, *input; } Job;
 static void job_free(gpointer data) { Job *job = data; g_free(job->source); g_free(job->input); g_free(job); }
 static void child_limits(gpointer data)
@@ -64,13 +74,19 @@ static void worker(GTask *task, gpointer source_object, gpointer task_data, GCan
     g_autoptr(GString) output = g_string_new(NULL);
     struct sock_filter filter[] = {
         BPF_STMT(BPF_LD|BPF_W|BPF_ABS, offsetof(struct seccomp_data, arch)),
-        BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, AUDIT_ARCH_X86_64, 1, 0),
+        BPF_JUMP(BPF_JMP|BPF_JEQ|BPF_K, PLUGIN_AUDIT_ARCH, 1, 0),
         BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_KILL_PROCESS),
         BPF_STMT(BPF_LD|BPF_W|BPF_ABS, offsetof(struct seccomp_data, nr)),
         BPF_JUMP(BPF_JMP|BPF_JGE|BPF_K, 0x40000000, 0, 1),
         BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_KILL_PROCESS),
-        DENY_SYSCALL(__NR_clone), DENY_SYSCALL(__NR_clone3), DENY_SYSCALL(__NR_fork),
-        DENY_SYSCALL(__NR_vfork), DENY_SYSCALL(__NR_socket), DENY_SYSCALL(__NR_ptrace),
+        DENY_SYSCALL(__NR_clone), DENY_SYSCALL(__NR_clone3),
+#ifdef __NR_fork
+        DENY_SYSCALL(__NR_fork),
+#endif
+#ifdef __NR_vfork
+        DENY_SYSCALL(__NR_vfork),
+#endif
+        DENY_SYSCALL(__NR_socket), DENY_SYSCALL(__NR_ptrace),
         DENY_SYSCALL(__NR_unshare), DENY_SYSCALL(__NR_setns), DENY_SYSCALL(__NR_mount), DENY_SYSCALL(__NR_umount2),
         BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_ALLOW),
     };

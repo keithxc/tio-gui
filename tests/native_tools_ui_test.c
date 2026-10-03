@@ -4,9 +4,12 @@
 #define main serial_application_main
 #include "../src/serial_main.c"
 #undef main
+#include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 #include "modbus.h"
+#include "native_ui_wait.h"
 static void spin(guint ms)
 {
     gint64 end = g_get_monotonic_time() + ms * 1000;
@@ -37,6 +40,30 @@ static void modbus_done(GObject *source, GAsyncResult *result, gpointer data)
 }
 static void replay_event(TioCaptureKind kind, const guint8 *bytes, gsize length, gint64 time_us, gpointer data)
 { (void)time_us; if (kind == TIO_CAPTURE_RX) g_byte_array_append(data, bytes, length); }
+
+typedef struct { int fd; GBytes *request; GByteArray *response; } ModbusPeer;
+static gpointer modbus_peer(gpointer data)
+{
+    ModbusPeer *peer = data;
+    gsize length;
+    const guint8 *expected = g_bytes_get_data(peer->request, &length);
+    guint8 actual[256]; gsize received = 0;
+    g_assert_cmpuint(length, <=, sizeof actual);
+    const gint64 deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (received < length && g_get_monotonic_time() < deadline) {
+        struct pollfd wait = {.fd = peer->fd, .events = POLLIN};
+        int ready = poll(&wait, 1, 50);
+        if (ready < 0 && errno == EINTR) continue;
+        g_assert_cmpint(ready, >=, 0);
+        if (!ready) continue;
+        gssize count = read(peer->fd, actual + received, sizeof actual - received);
+        if (count < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+        g_assert_cmpint(count, >, 0); received += count;
+    }
+    g_assert_cmpmem(actual, received, expected, length);
+    g_assert_cmpint(write(peer->fd, peer->response->data, peer->response->len), ==, peer->response->len);
+    return NULL;
+}
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL); gtk_init();
@@ -47,7 +74,7 @@ int main(int argc, char **argv)
     app.settings_path = g_build_filename(directory, "serial.ini", NULL);
     app.application = gtk_application_new("io.github.keithxc.tio_gui.native.tools.test", G_APPLICATION_NON_UNIQUE);
     g_assert_true(g_application_register(G_APPLICATION(app.application), NULL, NULL));
-    activate(app.application, &app); spin(300); Tab *tab = g_ptr_array_index(app.tabs, 0);
+    activate(app.application, &app); wait_window_drawn(app.window); Tab *tab = g_ptr_array_index(app.tabs, 0);
     text(tab->device, device); gtk_check_button_set_active(tab->reconnect, FALSE); connect_clicked(NULL, tab);
     for (guint i = 0; i < 200 && !tab->connected; i++) spin(5); g_assert_true(tab->connected);
     g_test_message("quick CRC, delay, cancel on disconnect");
@@ -71,14 +98,20 @@ int main(int argc, char **argv)
     g_ptr_array_add(app.settings.sequences, tio_sequence_encode(sequence, NULL)); tio_sequence_free(sequence);
     g_test_message("Modbus RTU bridge supports repeated requests");
     modbus_rtu(NULL, tab); g_assert_nonnull(tab->modbus_window);
+    wait_window_drawn(GTK_WINDOW(tab->modbus_window));
     screenshot(GTK_WINDOW(tab->modbus_window), "macos-modbus.png");
     for (guint pass = 0; pass < 3; pass++) {
         Reply reply = {0}; TioModbusRequest request = {.endpoint=tio_native_bridge_path(tab->bridge), .unit=1, .function=3, .address=pass, .quantity=1};
-        tio_modbus_request_async(&request, NULL, modbus_done, &reply);
-        g_autoptr(GBytes) frame = tio_modbus_frame(&request, NULL); gsize length; const guint8 *bytes = g_bytes_get_data(frame, &length); expect(master, bytes, length);
+        g_autoptr(GBytes) frame = tio_modbus_frame(&request, NULL);
         g_autoptr(GByteArray) response = tio_payload_build("01 03 02 00 2A", TRUE, 0, 2, NULL);
-        g_assert_cmpint(write(master, response->data, response->len), ==, response->len);
-        for (guint i = 0; i < 300 && !reply.done; i++) spin(5);
+        /* A real serial peer responds independently of GTK rendering. Keep the
+         * fake device off the UI thread too, without extending product timeouts. */
+        ModbusPeer peer = {.fd = master, .request = frame, .response = response};
+        GThread *thread = g_thread_new("modbus-peer", modbus_peer, &peer);
+        tio_modbus_request_async(&request, NULL, modbus_done, &reply);
+        const gint64 deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+        while (!reply.done && g_get_monotonic_time() < deadline) spin(5);
+        g_thread_join(thread);
         g_assert_true(reply.done); g_assert_no_error(reply.error); g_assert_nonnull(strstr(reply.text, "42")); g_free(reply.text); spin(60);
     }
     gtk_window_destroy(GTK_WINDOW(tab->modbus_window)); spin(100); g_assert_null(tab->bridge);
@@ -90,11 +123,11 @@ int main(int argc, char **argv)
     gsize size; const char *text_ = g_bytes_get_data(plain, &size); g_assert_cmpmem(text_, size, "[2.000000] OK\n", 14);
     g_test_message("analyzer, sequence, quick editor and advanced layout");
     g_assert_cmpint(write(master, "INFO temp=23.5\nERROR test fault\n", 32), ==, 32); spin(100);
-    on_analyzer_clicked(NULL, tab); screenshot(GTK_WINDOW(tab->analyzer_window), "macos-analyzer.png");
+    on_analyzer_clicked(NULL, tab); wait_window_drawn(GTK_WINDOW(tab->analyzer_window)); screenshot(GTK_WINDOW(tab->analyzer_window), "macos-analyzer.png");
     gtk_window_destroy(GTK_WINDOW(tab->analyzer_window)); spin(300);
-    on_sequences_clicked(NULL, tab); screenshot(GTK_WINDOW(tab->sequence_window), "macos-sequences.png");
+    on_sequences_clicked(NULL, tab); wait_window_drawn(GTK_WINDOW(tab->sequence_window)); screenshot(GTK_WINDOW(tab->sequence_window), "macos-sequences.png");
     gtk_window_destroy(GTK_WINDOW(tab->sequence_window)); spin(300);
-    quick_edit(NULL, tab); screenshot(tab->quick_window, "macos-quick.png"); gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300);
+    quick_edit(NULL, tab); wait_window_drawn(tab->quick_window); screenshot(tab->quick_window, "macos-quick.png"); gtk_widget_set_visible(GTK_WIDGET(tab->quick_window), FALSE); spin(300);
     gtk_widget_set_visible(tab->workspace.advanced, TRUE); screenshot(app.window, "macos-advanced.png");
     const char *pages[] = {"session", "lines", "reconnect", "transfer", "recording"}; guint page_index = 0;
     for (GtkWidget *page = gtk_widget_get_next_sibling(gtk_stack_get_visible_child(tab->settings_stack)); page; page = gtk_widget_get_next_sibling(page), page_index++) {

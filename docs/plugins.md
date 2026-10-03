@@ -21,6 +21,11 @@ space and zero file/core output limits. Closing the window cancels execution.
 An unavailable sandbox is an error; the application never retries unsandboxed.
 
 Runtime dependencies are bubblewrap plus Lua 5.4 or QuickJS; the Nix package
-includes all three. The tested sandbox target is Linux x86-64. Runtime libraries
-may be readable; user files and host serial devices are not mounted. This API is
-for bounded log transformations, not general application automation.
+includes all three. The Linux filter supports x86-64 and little-endian AArch64
+with the LP64 ABI. Other architectures or ABIs fail at build time; they do not
+fall back to an unsandboxed runner. A syscall architecture mismatch kills the
+plugin, and both native `clone` and `clone3` remain denied. The separate `fork`
+and `vfork` syscalls are denied on architectures that provide them.
+Runtime libraries may be readable; user files and host serial devices are not
+mounted. This API is for bounded log transformations, not general application
+automation.
