@@ -1,0 +1,41 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Apple Silicon desktop and serial agent
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31.11.1
+      - name: Configure with the locked Nix development environment
+        run: >-
+          nix develop --no-update-lock-file -c cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release -DTIO_GUI_BUILD_AGENT=ON -DBUILD_TESTING=ON
+      - name: Build
+        run: nix develop --no-update-lock-file -c cmake --build build --parallel 3
+      - name: Test
+        run: nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure
+      - name: Keep test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-diagnostics
+          path: build/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+          retention-days: 14

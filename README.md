@@ -8,12 +8,25 @@
 
 A standalone **Windows/macOS serial edition** is available through
 `-DTIO_GUI_SERIAL_ONLY=ON` (the default on those platforms). It uses native serial
-APIs. **macOS 0.4.1** brings the Linux serial tools into the shared workspace,
+APIs. **macOS 0.4.2** brings the Linux serial tools into the shared workspace,
 including sequences, CRC/delays, recording/replay, analysis/plugins, Modbus RTU,
 file transfers and a libvterm terminal. Developer ID signed and notarized DMG/ZIP
 packages are available for Apple Silicon/macOS 26+. Windows retains its 0.3.7
 frontend and NSIS installer. See [installation, scope and hardware checks](docs/serial-portable.md).
 The Linux tio/VTE edition described below remains the default Linux build.
+
+Current source also includes an **experimental remote serial client** for
+iPad/Android and desktop browsers, backed by an optional headless serial agent.
+The USB cable stays on the gateway computer; this does not provide local USB
+access on the tablet. See [build and use the remote client](docs/remote-serial.md).
+It is available from source and the separate `serial-agent` Nix package; desktop
+applications do not start the remote gateway automatically.
+
+The [cross-platform delivery backlog](docs/cross-platform.md) records platform
+differences and acceptance gates. [Linux distribution preparation](docs/linux-distribution.md)
+and [Windows validation](docs/windows-validation.md) cover repository submissions
+and the new build checks. Those checks must run before their targets are called
+validated; adding a workflow does not establish support for every Linux distribution.
 
 The Linux baseline validated in 0.3.7 targets x86-64 Linux with tio 3.9. Software acceptance covers real
 PTY serial transport, protocol peers and GTK controls; electrical and wireless
@@ -49,8 +62,11 @@ hardware limits are recorded in [the acceptance report](docs/acceptance.md).
 - Connecting to a port another session already holds is refused with a plain message, and the
   device list marks those ports as in use
 - Closing a connected tab or the whole window asks first and drains pending recordings
-- Optionally reopen the tabs that were open last time; restored tabs are configured but do not
-  connect on their own
+- Reopen the previous tabs by default, including their order and individual settings;
+  restored tabs do not connect on their own. Disable **Reopen sessions on startup**
+  in application settings to start with one tab. Existing saved opt-outs are respected;
+  if an older installation always starts with one tab, enable this setting before
+  closing the application window. Closing individual tabs removes them from the workspace.
 
 ### Connection profiles
 
@@ -186,11 +202,18 @@ highlighting, filtering, recording and plotting — reads the tap rather than sc
 path that would not fit in `sun_path` is dropped rather than passed on, because `tio` refuses to start
 at all on a long one and connecting matters more than the counters.
 
-User preferences are stored in `~/.config/tio-gui/config.ini`. The file holds general options
+The Linux GTK/VTE desktop stores preferences in
+`$XDG_CONFIG_HOME/tio-gui/config.ini` (normally `~/.config/tio-gui/config.ini`).
+The native serial frontend uses `serial.ini` in the same configuration directory;
+on Windows this normally resolves to `%LOCALAPPDATA%\tio-gui\serial.ini`.
+These are local, plaintext INI files, not a cloud synchronization service.
+The file holds general options
 (including the theme) under `[general]`, the starting values for a new session under `[defaults]`,
 the send history under `[send]`, one `[profile:<name>]` group per saved profile, and one `[tab:<n>]`
 group per session that was open at exit. Files written by 0.1.x and 0.2.x are migrated automatically
 on first start. Session logs default to the user's `Documents/tio-gui` directory.
+The Linux desktop refreshes its complete tab snapshot on normal window close;
+there is no general crash recovery or automatic backup rotation yet.
 
 Settings are split by what they belong to. The window menu holds what there is one of per window:
 theme, language, update checks, configuration backup, the device filter and the log size warning.

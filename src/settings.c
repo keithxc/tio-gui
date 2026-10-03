@@ -405,6 +405,7 @@ void tio_settings_init(TioSettings *settings)
         .theme = g_strdup("system"),
         .font_size = 10,
         .log_warning_mb = 256,
+        .restore_tabs = TRUE,
         .profiles = g_ptr_array_new_with_free_func(profile_free),
         .history = g_ptr_array_new_with_free_func(g_free),
         .highlight_rules = g_strdup(""),

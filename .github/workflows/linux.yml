@@ -1,0 +1,63 @@
+name: Linux
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-build:
+    name: Source build (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      GTK_A11Y: none
+      GDK_BACKEND: x11
+      GSK_RENDERER: cairo
+      TIO_GUI_NON_UNIQUE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install distribution build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential cmake ninja-build pkg-config gettext \
+            libgtk-4-dev libvte-2.91-gtk4-dev libpcre2-dev \
+            libsoup-3.0-dev libjson-glib-dev \
+            appstream desktop-file-utils dbus-x11 xvfb xauth python3
+      - name: Validate source metadata
+        run: sh packaging/linux/validate-metadata.sh
+      - name: Configure Linux tio edition
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=/usr
+          -DTIO_GUI_SERIAL_ONLY=OFF
+          -DTIO_GUI_BUILD_AGENT=ON
+          -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Unit tests
+        run: dbus-run-session -- xvfb-run -a ctest --test-dir build --output-on-failure
+      - name: Stage installation and validate desktop integration
+        run: |
+          DESTDIR="$PWD/build/stage" cmake --install build
+          test -x build/stage/usr/bin/tio-gui
+          build/stage/usr/bin/tio-gui --version
+          test -x build/stage/usr/bin/tio-serial-agent
+          build/stage/usr/bin/tio-serial-agent --version
+          sh packaging/linux/validate-metadata.sh build/stage/usr

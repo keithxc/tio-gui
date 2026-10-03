@@ -1009,11 +1009,13 @@ static void apply_session_config(TioTab *tab, const TioSessionConfig *config)
                                value_index(line_ending_values, config->line_ending, 2));
     gtk_check_button_set_active(tab->local_echo_check, config->local_echo);
     gtk_toggle_button_set_active(tab->hex_toggle, config->hex_output);
-    gtk_check_button_set_active(tab->timestamp_check, config->timestamps);
     gtk_drop_down_set_selected(
         tab->timestamp_format_dropdown,
         value_index(timestamp_format_values, config->timestamp_format, 3));
     gtk_check_button_set_active(tab->log_check, config->logging);
+    /* Enabling logging suggests timestamps through on_log_toggled. Restore the
+       saved timestamp choice afterward instead of keeping that suggestion. */
+    gtk_check_button_set_active(tab->timestamp_check, config->timestamps);
     gtk_check_button_set_active(tab->log_append_check, config->log_append);
     gtk_check_button_set_active(tab->log_strip_check, config->log_strip);
     gtk_editable_set_text(GTK_EDITABLE(tab->log_directory_entry), config->log_directory);
@@ -3937,17 +3939,16 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
         capture_all_settings(app->active);
     }
 
-    /* Record the sessions themselves, in page order, so they can come back. */
+    /* Always save the workspace. The restore preference controls startup, not
+       whether disabling it discards the last session configurations. */
     tio_settings_clear_tabs(&app->settings);
-    if (app->settings.restore_tabs) {
-        for (guint index = 0; index < app->tabs->len; ++index) {
-            TioTab *tab = g_ptr_array_index(app->tabs, index);
-            TioSessionConfig snapshot;
-            tio_session_config_init(&snapshot);
-            capture_session_config(tab, &snapshot);
-            tio_settings_add_tab(&app->settings, &snapshot);
-            tio_session_config_clear(&snapshot);
-        }
+    for (guint index = 0; index < app->tabs->len; ++index) {
+        TioTab *tab = g_ptr_array_index(app->tabs, index);
+        TioSessionConfig snapshot;
+        tio_session_config_init(&snapshot);
+        capture_session_config(tab, &snapshot);
+        tio_settings_add_tab(&app->settings, &snapshot);
+        tio_session_config_clear(&snapshot);
     }
 
     g_autoptr(GError) error = NULL;
@@ -5638,6 +5639,9 @@ static void tio_app_finish_close_tab(TioApp *app, TioTab *tab)
     }
     g_signal_handlers_disconnect_by_data(tab->terminal, tab);
     g_signal_handlers_disconnect_by_data(app->show_all_ttys_check, tab);
+    /* Closing the final tab also closes the window. Capture shared preferences
+       while an active tab still exists, before the close-request save runs. */
+    if (app->tabs->len == 1) capture_all_settings(tab);
     gint page = gtk_notebook_page_num(app->notebook, tab->content);
     g_ptr_array_remove(app->tabs, tab);
     if (page >= 0) {

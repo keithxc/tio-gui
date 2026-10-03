@@ -14,6 +14,18 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+option(TIO_GUI_BUILD_DESKTOP "Build the desktop application" ON)
+option(TIO_GUI_BUILD_AGENT "Build the headless native serial agent" OFF)
+if(TIO_GUI_BUILD_AGENT)
+  include(cmake/SerialAgent.cmake)
+endif()
+if(NOT TIO_GUI_BUILD_DESKTOP)
+  if(NOT TIO_GUI_BUILD_AGENT)
+    message(FATAL_ERROR "Enable at least one of TIO_GUI_BUILD_DESKTOP or TIO_GUI_BUILD_AGENT")
+  endif()
+  return()
+endif()
+
 set(TIO_GUI_SERIAL_DEFAULT OFF)
 if(WIN32 OR APPLE)
   set(TIO_GUI_SERIAL_DEFAULT ON)
@@ -188,11 +200,25 @@ if(BUILD_TESTING)
     TIO_GUI_VERSION="${PROJECT_VERSION}"
     TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
     TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
+  # The restart regression exercises the same application sources as the editor test.
+  get_target_property(TIO_GUI_UI_TEST_SOURCES quick-editor-test SOURCES)
+  list(REMOVE_ITEM TIO_GUI_UI_TEST_SOURCES tests/quick_editor_test.c)
+  add_executable(session-restore-test tests/session_restore_test.c ${TIO_GUI_UI_TEST_SOURCES})
+  target_link_libraries(session-restore-test PRIVATE m PkgConfig::GTK4 PkgConfig::VTE
+    PkgConfig::PCRE2 PkgConfig::SOUP PkgConfig::JSON_GLIB)
+  target_compile_definitions(session-restore-test PRIVATE
+    TIO_GUI_VERSION="${PROJECT_VERSION}"
+    TIO_GUI_LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+    TIO_GUI_BUILD_LOCALE_DIR="${CMAKE_CURRENT_BINARY_DIR}/locale")
+  add_test(NAME session-restore COMMAND session-restore-test)
+  set_tests_properties(session-restore PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
 endif()
 
 install(TARGETS tio-gui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/io.github.keithxc.tio_gui.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES data/io.github.keithxc.tio_gui.metainfo.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
 
 foreach(TIO_GUI_ICON_SIZE 16 32 48 64 128 256 512)
   install(

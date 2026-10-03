@@ -1,8 +1,8 @@
 # Native serial editions
 
-## macOS 0.4.1
+## macOS 0.4.2
 
-Download `tio-gui-0.4.1-macos-arm64.dmg`, open it and drag **tio-gui.app** into
+Download `tio-gui-0.4.2-macos-arm64.dmg`, open it and drag **tio-gui.app** into
 Applications. The ZIP contains the same application. Requires Apple Silicon and
 macOS 26 or newer. Intel is not included. GTK, libvterm, lrzsz, Lua and QuickJS
 are bundled; the destination Mac needs no Homebrew, Nix or development tools.
@@ -87,7 +87,8 @@ with mynix's locked nixpkgs. Apple Clang/SDK, codesign, notarytool and hdiutil
 remain system tools. `TIO_MACOS_RUNTIME` supplies the packager with exact Nix
 runtime paths and source/license metadata. The resulting app contains relocated
 libraries, with no Nix or Homebrew runtime requirement. The packager retains a
-Homebrew fallback for other builders; the 0.4.1 release is built through mynix.
+Homebrew fallback for other builders; the 0.4.2 release uses the project's pinned
+Nix development shell, also exposed by mynix.
 
 ```sh
 # Uses the project's pinned Nix packages. On the maintainer's machines:
@@ -106,7 +107,7 @@ Signing credentials stay in the local keychain. Without the signing arguments,
 the packager creates an ad-hoc development package. Release publishing requires
 Developer ID verification, accepted notarization, stapled tickets, Gatekeeper
 checks, clean-environment bundle checks and uploaded checksum verification.
-The final verification record is in [macOS 0.4.1 acceptance](macos-0.4.1-acceptance.md).
+The final verification record is in [macOS 0.4.2 acceptance](macos-0.4.2-acceptance.md).
 
 ## Windows 0.3.7
 

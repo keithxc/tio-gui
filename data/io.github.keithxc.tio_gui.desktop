@@ -1,11 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=tio-gui
+GenericName=Serial Console
 Comment=A lightweight GUI session manager for tio
 Exec=tio-gui
 Icon=io.github.keithxc.tio_gui
 Terminal=false
-Categories=Development;Utility;
-Keywords=Serial;Terminal;tio;
+Categories=Development;
+Keywords=Serial;Terminal;tio;UART;USB;Embedded;
 StartupNotify=true
 StartupWMClass=io.github.keithxc.tio_gui

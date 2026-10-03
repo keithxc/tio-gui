@@ -1,0 +1,111 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light dark">
+  <title>tio-gui · Remote serial</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+  <header class="app-bar">
+    <h1>tio-gui <span>Remote serial</span></h1>
+    <div class="connection-actions">
+      <span id="connection" role="status" data-state="disconnected">Disconnected</span>
+      <button id="connect" class="connect-action" hidden>Connect</button>
+      <button id="disconnect" class="secondary" hidden disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <section id="access" aria-labelledby="access-title">
+    <h2 id="access-title">Open your serial workspace</h2>
+    <p>Connect to the serial adapter on your gateway computer.</p>
+    <form id="access-form">
+      <label for="token">Gateway access token</label>
+      <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <button type="submit">Take control</button>
+    </form>
+    <p class="hint">Use the token printed by the gateway. Only this page keeps it, and only one page controls the port.</p>
+  </section>
+
+  <section id="workspace" aria-label="Serial workspace" hidden>
+    <div class="terminal-toolbar">
+      <button id="settings-toggle" class="session-button" aria-label="Connection settings" aria-haspopup="dialog" title="Connection settings">
+        <span id="session-summary">Choose a port</span><span id="session-meta">115200 · 8N1</span><span class="chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="terminal-actions">
+        <label class="sr-only" for="view">View</label>
+        <select id="view" title="Receive display format"><option value="text">Text</option><option value="hex">HEX</option></select>
+        <label class="toggle" title="Pause display to select and copy"><input id="pause" type="checkbox"><span>Pause</span></label>
+        <button id="clear" class="quiet" title="Clear the receive view">Clear</button>
+        <button id="tools-toggle" class="quiet" aria-haspopup="dialog">Tools</button>
+      </div>
+    </div>
+
+    <div id="terminal-surface">
+      <pre id="received" tabindex="0" aria-label="Received serial data"></pre>
+      <div id="terminal-empty"><strong>Ready for serial output</strong><span>Incoming data will appear here.</span></div>
+      <button id="follow" hidden title="Show the latest received data and resume following">↓ Latest</button>
+    </div>
+
+    <form id="send-form" aria-label="Send serial data">
+      <label class="sr-only" for="payload">Send data</label>
+      <textarea id="payload" rows="1" placeholder="Send a command…" title="Enter to send · Shift+Enter for a new line" aria-describedby="send-help" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <div class="send-options">
+        <label for="send-mode">Send as</label>
+        <select id="send-mode" aria-label="Format"><option value="text">Text</option><option value="hex">HEX</option></select>
+        <label class="sr-only" for="ending">Ending</label>
+        <select id="ending" title="Line ending"><option value="">No ending</option><option value="lf">LF</option><option value="cr">CR</option><option value="crlf" selected>CR+LF</option></select>
+        <span class="send-shortcut" aria-hidden="true">↵ send</span>
+      </div>
+      <button id="send" type="submit" disabled>Send</button>
+    </form>
+  </section>
+
+  <div class="status-bar">
+    <p id="notice" role="status" aria-live="polite">Enter the access token to begin.</p>
+    <span id="counts" aria-label="Transferred bytes">RX 0 B · TX 0 B</span>
+  </div>
+</main>
+
+<dialog id="connection-panel" class="drawer" aria-labelledby="connection-title">
+  <div class="panel-heading"><h2 id="connection-title">Connection</h2><button id="settings-close" class="close-button" aria-label="Close connection settings">×</button></div>
+  <div class="panel-content">
+    <p class="hint">The port is on the gateway computer.</p>
+    <fieldset id="settings"><legend class="sr-only">Remote serial port</legend>
+      <label for="device">Device</label>
+      <div class="device-row"><input id="device" list="devices" placeholder="/dev/ttyUSB0 or COM3" autocapitalize="off" spellcheck="false"><datalist id="devices"></datalist><button id="refresh" class="secondary" title="Refresh available ports">Refresh</button></div>
+      <label for="baud">Baud rate</label><input id="baud" type="number" min="1" max="12000000" value="115200" inputmode="numeric">
+      <div class="settings-grid">
+        <label>Data bits<select id="bits"><option>8</option><option>7</option><option>6</option><option>5</option></select></label>
+        <label>Stop bits<select id="stops"><option>1</option><option>2</option></select></label>
+        <label>Parity<select id="parity"><option value="0">None</option><option value="1">Odd</option><option value="2">Even</option></select></label>
+        <label>Flow control<select id="flow"><option value="0">None</option><option value="1">RTS/CTS</option><option value="2">XON/XOFF</option></select></label>
+      </div>
+      <label class="check"><input id="reconnect" type="checkbox">Reconnect when the device returns</label>
+    </fieldset>
+    <details class="control-lines"><summary>Serial control lines</summary><div class="line-controls"><button data-line="0" data-high="true">DTR high</button><button data-line="0" data-high="false">DTR low</button><button data-line="1" data-high="true">RTS high</button><button data-line="1" data-high="false">RTS low</button><button data-line="2" data-high="true">Send break</button></div><p class="hint">Available controls depend on your adapter and driver.</p></details>
+  </div>
+  <div class="panel-footer"><button id="settings-done" class="secondary">Done</button><button id="connect-dialog">Connect</button></div>
+</dialog>
+
+<dialog id="tools-panel" class="drawer" aria-labelledby="tools-title">
+  <div class="panel-heading"><h2 id="tools-title">Session tools</h2><button id="tools-close" class="close-button" aria-label="Close session tools">×</button></div>
+  <div class="panel-content">
+    <button id="save" class="secondary full-width">Save receive buffer</button>
+    <p class="hint" id="retention">Downloads the latest 128 KiB of received bytes. This is a buffer snapshot, not a complete recording.</p>
+    <h3>Reading output</h3>
+    <p class="hint">Scroll up, select text or pause to hold the display. Receiving continues. Choose Latest to return to live output.</p>
+    <h3>Sending</h3>
+    <p class="hint" id="send-help">Enter sends. Shift+Enter adds a new line. Text uses UTF-8; HEX accepts pairs of digits. Sends are limited to 64 KiB including the line ending.</p>
+    <p class="hint">TX counts confirmed writes. Disconnect cancels unsent data; reconnect never replays it.</p>
+    <h3>About this connection</h3>
+    <p class="hint">Remote serial · GPL-3.0-only · No cloud service. Text and HEX views do not interpret ANSI terminal controls. Closing or suspending the page expires control and closes the session.</p>
+  </div>
+  <div class="panel-footer"><button id="release" class="secondary full-width">Release control</button></div>
+</dialog>
+</body>
+</html>

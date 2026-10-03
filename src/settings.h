@@ -67,8 +67,8 @@ typedef struct {
     gboolean show_all_ttys;
     gboolean advanced_expanded;
     guint log_warning_mb; /* 0 disables the log size warning */
-    /* Reopen the sessions that were open at the last exit. Off by default:
-       reconnecting serial ports without being asked is not always wanted. */
+    /* Restore the last session tabs and their settings by default, without
+       automatically connecting to their serial ports. */
     gboolean restore_tabs;
     GPtrArray *profiles;    /* TioProfile *, in display order */
     gchar *highlight_rules;

@@ -12,6 +12,30 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
       version = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
+      serialAgent = hostSystem:
+        let hostPkgs = import nixpkgs { system = hostSystem; };
+        in hostPkgs.stdenv.mkDerivation {
+          pname = "tio-serial-agent";
+          inherit version;
+          src = self;
+          nativeBuildInputs = with hostPkgs; [ cmake ninja pkg-config python3 makeWrapper ];
+          nativeCheckInputs = [ hostPkgs.openssl ];
+          buildInputs = with hostPkgs; [ glib json-glib ];
+          cmakeFlags = [ "-DTIO_GUI_BUILD_DESKTOP=OFF" "-DTIO_GUI_BUILD_AGENT=ON" ];
+          doCheck = true;
+          postInstall = ''
+            makeWrapper ${hostPkgs.python3}/bin/python3 "$out/bin/tio-remote" \
+              --add-flags "$out/share/tio-gui/remote/gateway.py" \
+              --add-flags "--agent $out/bin/tio-serial-agent"
+          '';
+          meta = with hostPkgs.lib; {
+            description = "Headless serial transport for tio-gui remote clients";
+            homepage = "https://github.com/keithxc/tio-gui";
+            license = licenses.gpl3Only;
+            mainProgram = "tio-serial-agent";
+            platforms = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+          };
+        };
     in {
       devShells.aarch64-darwin.default = import ./nix/macos-shell.nix {
         pkgs = import nixpkgs { system = "aarch64-darwin"; };
@@ -19,6 +43,7 @@
       };
 
       packages.${system} = {
+        serial-agent = serialAgent system;
         default = pkgs.stdenv.mkDerivation {
           pname = "tio-gui";
           inherit version;
@@ -45,6 +70,13 @@
               --set LOCALE_ARCHIVE ${pkgs.glibcLocalesUtf8}/lib/locale/locale-archive \
               --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.tio pkgs.lrzsz pkgs.bubblewrap pkgs.quickjs pkgs.lua5_4 ]}
           '';
+          meta = with pkgs.lib; {
+            description = "Serial debugging workspace for embedded developers";
+            homepage = "https://github.com/keithxc/tio-gui";
+            license = licenses.gpl3Only;
+            mainProgram = "tio-gui";
+            platforms = [ "x86_64-linux" ];
+          };
         };
 
         appimage =
@@ -70,6 +102,9 @@
             squashfsArgs = [ "-comp" "xz" ];
           };
       };
+
+      packages.aarch64-linux.serial-agent = serialAgent "aarch64-linux";
+      packages.aarch64-darwin.serial-agent = serialAgent "aarch64-darwin";
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
