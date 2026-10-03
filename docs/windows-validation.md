@@ -97,9 +97,13 @@ Re-run installer/relocation tests and real Windows acceptance after migration.
 An isolated Linux x86-64 build using MinGW GCC 15.3, GTK 4.22.4, GLib 2.88.3 and
 JSON-GLib 1.10.8 successfully compiled the retained desktop frontend, the serial
 agent and the three Windows C test executables. These checks used the existing
-MINGW64 sysroot. The UCRT64 workflow passed `actionlint` validation; its first
-native Windows runner execution is still pending. No new installer or hardware
-acceptance is claimed by this build check.
+MINGW64 sysroot.
+
+The [first native UCRT64 CI run](https://github.com/keithxc/tio-gui/actions/runs/37131772236)
+at `fde4e22` then passed desktop and agent compilation, all six registered CTest
+groups, and both executable version checks (`0.4.2`). POSIX PTY cases are skipped
+on Windows; the integration group verifies that skip explicitly. This does not
+establish installer, GUI interaction or physical COM-port acceptance.
 
 ## Remaining checkpoints
 

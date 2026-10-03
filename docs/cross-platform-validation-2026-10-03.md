@@ -14,9 +14,24 @@ acceptance, physical-device support, or installation on end-user systems.
 | Linux / x86-64 | Native clean desktop plus agent build, final CTest run | Passed, 13/13 groups |
 | Linux / x86-64 | Separate headless build and tests; desktop and agent Nix packages; staged installation | Passed, 3/3 headless groups; both Nix packages built |
 | Linux / ARM64 | Native Nix agent package on Raspberry Pi, including final gateway and PTY tests | Passed, 3/3 groups; installed agent version and gateway help verified |
-| Windows / x86-64 | Clean MinGW cross-build of desktop, agent and three C test executables | Compiled; native Windows execution and hardware acceptance remain pending |
+| Windows / x86-64 | Clean MinGW cross-build of desktop, agent and three C test executables | Compiled; followed by native UCRT64 CI below |
 | Linux distribution integration | Source and staged AppStream/desktop/icon validation | Passed with appstreamcli 1.1.3 and desktop-file-validate 0.28 |
-| CI definitions | Linux, Windows and macOS workflow validation | actionlint passed; hosted CI runs have not been triggered in this change |
+| CI definitions | Linux, Windows and macOS workflow validation | actionlint passed; hosted validation is recorded below |
+
+### 0.4.2 release checks
+
+- Linux x86-64: fresh desktop plus agent build and 14/14 CTest groups under
+  Xvfb, including the close/reopen workspace regression. Both Nix packages built;
+  the agent package ran its three headless groups inside the Nix build.
+- macOS: signed and notarized packages, 12 desktop CTest groups and isolated
+  final-bundle PTY checks; see [package acceptance](macos-0.4.2-acceptance.md).
+- Native Windows UCRT64: [CI at fde4e22](https://github.com/keithxc/tio-gui/actions/runs/37131772236)
+  passed compilation, six registered CTest groups and executable versions.
+  Windows omits the POSIX PTY cases; GUI and physical COM acceptance remain open.
+- Native AArch64 and x86-64 Linux: the existing plugin transformation, file
+  isolation, timeout and output-limit test passed on both architectures after
+  selecting the native seccomp audit architecture. Process-creation restrictions
+  remain enabled; unsupported ABIs fail the build instead of disabling the filter.
 
 The final headless groups contain seven real-agent cases, thirteen HTTP/mock
 gateway cases and one real HTTP → gateway → agent → PTY integration case on
@@ -82,7 +97,7 @@ again; the packaged JavaScript and CSS matched the working files byte for byte.
 
 ## Remaining gates (device and distribution acceptance)
 
-- Native Windows execution, full desktop tool parity, UCRT64 package migration,
+- Native Windows GUI interaction, full desktop tool parity, UCRT64 package migration,
   offline installation and real COM adapter tests.
 - Real iPad/Android HTTPS sessions: certificate trust, soft keyboard, selection,
   orientation, background expiry and physical USB-UART round trips at the host.

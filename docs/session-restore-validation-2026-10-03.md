@@ -51,3 +51,19 @@ file; do not change that file underneath a live serial session.
 If an older configuration has no `tab:N` sections, it contains no previous tab
 workspace to restore. Enable restoration and configure the desired tabs before
 closing the main window normally.
+
+## Remaining persistence work
+
+This fix covers normal shutdown, not crash recovery. The next reliability steps
+are to collect the current complete workspace before every save and full export,
+then debounce saves after meaningful setting/tab changes. Linux currently
+refreshes its complete tab list only on window close, so an intermediate save
+or full export can still contain an older tab snapshot.
+
+Further work should preserve the last valid configuration as a rotating backup,
+report load/write errors in the interface, keep a damaged input for recovery,
+and version migrations explicitly. The existing GLib writer already uses
+consistent replacement for existing files; it does not explicitly request the
+stronger durable-write option. Native frontend multi-instance writes and the
+Windows restore preference also need consistent behavior. These are follow-up
+items, not claims made by the 0.4.2 normal-shutdown fix.
