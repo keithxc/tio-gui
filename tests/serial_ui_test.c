@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     g_test_message("language");
     gtk_drop_down_set_selected(app.language, 1);
     TioSettings prefs; tio_settings_init(&prefs);
-    g_assert_true(tio_settings_load_from_file(&prefs, app.settings_path, NULL));
+    g_assert_true(tio_settings_load_from_store(&prefs, app.settings_path, NULL));
     g_assert_cmpstr(prefs.theme, ==, "system"); g_assert_cmpstr(prefs.language, ==, "en");
     tio_settings_clear(&prefs);
     g_assert_cmpstr(gtk_button_get_label(tab->connect), ==, "Connect");
@@ -171,11 +171,14 @@ int main(int argc, char **argv)
     app.settings.font_size = 18; tio_console_font(GTK_WIDGET(tab->view), 18);
     g_assert_true(save(&app, NULL));
     TioSettings restored; tio_settings_init(&restored);
-    g_assert_true(tio_settings_load_from_file(&restored, app.settings_path, NULL));
+    g_assert_true(tio_settings_load_from_store(&restored, app.settings_path, NULL));
     g_assert_cmpuint(restored.font_size, ==, 18); tio_settings_clear(&restored);
     g_test_message("quit");
     quit(&app); spin(30);
     tio_settings_clear(&app.settings); g_object_unref(app.application); g_ptr_array_unref(app.tabs);
-    unlink(app.settings_path); g_free(app.settings_path); unlink(log); rmdir(directory); close(master);
+    g_autofree gchar *settings_backup = g_strconcat(app.settings_path, ".bk", NULL);
+    g_autofree gchar *settings_lock = g_strconcat(app.settings_path, ".lock", NULL);
+    unlink(app.settings_path); unlink(settings_backup); unlink(settings_lock);
+    g_free(app.settings_path); unlink(log); rmdir(directory); close(master);
     g_print("Serial GUI transport, logging, profiles and lifecycle passed\n"); return 0;
 }

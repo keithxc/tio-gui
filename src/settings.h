@@ -82,6 +82,11 @@ void tio_settings_load(TioSettings *settings);
 gboolean tio_settings_save(const TioSettings *settings, GError **error);
 gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error);
 gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path, GError **error);
+/* Application persistence: alternate path/path.bk, validate both snapshots and
+   compare wrapping 64-bit sequence numbers. Single-file APIs above remain for
+   explicit import/export. Both slots missing is G_FILE_ERROR_NOENT on load. */
+gboolean tio_settings_load_from_store(TioSettings *settings, const char *path, GError **error);
+gboolean tio_settings_save_to_store(const TioSettings *settings, const char *path, GError **error);
 void tio_settings_clear(TioSettings *settings);
 
 void tio_session_config_init(TioSessionConfig *config);

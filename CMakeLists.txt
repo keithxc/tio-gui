@@ -76,6 +76,13 @@ add_executable(tio-gui
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(settings-store-test tests/settings_store_test.c src/settings.c)
+  target_include_directories(settings-store-test PRIVATE src)
+  target_link_libraries(settings-store-test PRIVATE PkgConfig::GTK4)
+  target_compile_options(settings-store-test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
+  add_test(NAME settings-store COMMAND settings-store-test)
+  set_tests_properties(settings-store PROPERTIES TIMEOUT 60)
   add_executable(ble-test tests/ble_test.c src/payload.c src/log_model.c src/analyzer.c src/capture.c src/plugin.c src/plugin_ui.c)
   target_include_directories(ble-test PRIVATE src)
   target_link_libraries(ble-test PRIVATE PkgConfig::GTK4 PkgConfig::PCRE2 PkgConfig::JSON_GLIB)

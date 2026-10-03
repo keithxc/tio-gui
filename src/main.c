@@ -4432,16 +4432,19 @@ static void on_import_finished(GObject *source, GAsyncResult *result, gpointer u
     if (!rules_valid) {
         tio_settings_clear(&imported); set_status(tab, error->message); return;
     }
+    /* Commit before replacing the visible settings. A damaged store or a
+       competing writer must leave the current workspace available to export. */
+    if (!tio_settings_save(&imported, &error)) {
+        tio_settings_clear(&imported);
+        set_status(tab, error->message);
+        return;
+    }
     tio_settings_clear(&tab->app->settings);
     tab->app->settings = imported;
     for (guint i = 0; i < app->tabs->len; ++i) {
         TioTab *other = g_ptr_array_index(app->tabs, i);
         if (other->sequence_window) gtk_window_destroy(GTK_WINDOW(other->sequence_window));
         apply_imported_settings(other);
-    }
-    if (!tio_settings_save(&tab->app->settings, &error)) {
-        set_status(tab, error->message);
-        return;
     }
     set_status(tab, _("Settings imported"));
 }

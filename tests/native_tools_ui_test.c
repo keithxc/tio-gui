@@ -153,9 +153,53 @@ int main(int argc, char **argv)
     g_autofree gchar *portable = g_build_filename(directory, "portable.ini", NULL);
     g_assert_true(tio_settings_export_portable(&app.settings, portable, NULL));
     g_autoptr(GError) busy = NULL; g_assert_false(import_settings(&app, portable, &busy)); g_assert_error(busy, G_IO_ERROR, G_IO_ERROR_BUSY);
-    stop_tab(tab); g_assert_true(import_settings(&app, portable, NULL)); tab = g_ptr_array_index(app.tabs, 0);
+    stop_tab(tab);
+    /* Deliberately make the primary older than .bk, then leave newer edits
+     * only in the widgets. Import must back up the complete current workspace. */
+    g_autofree gchar *peer = g_strconcat(app.settings_path, ".bk", NULL);
+    g_remove(app.settings_path); g_remove(peer);
+    text(tab->baud, "9600"); g_assert_true(save(&app, NULL));
+    text(tab->baud, "19200"); g_assert_true(save(&app, NULL));
+    TioSettings primary, latest; tio_settings_init(&primary); tio_settings_init(&latest);
+    g_assert_true(tio_settings_load_from_file(&primary, app.settings_path, NULL));
+    g_assert_true(tio_settings_load_from_store(&latest, app.settings_path, NULL));
+    g_assert_cmpstr(((TioSessionConfig *)g_ptr_array_index(primary.tab_configs, 0))->baud, ==, "9600");
+    g_assert_cmpstr(((TioSessionConfig *)g_ptr_array_index(latest.tab_configs, 0))->baud, ==, "19200");
+    tio_settings_clear(&primary); tio_settings_clear(&latest);
+    text(tab->baud, "38400");
+    g_assert_true(import_settings(&app, portable, NULL)); tab = g_ptr_array_index(app.tabs, 0);
     g_assert_cmpuint(app.settings.profiles->len, ==, 1); g_assert_cmpuint(app.settings.sequences->len, ==, 1);
     g_autofree gchar *backup = g_strconcat(app.settings_path, ".before-import", NULL); g_assert_true(g_file_test(backup, G_FILE_TEST_EXISTS));
+    TioSettings previous; tio_settings_init(&previous);
+    g_assert_true(tio_settings_load_from_file(&previous, backup, NULL));
+    g_assert_cmpuint(previous.tab_configs->len, ==, 1);
+    TioSessionConfig *previous_tab = g_ptr_array_index(previous.tab_configs, 0);
+    g_assert_cmpstr(previous_tab->device, ==, device); g_assert_cmpstr(previous_tab->baud, ==, "38400");
+    g_assert_cmpuint(previous.profiles->len, ==, 1); g_assert_cmpuint(previous.sequences->len, ==, 1);
+    tio_settings_clear(&previous);
+    g_test_message("failed import preserves the workspace and both damaged store slots");
+    g_autofree gchar *primary_contents = NULL, *peer_contents = NULL;
+    gsize primary_length = 0, peer_length = 0;
+    g_assert_true(g_file_get_contents(app.settings_path, &primary_contents, &primary_length, NULL));
+    g_assert_true(g_file_get_contents(peer, &peer_contents, &peer_length, NULL));
+    const char damaged[] = "[storage]\nversion=1\nsequence=";
+    g_assert_true(g_file_set_contents(app.settings_path, damaged, -1, NULL));
+    g_assert_true(g_file_set_contents(peer, damaged, -1, NULL));
+    text(tab->device, "/unpersisted-import-device"); text(tab->baud, "57600");
+    g_autoptr(GError) damaged_error = NULL;
+    g_assert_false(import_settings(&app, portable, &damaged_error));
+    g_assert_error(damaged_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE);
+    g_assert_cmpuint(app.tabs->len, ==, 1); g_assert_true(g_ptr_array_index(app.tabs, 0) == tab);
+    g_assert_cmpstr(entry(tab->device), ==, "/unpersisted-import-device");
+    g_assert_cmpstr(entry(tab->baud), ==, "57600");
+    g_assert_cmpuint(app.settings.profiles->len, ==, 1); g_assert_cmpuint(app.settings.sequences->len, ==, 1);
+    g_autofree gchar *damaged_primary = NULL, *damaged_peer = NULL;
+    g_assert_true(g_file_get_contents(app.settings_path, &damaged_primary, NULL, NULL));
+    g_assert_true(g_file_get_contents(peer, &damaged_peer, NULL, NULL));
+    g_assert_cmpstr(damaged_primary, ==, damaged); g_assert_cmpstr(damaged_peer, ==, damaged);
+    /* Restore only this test's isolated store before exercising normal quit. */
+    g_assert_true(g_file_set_contents(app.settings_path, primary_contents, primary_length, NULL));
+    g_assert_true(g_file_set_contents(peer, peer_contents, peer_length, NULL));
     g_test_message("quit drains asynchronous recording before freeing tabs");
     text(tab->device, device); gtk_check_button_set_active(tab->reconnect, FALSE); connect_clicked(NULL, tab);
     for (guint i = 0; i < 200 && !tab->connected; i++) spin(5); g_assert_true(tab->connected);
@@ -168,5 +212,12 @@ int main(int argc, char **argv)
     for (guint i = 0; i < 400 && !tio_replay_finished(replay); i++) spin(5); g_assert_true(tio_replay_finished(replay));
     g_assert_cmpmem(replayed->data, replayed->len, binary, sizeof binary); tio_replay_free(replay);
     close(master); g_object_unref(app.application); tio_settings_clear(&app.settings); g_ptr_array_unref(app.tabs); g_free(app.settings_path);
+    g_autoptr(GDir) contents = g_dir_open(directory, 0, NULL); g_assert_nonnull(contents);
+    const char *name;
+    while ((name = g_dir_read_name(contents))) {
+        g_autofree gchar *path = g_build_filename(directory, name, NULL);
+        g_assert_cmpint(g_remove(path), ==, 0);
+    }
+    g_clear_pointer(&contents, g_dir_close); g_assert_cmpint(g_rmdir(directory), ==, 0);
     g_test_message("Native serial tools acceptance passed"); return 0;
 }

@@ -133,7 +133,10 @@ int main(void)
 
     g_autofree gchar *config_directory = g_build_filename(directory, "tio-gui", NULL);
     g_autofree gchar *config_path = g_build_filename(config_directory, "config.ini", NULL);
-    g_unlink(config_path); g_rmdir(config_directory); g_rmdir(directory);
+    g_autofree gchar *config_backup = g_strconcat(config_path, ".bk", NULL);
+    g_autofree gchar *config_lock = g_strconcat(config_path, ".lock", NULL);
+    g_unlink(config_path); g_unlink(config_backup); g_unlink(config_lock);
+    g_rmdir(config_directory); g_rmdir(directory);
     g_print("Workspace restart preserves tab order and per-tab settings without connecting.\n");
     return 0;
 }

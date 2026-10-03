@@ -6,6 +6,12 @@
 #include <string.h>
 
 #include <glib/gstdio.h>
+#ifdef G_OS_WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #define TIO_GUI_DEFAULTS_GROUP "defaults"
 /* 0.2.x wrote the same fields under [session]. Read-only, for migration. */
@@ -415,16 +421,8 @@ void tio_settings_init(TioSettings *settings)
     tio_session_config_init(&settings->defaults);
 }
 
-gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error)
+static void settings_read_key_file(TioSettings *settings, GKeyFile *key_file)
 {
-    g_return_val_if_fail(settings != NULL, FALSE);
-    g_return_val_if_fail(path != NULL, FALSE);
-
-    g_autoptr(GKeyFile) key_file = g_key_file_new();
-    if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, error)) {
-        return FALSE;
-    }
-
     if (g_key_file_has_group(key_file, TIO_GUI_DEFAULTS_GROUP)) {
         session_config_read(key_file, TIO_GUI_DEFAULTS_GROUP, &settings->defaults);
     } else if (g_key_file_has_group(key_file, TIO_GUI_LEGACY_SESSION_GROUP)) {
@@ -497,6 +495,16 @@ gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GE
         session_config_read(key_file, group, session);
         g_ptr_array_add(settings->tab_configs, session);
     }
+}
+
+gboolean tio_settings_load_from_file(TioSettings *settings, const char *path, GError **error)
+{
+    g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
+    g_autoptr(GKeyFile) key_file = g_key_file_new();
+    if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, error))
+        return FALSE;
+    settings_read_key_file(settings, key_file);
     return TRUE;
 }
 
@@ -505,14 +513,14 @@ void tio_settings_load(TioSettings *settings)
     g_return_if_fail(settings != NULL);
 
     g_autofree gchar *path = settings_path();
-    (void)tio_settings_load_from_file(settings, path, NULL);
+    g_autoptr(GError) error = NULL;
+    if (!tio_settings_load_from_store(settings, path, &error) &&
+        !g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+        g_printerr("Settings: %s\n", error->message);
 }
 
-gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path, GError **error)
+static gchar *settings_serialize(const TioSettings *settings, gsize *length, GError **error)
 {
-    g_return_val_if_fail(settings != NULL, FALSE);
-    g_return_val_if_fail(path != NULL, FALSE);
-
     g_autoptr(GKeyFile) key_file = g_key_file_new();
     g_key_file_set_string(key_file, "general", "language", settings->language);
     g_key_file_set_string(key_file, "general", "theme", settings->theme);
@@ -557,8 +565,15 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
         session_config_write(key_file, group, session);
     }
 
+    return g_key_file_to_data(key_file, length, error);
+}
+
+gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path, GError **error)
+{
+    g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
     gsize length = 0;
-    g_autofree gchar *contents = g_key_file_to_data(key_file, &length, error);
+    g_autofree gchar *contents = settings_serialize(settings, &length, error);
     if (contents == NULL) {
         return FALSE;
     }
@@ -567,7 +582,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     if (g_mkdir_with_parents(directory, 0700) == -1) {
         g_set_error(error,
                     G_FILE_ERROR,
-                    g_file_error_from_errno(errno),
+                    (gint)g_file_error_from_errno(errno),
                     "Could not create settings directory: %s",
                     g_strerror(errno));
         return FALSE;
@@ -579,7 +594,7 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     if (g_chmod(path, 0600) == -1) {
         g_set_error(error,
                     G_FILE_ERROR,
-                    g_file_error_from_errno(errno),
+                    (gint)g_file_error_from_errno(errno),
                     "Could not protect settings file: %s",
                     g_strerror(errno));
         return FALSE;
@@ -587,10 +602,299 @@ gboolean tio_settings_save_to_file(const TioSettings *settings, const char *path
     return TRUE;
 }
 
+/* The checksum includes the generation, so damage to a valid-looking counter
+   cannot make an older snapshot win. The header is canonical and precedes the
+   payload: a torn new-format header must never be accepted as legacy INI. */
+#define STORE_PREFIX "[storage]\nversion=1\nsequence="
+typedef struct {
+    GKeyFile *key_file;
+    GError *error;
+    guint64 sequence;
+    gboolean versioned;
+    gboolean missing;
+    gboolean io_error;
+} SettingsSlot;
+
+static gchar *store_digest(const char *sequence, const char *payload, gsize length)
+{
+    g_autoptr(GChecksum) checksum = g_checksum_new(G_CHECKSUM_SHA256);
+    g_checksum_update(checksum, (const guchar *)sequence, (gssize)strlen(sequence));
+    g_checksum_update(checksum, (const guchar *)"\n", 1);
+    g_checksum_update(checksum, (const guchar *)payload, (gssize)length);
+    return g_strdup(g_checksum_get_string(checksum));
+}
+
+static gboolean store_is_legacy(GKeyFile *key_file)
+{
+    gsize count = 0;
+    g_auto(GStrv) groups = g_key_file_get_groups(key_file, &count);
+    gboolean has_settings = FALSE;
+    for (gsize i = 0; i < count; ++i) {
+        const char *group = groups[i];
+        if (strcmp(group, "general") && strcmp(group, "defaults") &&
+            strcmp(group, "session") && strcmp(group, "serial") &&
+            strcmp(group, "display") && strcmp(group, "logging") &&
+            strcmp(group, "quick-buttons") &&
+            strcmp(group, "send") && strcmp(group, "analysis") &&
+            !g_str_has_prefix(group, TIO_GUI_PROFILE_PREFIX) &&
+            !g_str_has_prefix(group, TIO_GUI_TAB_PREFIX))
+            return FALSE;
+        if (g_key_file_has_key(key_file, group, "sequence", NULL) ||
+            g_key_file_has_key(key_file, group, "sha256", NULL))
+            return FALSE;
+        gsize keys = 0;
+        g_auto(GStrv) names = g_key_file_get_keys(key_file, group, &keys, NULL);
+        has_settings |= keys != 0;
+    }
+    return has_settings;
+}
+
+static SettingsSlot store_read_slot(const char *path, gboolean allow_legacy)
+{
+    SettingsSlot slot = {0};
+    g_autofree gchar *contents = NULL;
+    gsize length = 0;
+    if (!g_file_get_contents(path, &contents, &length, &slot.error)) {
+        slot.missing = g_error_matches(slot.error, G_FILE_ERROR, G_FILE_ERROR_NOENT);
+        slot.io_error = !slot.missing;
+        return slot;
+    }
+    g_autoptr(GKeyFile) key_file = g_key_file_new();
+    g_autofree gchar *sequence = NULL;
+    g_autofree gchar *canonical_sequence = NULL;
+    g_autofree gchar *digest = NULL;
+    g_autofree gchar *header = NULL;
+    /* GKeyFile can ignore bytes after a NUL. Never authenticate a different
+       byte stream from the one we actually parse. */
+    if (memchr(contents, '\0', length) != NULL)
+        goto invalid;
+    if (g_str_has_prefix(contents, STORE_PREFIX)) {
+        const char *payload = strstr(contents, "\n\n");
+        const char *sequence_start = contents + strlen(STORE_PREFIX);
+        const char *sequence_end = strchr(sequence_start, '\n');
+        if (!payload || !sequence_end || sequence_end >= payload)
+            goto invalid;
+        payload += 2;
+        sequence = g_strndup(sequence_start, (gsize)(sequence_end - sequence_start));
+        if (!g_ascii_string_to_unsigned(sequence, 10, 0, G_MAXUINT64,
+                                         &slot.sequence, NULL))
+            goto invalid;
+        canonical_sequence = g_strdup_printf("%" G_GUINT64_FORMAT, slot.sequence);
+        if (strcmp(sequence, canonical_sequence))
+            goto invalid;
+        gsize payload_length = length - (gsize)(payload - contents);
+        digest = store_digest(sequence, payload, payload_length);
+        header = g_strdup_printf(STORE_PREFIX "%s\nsha256=%s\n\n", sequence, digest);
+        if (strlen(header) != (gsize)(payload - contents) ||
+            memcmp(contents, header, strlen(header)))
+            goto invalid;
+        if (!g_key_file_load_from_data(key_file, payload, payload_length,
+                                       G_KEY_FILE_NONE, &slot.error))
+            return slot;
+        if (!store_is_legacy(key_file))
+            goto invalid;
+        slot.versioned = TRUE;
+    } else {
+        if (!allow_legacy)
+            goto invalid;
+        if (!g_key_file_load_from_data(key_file, contents, length,
+                                       G_KEY_FILE_NONE, &slot.error))
+            return slot;
+        if (!store_is_legacy(key_file))
+            goto invalid;
+    }
+    slot.key_file = g_steal_pointer(&key_file);
+    return slot;
+invalid:
+    g_set_error(&slot.error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE,
+                "Invalid or incomplete settings snapshot: %s", path);
+    return slot;
+}
+
+static void store_clear_slot(SettingsSlot *slot)
+{
+    g_clear_pointer(&slot->key_file, g_key_file_unref);
+    g_clear_error(&slot->error);
+}
+
+/* Unsigned subtraction implements serial-number arithmetic across wraparound.
+   Exactly half a range is ambiguous, and cannot arise from adjacent saves. */
+static gint store_select(const SettingsSlot slots[2], GError **error)
+{
+    if (slots[0].key_file && slots[1].key_file) {
+        if (!slots[0].versioned)
+            return 1;
+        guint64 distance = slots[1].sequence - slots[0].sequence;
+        if (distance == ((guint64)1 << 63)) {
+            g_set_error_literal(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE,
+                                "Settings counters are ambiguous; both copies were preserved");
+            return -1;
+        }
+        return distance != 0 && distance < ((guint64)1 << 63) ? 1 : 0;
+    }
+    if (slots[0].key_file) return 0;
+    if (slots[1].key_file) return 1;
+    if (slots[0].missing && slots[1].missing)
+        g_set_error_literal(error, G_FILE_ERROR, G_FILE_ERROR_NOENT,
+                            "No saved settings yet");
+    else
+        g_set_error(error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE,
+                    "Neither settings copy is valid; files were preserved (%s; %s)",
+                    slots[0].error->message, slots[1].error->message);
+    return -1;
+}
+
+gboolean tio_settings_load_from_store(TioSettings *settings, const char *path, GError **error)
+{
+    g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
+    g_autofree gchar *backup = g_strconcat(path, ".bk", NULL);
+    SettingsSlot slots[2] = {store_read_slot(path, TRUE), store_read_slot(backup, FALSE)};
+    gint selected = store_select(slots, error);
+    if (selected >= 0) {
+        TioSettings loaded;
+        tio_settings_init(&loaded);
+        settings_read_key_file(&loaded, slots[selected].key_file);
+        tio_settings_clear(settings);
+        *settings = loaded;
+    }
+    store_clear_slot(&slots[0]);
+    store_clear_slot(&slots[1]);
+    return selected >= 0;
+}
+
+/* The lock file is deliberately retained: unlinking it can split waiting
+   writers across two inodes. OS locks are released even if the process dies.
+   fcntl locks are per-process, so also serialize callers inside this process. */
+static GMutex store_mutex;
+typedef struct {
+#ifdef G_OS_WIN32
+    HANDLE handle;
+#else
+    int fd;
+#endif
+} StoreLock;
+
+static gboolean store_lock(const char *path, StoreLock *lock, GError **error)
+{
+    if (!g_mutex_trylock(&store_mutex)) {
+        g_set_error_literal(error, G_FILE_ERROR, G_FILE_ERROR_AGAIN,
+                            "Settings are being saved; try again");
+        return FALSE;
+    }
+    g_autofree gchar *lock_path = g_strconcat(path, ".lock", NULL);
+#ifdef G_OS_WIN32
+    g_autofree gunichar2 *wide = g_utf8_to_utf16(lock_path, -1, NULL, NULL, error);
+    if (!wide) {
+        g_mutex_unlock(&store_mutex);
+        return FALSE;
+    }
+    lock->handle = CreateFileW((LPCWSTR)wide, GENERIC_READ | GENERIC_WRITE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                               OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    OVERLAPPED overlap = {0};
+    if (lock->handle == INVALID_HANDLE_VALUE ||
+        !LockFileEx(lock->handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+                    0, 1, 0, &overlap)) {
+        DWORD code = GetLastError();
+        if (lock->handle != INVALID_HANDLE_VALUE) CloseHandle(lock->handle);
+        g_set_error(error, G_FILE_ERROR,
+                    code == ERROR_LOCK_VIOLATION ? G_FILE_ERROR_AGAIN : G_FILE_ERROR_FAILED,
+                    "Could not lock settings (Windows error %lu)", (unsigned long)code);
+        g_mutex_unlock(&store_mutex);
+        return FALSE;
+    }
+#else
+    lock->fd = g_open(lock_path, O_RDWR | O_CREAT, 0600);
+    struct flock region = {0};
+    region.l_type = F_WRLCK;
+    region.l_whence = SEEK_SET;
+    if (lock->fd == -1 || fcntl(lock->fd, F_SETLK, &region) == -1) {
+        int code = errno;
+        if (lock->fd != -1) close(lock->fd);
+        g_set_error(error, G_FILE_ERROR, (gint)g_file_error_from_errno(code),
+                    "Could not lock settings: %s", g_strerror(code));
+        g_mutex_unlock(&store_mutex);
+        return FALSE;
+    }
+    (void)fcntl(lock->fd, F_SETFD, FD_CLOEXEC);
+#endif
+    return TRUE;
+}
+
+static void store_unlock(StoreLock *lock)
+{
+#ifdef G_OS_WIN32
+    CloseHandle(lock->handle);
+#else
+    close(lock->fd);
+#endif
+    g_mutex_unlock(&store_mutex);
+}
+
+gboolean tio_settings_save_to_store(const TioSettings *settings, const char *path, GError **error)
+{
+    g_return_val_if_fail(settings != NULL, FALSE);
+    g_return_val_if_fail(path != NULL, FALSE);
+    g_autofree gchar *directory = g_path_get_dirname(path);
+    if (g_mkdir_with_parents(directory, 0700) == -1) {
+        g_set_error(error, G_FILE_ERROR, (gint)g_file_error_from_errno(errno),
+                    "Could not create settings directory: %s", g_strerror(errno));
+        return FALSE;
+    }
+    StoreLock lock;
+    if (!store_lock(path, &lock, error)) return FALSE;
+    g_autofree gchar *backup = g_strconcat(path, ".bk", NULL);
+    SettingsSlot slots[2] = {store_read_slot(path, TRUE), store_read_slot(backup, FALSE)};
+    gboolean ok = FALSE;
+    g_autofree gchar *payload = NULL;
+    g_autofree gchar *sequence = NULL;
+    g_autofree gchar *digest = NULL;
+    g_autofree gchar *contents = NULL;
+    /* An unreadable slot might be the newest. Do not silently overwrite it. */
+    if (slots[0].io_error || slots[1].io_error) {
+        g_propagate_error(error, g_error_copy(slots[slots[0].io_error ? 0 : 1].error));
+        goto done;
+    }
+    gboolean empty = slots[0].missing && slots[1].missing;
+    gint selected = empty ? -1 : store_select(slots, error);
+    if (!empty && selected < 0) goto done;
+    gint target = selected == 0 ? 1 : 0;
+    guint64 next = empty ? 0 : slots[selected].sequence + (guint64)1;
+    gsize length = 0;
+    payload = settings_serialize(settings, &length, error);
+    if (!payload) goto done;
+    sequence = g_strdup_printf("%" G_GUINT64_FORMAT, next);
+    digest = store_digest(sequence, payload, length);
+    contents = g_strdup_printf(STORE_PREFIX "%s\nsha256=%s\n\n%s", sequence, digest, payload);
+    const char *destination = target == 0 ? path : backup;
+    /* GLib preserves an existing file's mode. Restrict the inactive slot
+       before replacing it so a formerly permissive mode never exposes the
+       new snapshot. The selected, last valid slot is untouched. */
+    if (!slots[target].missing && g_chmod(destination, 0600) == -1) {
+        g_set_error(error, G_FILE_ERROR, (gint)g_file_error_from_errno(errno),
+                    "Could not protect settings file: %s", g_strerror(errno));
+        goto done;
+    }
+    ok = g_file_set_contents_full(destination, contents, -1,
+                                  G_FILE_SET_CONTENTS_CONSISTENT | G_FILE_SET_CONTENTS_DURABLE,
+                                  0600, error);
+    if (ok && g_chmod(destination, 0600) == -1) {
+        g_set_error(error, G_FILE_ERROR, (gint)g_file_error_from_errno(errno),
+                    "Could not protect settings file: %s", g_strerror(errno));
+        ok = FALSE;
+    }
+done:
+    store_clear_slot(&slots[0]);
+    store_clear_slot(&slots[1]);
+    store_unlock(&lock);
+    return ok;
+}
+
 gboolean tio_settings_save(const TioSettings *settings, GError **error)
 {
     g_autofree gchar *path = settings_path();
-    return tio_settings_save_to_file(settings, path, error);
+    return tio_settings_save_to_store(settings, path, error);
 }
 
 void tio_settings_clear(TioSettings *settings)

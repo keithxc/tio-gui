@@ -620,15 +620,21 @@ static gboolean import_settings(App *app, const char *path, GError **error)
     gboolean valid = tio_highlighter_rules(highlighter, loaded.highlight_rules, error); tio_highlighter_free(highlighter);
     if (!valid) { tio_settings_clear(&loaded); return FALSE; }
     loaded.native_tools_version = 1;
+    if (g_strcmp0(loaded.language, "en")) replace(&loaded.language, "zh_CN");
     g_autofree gchar *backup = g_strconcat(app->settings_path, ".before-import", NULL);
-    if (!save(app, error) || !tio_settings_save_to_file(&app->settings, backup, error)) { tio_settings_clear(&loaded); return FALSE; }
+    /* The newest stored slot may be .bk, and widgets can be newer than either
+     * slot. Back up the complete current snapshot as a single importable file. */
+    snapshot_settings(app);
+    if (!ensure_settings_directory(app, error) || !tio_settings_save_to_file(&app->settings, backup, error)) { tio_settings_clear(&loaded); return FALSE; }
+    /* Commit before replacing the workspace so a damaged or unwritable store
+     * leaves the current tabs intact and reports the import as failed. */
+    if (!tio_settings_save_to_store(&loaded, app->settings_path, error)) { tio_settings_clear(&loaded); return FALSE; }
     while (app->tabs->len) {
         guint i = app->tabs->len - 1; Tab *tab = g_ptr_array_index(app->tabs, i);
         gint page = gtk_notebook_page_num(app->notebook, tab->page);
         g_ptr_array_remove_index(app->tabs, i); tab_free(tab); gtk_notebook_remove_page(app->notebook, page);
     }
     tio_settings_clear(&app->settings); app->settings = loaded;
-    if (g_strcmp0(app->settings.language, "en")) replace(&app->settings.language, "zh_CN");
     native_language(app->settings.language); native_theme(app);
     app->translating = TRUE;
     gtk_drop_down_set_selected(app->theme, !g_strcmp0(app->settings.theme, "dark") ? 2 : !g_strcmp0(app->settings.theme, "light") ? 1 : 0);
@@ -638,7 +644,7 @@ static gboolean import_settings(App *app, const char *path, GError **error)
     app->translating = FALSE;
     for (guint i = 0; i < app->settings.tab_configs->len; i++) new_tab(app, g_ptr_array_index(app->settings.tab_configs, i));
     if (!app->tabs->len) new_tab(app, &app->settings.defaults);
-    translate_widgets(GTK_WIDGET(app->window)); return save(app, error);
+    translate_widgets(GTK_WIDGET(app->window)); return TRUE;
 }
 static void settings_file_done(GObject *source, GAsyncResult *result, gpointer data)
 {
@@ -650,8 +656,11 @@ static void settings_file_done(GObject *source, GAsyncResult *result, gpointer d
     g_autofree gchar *path = g_file_get_path(file); g_autoptr(GError) error = NULL;
     gboolean ok = FALSE;
     if (!mode) ok = import_settings(app, path, &error);
-    else if (save(app, &error)) ok = mode == 2 ? tio_settings_export_portable(&app->settings, path, &error)
-        : tio_settings_save_to_file(&app->settings, path, &error);
+    else {
+        snapshot_settings(app);
+        ok = mode == 2 ? tio_settings_export_portable(&app->settings, path, &error)
+            : tio_settings_save_to_file(&app->settings, path, &error);
+    }
     if (!ok) {
         g_autoptr(GtkAlertDialog) alert = gtk_alert_dialog_new("%s", error ? error->message : _("Choose a local file"));
         gtk_alert_dialog_show(alert, app->window);

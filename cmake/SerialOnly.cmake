@@ -68,6 +68,13 @@ set_target_properties(tio-gui PROPERTIES
   MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
 install(TARGETS tio-gui RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 if(BUILD_TESTING)
+  add_executable(settings-store-test tests/settings_store_test.c src/settings.c)
+  target_include_directories(settings-store-test PRIVATE src)
+  target_link_libraries(settings-store-test PRIVATE PkgConfig::GTK4)
+  target_compile_options(settings-store-test PRIVATE
+    $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic;-Wconversion>)
+  add_test(NAME settings-store COMMAND settings-store-test)
+  set_tests_properties(settings-store PROPERTIES TIMEOUT 60)
   add_executable(native-serial-test tests/native_serial_test.c src/native_serial.c)
   target_include_directories(native-serial-test PRIVATE src)
   target_link_libraries(native-serial-test PRIVATE PkgConfig::GTK4)

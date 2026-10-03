@@ -194,7 +194,7 @@ static gboolean save(App *app, GError **error)
     if (g_mkdir_with_parents(directory, 0700) < 0) {
         g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(errno), "%s", g_strerror(errno)); return FALSE;
     }
-    return tio_settings_save_to_file(&app->settings, app->settings_path, error);
+    return tio_settings_save_to_store(&app->settings, app->settings_path, error);
 }
 static void native_language(const char *language)
 {
@@ -980,9 +980,11 @@ int main(int argc, char **argv)
     App app = {0}; app.tabs = g_ptr_array_new(); tio_settings_init(&app.settings);
     replace(&app.settings.language, "zh_CN");
     app.settings_path = g_build_filename(g_get_user_config_dir(), "tio-gui", "serial.ini", NULL);
-    if (g_file_test(app.settings_path, G_FILE_TEST_EXISTS)) {
+    {
         g_autoptr(GError) error = NULL;
-        if (!tio_settings_load_from_file(&app.settings, app.settings_path, &error)) g_printerr("Settings: %s\n", error->message);
+        if (!tio_settings_load_from_store(&app.settings, app.settings_path, &error)
+            && !g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+            g_printerr("Settings: %s\n", error->message);
     }
     /* Earlier native builds saved an unused system language preference. */
     if (g_strcmp0(app.settings.language, "en")) replace(&app.settings.language, "zh_CN");

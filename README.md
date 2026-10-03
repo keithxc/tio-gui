@@ -203,17 +203,23 @@ path that would not fit in `sun_path` is dropped rather than passed on, because 
 at all on a long one and connecting matters more than the counters.
 
 The Linux GTK/VTE desktop stores preferences in
-`$XDG_CONFIG_HOME/tio-gui/config.ini` (normally `~/.config/tio-gui/config.ini`).
-The native serial frontend uses `serial.ini` in the same configuration directory;
-on Windows this normally resolves to `%LOCALAPPDATA%\tio-gui\serial.ini`.
+`$XDG_CONFIG_HOME/tio-gui/config.ini` (normally `~/.config/tio-gui/config.ini`)
+and its `.bk` peer. Native serial editions use `serial.ini` and `serial.ini.bk`.
+Saves alternate between the two files; startup validates their checksums and
+loads the newest valid snapshot using a wrapping 64-bit counter. See
+[settings storage and recovery](docs/settings-storage.md) before editing or
+backing up these files; either peer may hold the newest settings.
+On Windows the configuration directory normally resolves to
+`%LOCALAPPDATA%\tio-gui`.
 These are local, plaintext INI files, not a cloud synchronization service.
 The file holds general options
 (including the theme) under `[general]`, the starting values for a new session under `[defaults]`,
 the send history under `[send]`, one `[profile:<name>]` group per saved profile, and one `[tab:<n>]`
 group per session that was open at exit. Files written by 0.1.x and 0.2.x are migrated automatically
 on first start. Session logs default to the user's `Documents/tio-gui` directory.
-The Linux desktop refreshes its complete tab snapshot on normal window close;
-there is no general crash recovery or automatic backup rotation yet.
+The Linux desktop refreshes its complete tab snapshot on normal window close.
+The two-file store protects saved snapshots; unsaved edits still require a
+normal save, and there is no general autosave timer.
 
 Settings are split by what they belong to. The window menu holds what there is one of per window:
 theme, language, update checks, configuration backup, the device filter and the log size warning.
