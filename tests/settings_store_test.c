@@ -624,7 +624,15 @@ static GSubprocess *start_child(const char *mode, const char *path)
     g_assert_no_error(error);
     g_assert_nonnull(child);
     g_autoptr(GDataInputStream) output = g_data_input_stream_new(g_subprocess_get_stdout_pipe(child));
+    /* The Windows CRT writes CRLF in text mode; accept either platform's
+       line ending while still checking the exact readiness message. */
+    g_data_input_stream_set_newline_type(output, G_DATA_STREAM_NEWLINE_TYPE_ANY);
     g_autofree gchar *ready = g_data_input_stream_read_line(output, NULL, NULL, &error);
+    if (error || g_strcmp0(ready, "ready") != 0) {
+        /* Do not leave a lock-holding child alive when an assertion aborts. */
+        g_subprocess_force_exit(child);
+        g_subprocess_wait(child, NULL, NULL);
+    }
     g_assert_no_error(error);
     g_assert_cmpstr(ready, ==, "ready");
     return child;

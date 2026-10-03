@@ -22,6 +22,27 @@ static void pump(guint ms)
         g_usleep(1000);
     }
 }
+/* GLib timeout sources can be dispatched late under CI load. Wait for the
+ * observable transition, with a deadline, rather than treating a sleep as
+ * proof that all write/probe/delay ticks have run. */
+static void wait_for_writes(Sink *sink, guint count)
+{
+    const gint64 deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (sink->writes < count && g_get_monotonic_time() < deadline) {
+        g_main_context_iteration(NULL, FALSE);
+        g_usleep(1000);
+    }
+    g_assert_cmpuint(sink->writes, ==, count);
+}
+static void wait_finished(TioSequenceRunner *runner)
+{
+    const gint64 deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (tio_sequence_runner_active(runner) && g_get_monotonic_time() < deadline) {
+        g_main_context_iteration(NULL, FALSE);
+        g_usleep(1000);
+    }
+    g_assert_false(tio_sequence_runner_active(runner));
+}
 static void lifecycle(void)
 {
     TioSequence *sequence = tio_sequence_new("Boot check");
@@ -33,31 +54,29 @@ static void lifecycle(void)
     pump(40);
     g_assert_cmpuint(sink.writes, ==, 0);
     sink.busy = FALSE;
-    pump(30);
-    g_assert_cmpuint(sink.writes, ==, 1);
+    wait_for_writes(&sink, 1);
     tio_sequence_runner_pause(runner, TRUE);
     pump(130);
     g_assert_cmpuint(sink.writes, ==, 1);
     tio_sequence_runner_pause(runner, FALSE);
-    pump(160);
-    g_assert_false(tio_sequence_runner_active(runner));
+    wait_finished(runner);
     g_assert_false(tio_sequence_runner_failed(runner));
+    g_assert_cmpuint(sink.writes, ==, 2);
     const guint8 expected[] = {0, 0x14, 0xff, 'A', 'T', '\r', '\n'};
     g_assert_cmpmem(sink.bytes->data, sink.bytes->len, expected, sizeof expected);
     tio_sequence_runner_free(runner);
     sink.writes = 0;
     runner = tio_sequence_runner_new(sequence, TRUE, send_step, &sink, NULL);
-    pump(260);
-    g_assert_cmpuint(sink.writes, >=, 3);
+    wait_for_writes(&sink, 3);
     tio_sequence_runner_free(runner);
     guint writes = sink.writes;
     pump(100);
     g_assert_cmpuint(sink.writes, ==, writes);
     sink.fail = TRUE;
     runner = tio_sequence_runner_new(sequence, FALSE, send_step, &sink, NULL);
-    pump(30);
-    g_assert_false(tio_sequence_runner_active(runner));
+    wait_finished(runner);
     g_assert_true(tio_sequence_runner_failed(runner));
+    g_assert_cmpuint(sink.writes, ==, writes);
     tio_sequence_runner_free(runner);
     tio_sequence_free(sequence);
     g_byte_array_unref(sink.bytes);
