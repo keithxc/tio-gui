@@ -14,12 +14,24 @@ static void wait_window_drawn(GtkWindow *window)
     gtk_widget_queue_draw(widget);
     while (g_get_monotonic_time() < deadline) {
         g_main_context_iteration(NULL, FALSE);
-        GdkFrameTimings *timings = gdk_frame_clock_get_current_timings(clock);
-        if (gtk_widget_get_mapped(widget) && timings &&
-            gdk_frame_timings_get_frame_counter(timings) > previous &&
-            gdk_frame_timings_get_complete(timings))
-            return;
+        /* Presentation can finish after a newer frame starts, and a startup
+         * frame may be skipped entirely. Look for any completed frame after
+         * queue_draw, not only the newest or the first frame. */
+        const gint64 first = MAX(previous + 1, gdk_frame_clock_get_history_start(clock));
+        const gint64 current = gdk_frame_clock_get_frame_counter(clock);
+        for (gint64 frame = first; gtk_widget_get_mapped(widget) && frame <= current; ++frame) {
+            GdkFrameTimings *timings = gdk_frame_clock_get_timings(clock, frame);
+            if (timings && gdk_frame_timings_get_complete(timings)) return;
+        }
         g_usleep(1000);
     }
-    g_error("Window did not present a complete frame: %s", gtk_window_get_title(window));
+    GdkFrameTimings *timings = gdk_frame_clock_get_current_timings(clock);
+    GskRenderer *renderer = gtk_native_get_renderer(GTK_NATIVE(window));
+    g_error("Window did not present a complete frame: %s (mapped=%d, frame=%" G_GINT64_FORMAT
+            ", previous=%" G_GINT64_FORMAT ", history-start=%" G_GINT64_FORMAT ", complete=%d, renderer=%s)",
+            gtk_window_get_title(window), gtk_widget_get_mapped(widget),
+            gdk_frame_clock_get_frame_counter(clock), previous,
+            gdk_frame_clock_get_history_start(clock),
+            timings && gdk_frame_timings_get_complete(timings),
+            renderer ? G_OBJECT_TYPE_NAME(renderer) : "none");
 }

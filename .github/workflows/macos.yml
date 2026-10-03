@@ -30,12 +30,27 @@ jobs:
       - name: Build
         run: nix develop --no-update-lock-file -c cmake --build build --parallel 3
       - name: Test
+        id: native_tests
         run: nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure
+      - name: Diagnose UI failures with the Cairo renderer
+        if: failure() && steps.native_tests.outcome == 'failure'
+        env:
+          GSK_RENDERER: cairo
+          GSK_DEBUG: renderer
+        # Preserve the original failure and its detailed log. This diagnostic
+        # rerun isolates the renderer; it cannot turn a failed default run green.
+        run: |
+          cp build/Testing/Temporary/LastTest.log build/default-renderer-last-test.log
+          nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure \
+            -R '^(serial-ui|native-tools-ui)$' --output-log build/cairo-diagnostics.log
       - name: Keep test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-test-diagnostics
-          path: build/Testing/Temporary/LastTest.log
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/default-renderer-last-test.log
+            build/cairo-diagnostics.log
           if-no-files-found: warn
           retention-days: 14
