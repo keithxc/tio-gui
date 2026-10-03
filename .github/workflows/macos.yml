@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      diagnose_default_renderer:
+        description: Also diagnose the hosted runner's default OpenGL renderer
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,21 +33,25 @@ jobs:
           nix develop --no-update-lock-file -c cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release -DTIO_GUI_BUILD_AGENT=ON -DBUILD_TESTING=ON
       - name: Build
+        id: native_build
         run: nix develop --no-update-lock-file -c cmake --build build --parallel 3
       - name: Test
-        id: native_tests
-        run: nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure
-      - name: Diagnose UI failures with the Cairo renderer
-        if: failure() && steps.native_tests.outcome == 'failure'
         env:
+          # The hosted runner stalls at frame 0 with GskGLRenderer. Cairo runs
+          # the same native widgets and transport assertions; default-renderer
+          # coverage is also exercised during physical Mac package acceptance.
           GSK_RENDERER: cairo
+        run: nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure
+      - name: Diagnose the default renderer (manual)
+        if: always() && steps.native_build.outcome == 'success' && github.event_name == 'workflow_dispatch' && inputs.diagnose_default_renderer
+        env:
+          GSK_RENDERER: gl
           GSK_DEBUG: renderer
-        # Preserve the original failure and its detailed log. This diagnostic
-        # rerun isolates the renderer; it cannot turn a failed default run green.
+        # Preserve the functional test log before the optional diagnostic run.
         run: |
-          cp build/Testing/Temporary/LastTest.log build/default-renderer-last-test.log
+          cp build/Testing/Temporary/LastTest.log build/cairo-functional-last-test.log
           nix develop --no-update-lock-file -c ctest --test-dir build --output-on-failure \
-            -R '^(serial-ui|native-tools-ui)$' --output-log build/cairo-diagnostics.log
+            -R '^(serial-ui|native-tools-ui)$' --output-log build/opengl-diagnostics.log
       - name: Keep test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,7 +59,7 @@ jobs:
           name: macos-test-diagnostics
           path: |
             build/Testing/Temporary/LastTest.log
-            build/default-renderer-last-test.log
-            build/cairo-diagnostics.log
+            build/cairo-functional-last-test.log
+            build/opengl-diagnostics.log
           if-no-files-found: warn
           retention-days: 14

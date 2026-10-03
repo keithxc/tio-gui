@@ -126,7 +126,11 @@ int main(int argc, char **argv)
     g_assert_cmpmem(output, length, typed, sizeof typed);
     /* Logging is independent of presentation and drains on explicit disconnect. */
     gtk_toggle_button_set_active(tab->hex_rx, TRUE);
-    g_assert_cmpint(write(master, "tail", 4), ==, 4); spin(60);
+    const guint64 tail_rx = tab->rx + 4;
+    g_assert_cmpint(write(master, "tail", 4), ==, 4);
+    const gint64 receive_deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+    while (tab->rx < tail_rx && g_get_monotonic_time() < receive_deadline) spin(5);
+    g_assert_cmpuint(tab->rx, ==, tail_rx);
     g_signal_emit_by_name(tab->connect, "clicked"); g_assert_null(tab->serial);
     g_autofree gchar *logged = NULL; gsize log_length;
     g_assert_true(g_file_get_contents(log, &logged, &log_length, NULL));

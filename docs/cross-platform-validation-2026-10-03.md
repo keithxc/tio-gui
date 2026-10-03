@@ -25,6 +25,12 @@ acceptance, physical-device support, or installation on end-user systems.
   the agent package ran its three headless groups inside the Nix build.
 - macOS: signed and notarized packages, 12 desktop CTest groups and isolated
   final-bundle PTY checks; see [package acceptance](macos-0.4.2-acceptance.md).
+  Hosted macOS CI uses Cairo software rendering for its native widget and
+  transport tests. The runner's default OpenGL path stalled at its first frame;
+  software rendering reached the same functional assertions. Default rendering
+  remains covered by local Mac tests and package checks, and can be diagnosed
+  separately through the workflow's manual input. A hosted software-renderer
+  pass does not establish default OpenGL performance on macOS 26 hardware.
 - Native Windows UCRT64: [CI at fde4e22](https://github.com/keithxc/tio-gui/actions/runs/37131772236)
   passed compilation, six registered CTest groups and executable versions.
   Windows omits the POSIX PTY cases; GUI and physical COM acceptance remain open.
