@@ -47,8 +47,12 @@ if stage.exists(): shutil.rmtree(stage)
 (stage / "bin").mkdir(parents=True)
 shutil.copy2(build / "tio-gui.exe", stage / "bin/tio-gui.exe")
 pending = [stage / "bin/tio-gui.exe"]
-shutil.copy2(prefix / "bin/gdk-pixbuf-query-loaders.exe", stage / "bin/gdk-pixbuf-query-loaders.exe")
-pending.append(stage / "bin/gdk-pixbuf-query-loaders.exe")
+# GSubprocess uses GLib's spawn helpers on Windows. DLL import traversal does
+# not discover these executables, but runtime pixbuf setup and child processes
+# need them even when the destination has no MSYS2 development installation.
+for name in ("gdk-pixbuf-query-loaders.exe", "gspawn-win64-helper.exe", "gspawn-win64-helper-console.exe"):
+    shutil.copy2(prefix / "bin" / name, stage / "bin" / name)
+    pending.append(stage / "bin" / name)
 for source in (prefix / "lib/gdk-pixbuf-2.0/2.10.0/loaders").glob("*.dll"):
     destination = stage / "lib/gdk-pixbuf-2.0/2.10.0/loaders" / source.name
     destination.parent.mkdir(parents=True, exist_ok=True)
