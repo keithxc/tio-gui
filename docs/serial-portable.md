@@ -1,8 +1,8 @@
 # Native serial editions
 
-## macOS 0.4.2
+## macOS 0.4.3
 
-Download `tio-gui-0.4.2-macos-arm64.dmg`, open it and drag **tio-gui.app** into
+Download `tio-gui-0.4.3-macos-arm64.dmg`, open it and drag **tio-gui.app** into
 Applications. The ZIP contains the same application. Requires Apple Silicon and
 macOS 26 or newer. Intel is not included. GTK, libvterm, lrzsz, Lua and QuickJS
 are bundled; the destination Mac needs no Homebrew, Nix or development tools.
@@ -87,7 +87,7 @@ with mynix's locked nixpkgs. Apple Clang/SDK, codesign, notarytool and hdiutil
 remain system tools. `TIO_MACOS_RUNTIME` supplies the packager with exact Nix
 runtime paths and source/license metadata. The resulting app contains relocated
 libraries, with no Nix or Homebrew runtime requirement. The packager retains a
-Homebrew fallback for other builders; the 0.4.2 release uses the project's pinned
+Homebrew fallback for other builders; the 0.4.3 release uses the project's pinned
 Nix development shell, also exposed by mynix.
 
 ```sh
@@ -107,13 +107,13 @@ Signing credentials stay in the local keychain. Without the signing arguments,
 the packager creates an ad-hoc development package. Release publishing requires
 Developer ID verification, accepted notarization, stapled tickets, Gatekeeper
 checks, clean-environment bundle checks and uploaded checksum verification.
-The final verification record is in [macOS 0.4.2 acceptance](macos-0.4.2-acceptance.md).
+See the [0.4.3 release notes](releases/v0.4.3.md) for the current validation scope.
 
-## Windows 0.3.7
+## Windows 0.4.3 preview
 
-The existing per-user NSIS installer remains available in the 0.3.7 release.
-Its native frontend is retained separately; this macOS release does not change
-Windows UI scope or replace Windows assets. It includes serial framing, direct
+The per-user NSIS installer is named `tio-gui-0.4.3-windows-x86_64-setup.exe`.
+Its native frontend is retained separately and does not yet include the full
+macOS workspace. It includes serial framing, direct
 input, text/HEX sends, four basic quick buttons, raw receive logs, profiles,
 search, zoom, Chinese/English, themes and same-COM reconnect. It remains a line
 console without the additional macOS serial tools listed above. Windows packages

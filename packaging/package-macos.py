@@ -10,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 
+from macos_runtime import system_library_for
+
 # Nix also provides xcrun/otool shims for its SDK. Distribution tools must use
 # the installed Apple toolchain, especially notarytool and codesign.
 os.environ["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin:" + os.environ.get("PATH", "")
@@ -113,6 +115,11 @@ while pending:
         if not source.exists():
             raise SystemExit(f"Unresolved dependency: {dependency} in {original}")
         source = source.resolve()
+        system_library = system_library_for(source)
+        if system_library:
+            subprocess.run(["install_name_tool", "-change", dependency,
+                            system_library, str(target)], check=True)
+            continue
         if source.name not in copied:
             destination = libraries / source.name
             shutil.copy2(source, destination)
@@ -208,6 +215,9 @@ command = ["codesign", "--force", "--sign", args.identity]
 if args.identity != "-": command += ["--timestamp", "--options", "runtime"]
 subprocess.run(command + [str(app)], check=True)
 subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
+# Exercise actual GLib conversions with development roots denied. A valid
+# signature and LC_LOAD_DYLIB audit cannot detect iconv's dlopen/data paths.
+subprocess.run([sys.executable, str(repo / "tests/macos_conversion_smoke.py"), str(app)], check=True)
 if args.identity != "-":
     signature = subprocess.check_output(["codesign", "-dvv", str(app)], stderr=subprocess.STDOUT, text=True)
     if "Authority=Developer ID Application:" not in signature or "Runtime Version=" not in signature:
