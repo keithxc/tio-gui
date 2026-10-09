@@ -36,7 +36,7 @@ assert (directory / "share/licenses/NotoSansSC/OFL.txt").is_file()
 shutil.copytree(directory, relocated, dirs_exist_ok=True)
 wine(relocated / "bin/tio-gui.exe", "--version")
 test_environment = dict(environment, WINEPATH=win_directory + r"\bin")
-for test in ["native-serial-test", "payload-test", "highlighter-test"]:
+for test in ["settings-store-test", "native-serial-test", "payload-test", "highlighter-test"]:
     subprocess.run(["wine", str(repo / ".cache/serial-windows" / (test + ".exe"))], env=test_environment, timeout=60, check=True)
 log = repo / ".cache/windows-startup.log"
 with log.open("w") as output:
