@@ -3900,6 +3900,13 @@ static gboolean save_workspace(TioApp *app, GError **error)
     return tio_settings_save(&app->settings, error);
 }
 
+static gboolean close_window_after_dialog(gpointer data)
+{
+    GtkWindow *window = data;
+    if (gtk_widget_get_visible(GTK_WIDGET(window))) gtk_window_close(window);
+    return G_SOURCE_REMOVE;
+}
+
 static void on_confirm_window_close(GObject *source, GAsyncResult *result, gpointer data)
 {
     GtkWindow *window = data;
@@ -3908,14 +3915,40 @@ static void on_confirm_window_close(GObject *source, GAsyncResult *result, gpoin
     TioApp *app = g_object_get_data(G_OBJECT(window), "tio-gui");
     if (app && gtk_widget_get_visible(GTK_WIDGET(window))) {
         app->close_dialog_pending = FALSE;
-        if (choice == 1) { app->close_confirmed = TRUE; gtk_window_close(window); }
+        if (choice == 1) {
+            app->close_confirmed = TRUE;
+            /* GTK 4.14 still tears down the transient dialog after returning
+               the result. Keep its parent alive until that teardown finishes. */
+            g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, close_window_after_dialog,
+                            g_object_ref(window), g_object_unref);
+        }
     }
     g_object_unref(window);
 }
 
+static void destroy_transient_windows(GtkWindow *parent)
+{
+    /* GTK 4.14 can dispose a transient after its parent's final reference is
+       gone. Disconnect its parent handlers while the parent is still valid.
+       Snapshot first: destroying windows mutates the live toplevel model. */
+    GListModel *windows = gtk_window_get_toplevels();
+    g_autoptr(GPtrArray) children = g_ptr_array_new_with_free_func(g_object_unref);
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        GtkWindow *child = g_list_model_get_item(windows, i);
+        if (gtk_window_get_transient_for(child) == parent)
+            g_ptr_array_add(children, child);
+        else
+            g_object_unref(child);
+    }
+    for (guint i = 0; i < children->len; ++i) {
+        GtkWindow *child = g_ptr_array_index(children, i);
+        gtk_window_set_transient_for(child, NULL);
+        gtk_window_destroy(child);
+    }
+}
+
 static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
 {
-    (void)window;
     TioApp *app = user_data;
 
     if (!app->close_confirmed && app_has_live_sessions(app)) {
@@ -3972,6 +4005,7 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
         return TRUE;
     }
 
+    destroy_transient_windows(window);
     return FALSE;
 }
 
@@ -5686,6 +5720,15 @@ static void tio_app_finish_close_tab(TioApp *app, TioTab *tab)
     }
 }
 
+static gboolean close_tab_after_dialog(gpointer data)
+{
+    TabRequest *request = data;
+    g_autoptr(GtkWindow) window = g_weak_ref_get(&request->window);
+    TioTab *tab = tab_request_resolve(request, window);
+    if (tab) tio_app_finish_close_tab(tab->app, tab);
+    return G_SOURCE_REMOVE;
+}
+
 static void on_close_tab_response(GObject *source, GAsyncResult *result, gpointer user_data)
 {
     g_autoptr(TabRequest) request = user_data;
@@ -5700,7 +5743,11 @@ static void on_close_tab_response(GObject *source, GAsyncResult *result, gpointe
     if (tab->child_pid > 0) {
         (void)kill(tab->child_pid, SIGHUP);
     }
-    tio_app_finish_close_tab(tab->app, tab);
+    /* The last tab closes the dialog's parent window. Let GTK finish removing
+       its transient-parent handlers first; resolve the tab weakly on the idle
+       callback so another close cannot leave a stale session pointer. */
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, close_tab_after_dialog,
+                    tab_request_new(tab, NULL), (GDestroyNotify)tab_request_free);
 }
 
 /* A session that is still connected or still writing a log is not closed on a
@@ -5944,6 +5991,9 @@ int main(int argc, char **argv)
     if (!apply_language(startup_language)) {
         g_warning("Locale is unavailable for language: %s", startup_language);
     }
+    /* GTK otherwise calls setlocale(LC_ALL, "") during initialization and
+       discards our explicit LC_MESSAGES selection (notably under LC_ALL=C). */
+    gtk_disable_setlocale();
 
     GApplicationFlags application_flags = G_APPLICATION_HANDLES_COMMAND_LINE;
     if (g_getenv("TIO_GUI_NON_UNIQUE") != NULL) {

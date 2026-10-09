@@ -13,6 +13,17 @@ static void drain_events(void)
     }
 }
 
+static GtkWidget *find_close_button(GtkWidget *widget)
+{
+    if (GTK_IS_BUTTON(widget) && g_strcmp0(gtk_button_get_label(GTK_BUTTON(widget)), "Close") == 0)
+        return widget;
+    for (GtkWidget *child = gtk_widget_get_first_child(widget); child; child = gtk_widget_get_next_sibling(child)) {
+        GtkWidget *button = find_close_button(child);
+        if (button) return button;
+    }
+    return NULL;
+}
+
 static TioApp *open_workspace(GtkApplication **current)
 {
     static guint launch = 0;
@@ -73,6 +84,7 @@ static void assert_tab(TioApp *app, guint index, const char *name,
 
 int main(void)
 {
+    g_log_set_always_fatal(G_LOG_FATAL_MASK | G_LOG_LEVEL_CRITICAL);
     g_autofree gchar *directory = g_dir_make_tmp("tio-session-restore-XXXXXX", NULL);
     g_assert_nonnull(directory);
     g_setenv("XDG_CONFIG_HOME", directory, TRUE);
@@ -151,6 +163,33 @@ int main(void)
     g_assert_true(saved.restore_tabs);
     g_assert_cmpuint(saved.tab_configs->len, ==, 0);
     tio_settings_clear(&saved);
+
+    /* Confirming a logged final tab must allow GTK's transient dialog to
+       finish teardown before its parent is destroyed (GTK 4.14 regression). */
+    app = open_workspace(&application);
+    TioTab *logged = g_ptr_array_index(app->tabs, 0);
+    logged->log_path = g_build_filename(directory, "closed-session.log", NULL);
+    tio_app_close_tab(app, logged);
+    drain_events();
+    GListModel *windows = gtk_window_get_toplevels();
+    g_autoptr(GtkWindow) confirmation = NULL;
+    for (guint i = 0; i < g_list_model_get_n_items(windows); ++i) {
+        GtkWindow *candidate = g_list_model_get_item(windows, i);
+        if (gtk_window_get_transient_for(candidate) == GTK_WINDOW(app->window)) {
+            confirmation = candidate;
+            break;
+        }
+        g_object_unref(candidate);
+    }
+    g_assert_nonnull(confirmation);
+    GtkWidget *close_button = find_close_button(GTK_WIDGET(confirmation));
+    g_assert_nonnull(close_button);
+    g_signal_emit_by_name(close_button, "clicked");
+    /* Release the test's extra reference while the parent is alive, just as
+       the real event handler does; do not retain a destroyed GTK dialog. */
+    g_clear_object(&confirmation);
+    drain_events();
+    g_assert_null(g_object_get_data(G_OBJECT(application), "tio-gui-window"));
 
     g_unlink(config_path); g_unlink(config_backup); g_unlink(config_lock);
     g_rmdir(config_directory); g_rmdir(directory);

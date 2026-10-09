@@ -8,11 +8,12 @@
 
 A standalone **Windows/macOS serial edition** is available through
 `-DTIO_GUI_SERIAL_ONLY=ON` (the default on those platforms). It uses native serial
-APIs. **macOS 0.4.2** brings the Linux serial tools into the shared workspace,
+APIs. **macOS 0.4.3** brings the Linux serial tools into the shared workspace,
 including sequences, CRC/delays, recording/replay, analysis/plugins, Modbus RTU,
 file transfers and a libvterm terminal. Developer ID signed and notarized DMG/ZIP
-packages are available for Apple Silicon/macOS 26+. Windows retains its 0.3.7
-frontend and NSIS installer. See [installation, scope and hardware checks](docs/serial-portable.md).
+packages are available for Apple Silicon/macOS 26+. Windows 0.4.3 includes a
+smaller native serial frontend and a per-user NSIS installer. See
+[installation, scope and hardware checks](docs/serial-portable.md).
 The Linux tio/VTE edition described below remains the default Linux build.
 
 Current source also includes an **experimental remote serial client** for
@@ -166,13 +167,20 @@ The project version is maintained in `VERSION`. Check an installed build with
 Translatable strings live in `po/tio-gui.pot`. After adding or changing a string, run
 `cmake --build build --target update-pot` and merge the result into each catalogue in `po/`.
 
-Linux releases include an x86-64 AppImage with tio, runtime dependencies and
-Latin/CJK fonts;
-Nix/NixOS users should use the flake. Build the AppImage with
-`nix build .#appimage` (the bundler revision is pinned in `flake.lock`). It uses
-software rendering by default for host graphics compatibility. Linux user
-namespaces must be enabled. With no FUSE available, run the AppImage with
-`--appimage-extract-and-run`. Debian/RPM/AUR packages are not provided.
+The [0.4.3 release](https://github.com/keithxc/tio-gui/releases/tag/v0.4.3)
+provides x86-64 Linux AppImage, DEB, RPM, Arch `.pkg.tar.zst`, portable tarball
+and sideloadable Flatpak packages. They include tio 3.9, private runtime
+libraries and Latin/CJK fonts. The AppImage uses a static type-2 runtime and
+does not require Nix or user namespaces for startup; without FUSE, add
+`--appimage-extract-and-run`. Software rendering is the default.
+
+Nix/NixOS users should use the flake. The older developer-only
+`nix build .#appimage` recipe still requires user namespaces and is not the
+portable AppImage published in 0.4.3. Reproduce release packages on x86-64
+Linux with `packaging/linux/package.sh /absolute/build/root`, then
+`python3 packaging/linux/flatpak.py /absolute/build/root/AppDir /absolute/flatpak/output 0.4.3`.
+See [installation and acceptance boundaries](docs/linux-distribution.md).
+These downloadable files do not imply acceptance into AUR, Nixpkgs or Flathub.
 
 The release workflow prepares a draft from a version tag. Publish the draft only
 after uploading and verifying all platform packages and their checksums.
