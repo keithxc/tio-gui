@@ -269,7 +269,7 @@ struct _TioApp {
     TioSettings settings;
 
     guint close_capture_timer;
-    gboolean close_confirmed, close_dialog_pending;
+    gboolean close_confirmed, close_dialog_pending, close_settings_saved;
     GtkButton *new_tab_button;
     GtkNotebook *notebook;
     GPtrArray *tabs; /* TioTab *, in page order */
@@ -3880,6 +3880,26 @@ static gboolean app_has_live_sessions(TioApp *app)
     return FALSE;
 }
 
+static gboolean save_workspace(TioApp *app, GError **error)
+{
+    if (app->active != NULL) {
+        capture_all_settings(app->active);
+    }
+
+    /* Always save the workspace. The restore preference controls startup, not
+       whether disabling it discards the last session configurations. */
+    tio_settings_clear_tabs(&app->settings);
+    for (guint index = 0; index < app->tabs->len; ++index) {
+        TioTab *tab = g_ptr_array_index(app->tabs, index);
+        TioSessionConfig snapshot;
+        tio_session_config_init(&snapshot);
+        capture_session_config(tab, &snapshot);
+        tio_settings_add_tab(&app->settings, &snapshot);
+        tio_session_config_clear(&snapshot);
+    }
+    return tio_settings_save(&app->settings, error);
+}
+
 static void on_confirm_window_close(GObject *source, GAsyncResult *result, gpointer data)
 {
     GtkWindow *window = data;
@@ -3912,6 +3932,23 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
         }
         return TRUE;
     }
+    /* Persist before stopping sessions. A lock conflict, damaged store or I/O
+       error must leave the live workspace usable so it can be retried or
+       exported. A deferred close re-enters this handler after capture drains;
+       do not create a second settings generation on that path. */
+    if (!app->close_settings_saved) {
+        g_autoptr(GError) error = NULL;
+        if (!save_workspace(app, &error)) {
+            g_warning("Could not save settings: %s", error->message);
+            GtkAlertDialog *dialog =
+                gtk_alert_dialog_new(_("Could not save settings: %s"), error->message);
+            gtk_alert_dialog_show(dialog, window);
+            g_object_unref(dialog);
+            app->close_confirmed = FALSE;
+            return TRUE;
+        }
+        app->close_settings_saved = TRUE;
+    }
     /* Stop every session, not just the visible one. */
     for (guint index = 0; index < app->tabs->len; ++index) {
         TioTab *tab = g_ptr_array_index(app->tabs, index);
@@ -3935,26 +3972,6 @@ static gboolean on_window_close_request(GtkWindow *window, gpointer user_data)
         return TRUE;
     }
 
-    if (app->active != NULL) {
-        capture_all_settings(app->active);
-    }
-
-    /* Always save the workspace. The restore preference controls startup, not
-       whether disabling it discards the last session configurations. */
-    tio_settings_clear_tabs(&app->settings);
-    for (guint index = 0; index < app->tabs->len; ++index) {
-        TioTab *tab = g_ptr_array_index(app->tabs, index);
-        TioSessionConfig snapshot;
-        tio_session_config_init(&snapshot);
-        capture_session_config(tab, &snapshot);
-        tio_settings_add_tab(&app->settings, &snapshot);
-        tio_session_config_clear(&snapshot);
-    }
-
-    g_autoptr(GError) error = NULL;
-    if (!tio_settings_save(&app->settings, &error)) {
-        g_warning("Could not save settings: %s", error->message);
-    }
     return FALSE;
 }
 

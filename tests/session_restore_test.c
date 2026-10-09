@@ -77,6 +77,10 @@ int main(void)
     g_assert_nonnull(directory);
     g_setenv("XDG_CONFIG_HOME", directory, TRUE);
     g_setenv("TIO_GUI_LANGUAGE", "en", TRUE);
+    g_autofree gchar *config_directory = g_build_filename(directory, "tio-gui", NULL);
+    g_autofree gchar *config_path = g_build_filename(config_directory, "config.ini", NULL);
+    g_autofree gchar *config_backup = g_strconcat(config_path, ".bk", NULL);
+    g_autofree gchar *config_lock = g_strconcat(config_path, ".lock", NULL);
     if (!gtk_init_check()) {
         g_rmdir(directory);
         g_print("Session restore requires a display; use Xvfb.\n");
@@ -94,6 +98,23 @@ int main(void)
     TioTab *last = tio_app_add_tab(app);
     configure_tab(last, "Board C", "/dev/tio-test-c", "115200", "third");
     gtk_notebook_reorder_child(app->notebook, last->content, 0);
+
+    /* A settings failure must be detected before close tears down any tab or
+       live session. Use a directory at the lock path to force a real open
+       failure without replacing either settings snapshot. */
+    g_assert_cmpint(g_mkdir_with_parents(config_directory, 0700), ==, 0);
+    g_assert_cmpint(g_mkdir(config_lock, 0700), ==, 0);
+    GtkWidget *original_window = app->window;
+    gtk_window_close(GTK_WINDOW(original_window));
+    drain_events();
+    g_assert_true(g_object_get_data(G_OBJECT(application), "tio-gui-window") == original_window);
+    g_assert_cmpuint(app->tabs->len, ==, 3);
+    for (guint index = 0; index < app->tabs->len; ++index) {
+        TioTab *tab = g_ptr_array_index(app->tabs, index);
+        g_assert_false(tab->close_requested);
+        g_assert_cmpint(tab->child_pid, <=, 0);
+    }
+    g_assert_cmpint(g_rmdir(config_lock), ==, 0);
     close_workspace(application, app);
 
     app = open_workspace(&application);
@@ -131,12 +152,8 @@ int main(void)
     g_assert_cmpuint(saved.tab_configs->len, ==, 0);
     tio_settings_clear(&saved);
 
-    g_autofree gchar *config_directory = g_build_filename(directory, "tio-gui", NULL);
-    g_autofree gchar *config_path = g_build_filename(config_directory, "config.ini", NULL);
-    g_autofree gchar *config_backup = g_strconcat(config_path, ".bk", NULL);
-    g_autofree gchar *config_lock = g_strconcat(config_path, ".lock", NULL);
     g_unlink(config_path); g_unlink(config_backup); g_unlink(config_lock);
     g_rmdir(config_directory); g_rmdir(directory);
-    g_print("Workspace restart preserves tab order and per-tab settings without connecting.\n");
+    g_print("Workspace save failure preserves live tabs; restart restores order and per-tab settings without connecting.\n");
     return 0;
 }
