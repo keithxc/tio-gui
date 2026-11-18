@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """Drive real GTK key events on the private display and verify VTE PTY bytes."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
+_setup_build_environment()
 import os
 import select
 import subprocess

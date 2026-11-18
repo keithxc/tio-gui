@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Export the verified portable runtime as a sideloadable Flatpak bundle."""
+import sys as _host_sys
+if _host_sys.platform == 'darwin':
+    raise SystemExit('Run Linux x86_64 packaging on pk4.')
 import argparse
 from pathlib import Path
 import shutil

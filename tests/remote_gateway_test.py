@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """No serial hardware: exercise the actual HTTP gateway with a mock agent."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
+_setup_build_environment()
 import base64
 import http.client
 import importlib.util

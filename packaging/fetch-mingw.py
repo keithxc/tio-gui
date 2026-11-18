@@ -14,9 +14,17 @@ import sys
 import tarfile
 import urllib.request
 import time
+import importlib.util
 
 base = "https://repo.msys2.org/mingw/mingw64/"
-root = Path(sys.argv[1]).resolve()
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location('tio_paths', Path(__file__).with_name('build-paths.py'))
+path_api = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(path_api)
+if sys.platform == 'darwin':
+    raise SystemExit('Run Windows/Linux x86_64 builds on pk4; no macOS cross-build')
+root = path_api.validate(Path(sys.argv[1]))
+path_api.environment()
 root.mkdir(parents=True, exist_ok=True)
 cache = root / "packages"
 cache.mkdir(exist_ok=True)

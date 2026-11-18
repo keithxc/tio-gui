@@ -3,7 +3,14 @@
 # Uses isolated PTYs, localhost servers and an isolated vcan namespace.
 set -eu
 export LC_ALL=C GTK_IM_MODULE=simple GTK_A11Y=none
-build=${1:-.cache/build}
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+cd "$repo"
+exports=$(python3 packaging/build-paths.py --environment)
+eval "$exports"
+build=${1:-$TIO_WORK_DIR/cmake}
+build=$(python3 packaging/build-paths.py --check "$build")
+export TMPDIR="$TIO_TESTS_DIR/tmp" PYTHONPYCACHEPREFIX="$TIO_CACHE_DIR/pycache"
+mkdir -p "$TMPDIR" "$TIO_LOGS_DIR"
 cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build "$build" -j 4
 ctest --test-dir "$build" --output-on-failure

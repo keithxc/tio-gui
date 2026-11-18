@@ -9,7 +9,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import importlib.util
 
+sys.dont_write_bytecode = True
 from macos_runtime import system_library_for
 
 # Nix also provides xcrun/otool shims for its SDK. Distribution tools must use
@@ -19,6 +21,10 @@ for key in ("DEVELOPER_DIR", "SDKROOT"):
     if os.environ.get(key, "").startswith("/nix/"): os.environ.pop(key)
 
 repo = Path(__file__).resolve().parents[1]
+sys.dont_write_bytecode = True
+path_spec = importlib.util.spec_from_file_location('tio_paths', repo / 'packaging/build-paths.py')
+path_api = importlib.util.module_from_spec(path_spec)
+path_spec.loader.exec_module(path_api)
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("build", type=Path)
 parser.add_argument("output", type=Path)
@@ -27,8 +33,9 @@ parser.add_argument("--notary-profile")
 args = parser.parse_args()
 if args.notary_profile and args.identity == "-":
     parser.error("Notarization requires a Developer ID Application identity")
-build = args.build.resolve()
-output = args.output.resolve()
+build = path_api.validate(args.build, app=True)
+output = path_api.validate(args.output)
+path_api.environment()
 output.mkdir(parents=True, exist_ok=True)
 version = (repo / "VERSION").read_text().strip()
 with (build / "tio-gui.app/Contents/Info.plist").open("rb") as file:
@@ -37,7 +44,7 @@ if build_info.get("CFBundleShortVersionString") != version or build_info.get("CF
     raise SystemExit("Built app version does not match VERSION; reconfigure and rebuild before packaging")
 # Each packaging attempt gets a fresh workspace. macOS can protect a previously
 # signed/launched bundle against in-place changes through App Management.
-stage = Path(tempfile.mkdtemp(prefix=f"dmg-stage-{version}-", dir=build))
+stage = Path(tempfile.mkdtemp(prefix=f"dmg-stage-{version}-", suffix=".noindex", dir=build))
 def writable_tree(root):
     if not root.exists(): return
     for path in [root, *root.rglob("*")]:

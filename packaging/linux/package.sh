@@ -3,6 +3,10 @@
 set -euo pipefail
 source_root=$(cd -- "$(dirname -- "$0")/../.." && pwd)
 work_root=${1:?Usage: package.sh /absolute/build/root}
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Run Linux x86_64 packaging on pk4.' >&2; exit 1; }
+work_root=$(python3 "$source_root/packaging/build-paths.py" --check "$work_root")
+exports=$(python3 "$source_root/packaging/build-paths.py" --platform linux-x86_64 --environment)
+eval "$exports"
 case "$work_root" in /*) ;; *) echo 'Build root must be absolute' >&2; exit 2 ;; esac
 mkdir -p "$work_root"/{cache,dist,logs,tmp}
 name="tio-gui-package-$(id -u)-$$"

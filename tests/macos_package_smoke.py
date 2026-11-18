@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
 """Exercise a bundled app on an isolated PTY/config. Requires macOS Accessibility permission. Temporarily selects US/ABC for physical test keys, restoring the previous input source. Optional screenshots need screen-capture permission."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
 import os,pty,subprocess,tempfile,time,select,json,sys
 from pathlib import Path
-repo=Path(__file__).resolve().parents[1]; (repo/'.cache').mkdir(exist_ok=True)
-helper=repo/'.cache/macos-input'
+repo=Path(__file__).resolve().parents[1]
+paths=json.loads(subprocess.check_output([sys.executable,str(repo/'packaging/build-paths.py'),'--platform','macos-arm64','--json']))
+from build_environment import api
+if os.environ.get('TIO_TEST_LAYOUT_DIR'):
+ os.environ['TIO_TEST_LAYOUT_DIR'] = str(api.validate(os.environ['TIO_TEST_LAYOUT_DIR']))
+_setup_build_environment()
+for purpose in ['work','cache','tests','evidence']:Path(paths[purpose]).mkdir(parents=True,exist_ok=True)
+helper=Path(paths['work'])/'macos-input'
 sdk_env=dict(os.environ);sdk_env.pop('SDKROOT',None);sdk_env.pop('DEVELOPER_DIR',None)
+sdk_env['TMPDIR']=paths['tests'];sdk_env['CLANG_MODULE_CACHE_PATH']=str(Path(paths['cache'])/'clang-module-cache')
 sdk=subprocess.check_output(['/usr/bin/xcrun','--sdk','macosx','--show-sdk-path'],env=sdk_env,text=True).strip()
-subprocess.run(['/usr/bin/xcrun','swiftc','-sdk',sdk,str(repo/'tests/macos_input.swift'),'-o',str(helper)],env=sdk_env,check=True)
-app=Path(sys.argv[1]).resolve(); root=Path(tempfile.mkdtemp(prefix='tio-bundle-smoke-'));(root/'config/tio-gui').mkdir(parents=True)
+subprocess.run(['/usr/bin/xcrun','swiftc','-sdk',sdk,'-module-cache-path',str(Path(paths['cache'])/'swift-module-cache'),str(repo/'tests/macos_input.swift'),'-o',str(helper)],env=sdk_env,check=True)
+app=Path(sys.argv[1]).resolve(); root=Path(tempfile.mkdtemp(prefix='tio-bundle-smoke-',dir=paths['tests']));(root/'config/tio-gui').mkdir(parents=True)
 master,slave=pty.openpty();path=os.ttyname(slave);log=root/'received.log'
 (root/'config/tio-gui/serial.ini').write_text(f'[general]\nlanguage=en\nnative-tools-version=1\nrestore-tabs=false\n[defaults]\ndevice={path}\nbaud=115200\nreconnect=false\nlogging=true\nlog-file={log}\nlog-append=true\nlog-strip=false\n')
 env={'HOME':str(Path.home()),'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','TMPDIR':os.environ.get('TMPDIR','/tmp'),'XDG_CONFIG_HOME':str(root/'config'),'XDG_CACHE_HOME':str(root/'cache'),'LANG':'en_US.UTF-8'}
@@ -16,7 +26,7 @@ stdout=(root/'app.log').open('w')
 # implicit dlopen/resource fallbacks that a system-only PATH cannot detect.
 command=['/usr/bin/sandbox-exec','-p','(version 1)(allow default)(deny file-read* (subpath "/nix/store") (subpath "/opt/homebrew") (subpath "/usr/local/Cellar"))',str(app/'Contents/MacOS/tio-gui')]
 process=subprocess.Popen(command,env=env,stdout=stdout,stderr=subprocess.STDOUT)
-(repo/'.cache/packaged-smoke-state.json').write_text(json.dumps({'pid':process.pid,'root':str(root),'device':path}))
+(Path(paths['evidence'])/'packaged-smoke-state.json').write_text(json.dumps({'pid':process.pid,'root':str(root),'device':path}))
 print('PID',process.pid,'ROOT',root,flush=True)
 try:
  time.sleep(2)

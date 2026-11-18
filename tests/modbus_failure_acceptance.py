@@ -1,3 +1,7 @@
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
+_setup_build_environment()
 #!/usr/bin/env python3
 import os,socket,subprocess,sys,threading,time
 for failure in ('transaction','exception','timeout'):

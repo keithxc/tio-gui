@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """Replay a real Bash/Readline PTY stream through the highlight renderer."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
+_setup_build_environment()
 import os
 from pathlib import Path
 import pty

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """Native transport and bundled lrzsz, all protocols/directions, exact binary PTY peer."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
+_setup_build_environment()
 import os, pty, select, socket, subprocess, sys, tempfile, threading, time, tty
 from pathlib import Path
 helper = str(Path(sys.argv[1]).resolve())

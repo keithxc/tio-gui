@@ -5,6 +5,9 @@ Each process uses sharun's private loader, not LD_LIBRARY_PATH injected into
 host tools. All downloaded inputs are checksum-locked; Ubuntu package/source
 versions and copyright notices are recorded with the shipped runtime.
 """
+import sys as _host_sys
+if _host_sys.platform == 'darwin':
+    raise SystemExit('Run Linux x86_64 packaging on pk4.')
 import argparse
 import hashlib
 import json

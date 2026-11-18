@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Regression: replace Nix Apple iconv, preserve the distinct GNU provider."""
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packaging"))
 from macos_runtime import system_library_for
 
 scratch = Path(sys.argv[1]).resolve()
+from build_environment import api
+scratch = api.validate(scratch)
+_setup_build_environment()
 scratch.mkdir(parents=True, exist_ok=True)
 
 def run(*args):

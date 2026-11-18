@@ -149,23 +149,35 @@ See the native edition document for macOS driver and terminal boundaries.
 
 ```sh
 nix develop
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-./build/tio-gui
+build="$(python3 packaging/build-paths.py --purpose work)/cmake"
+cmake -S . -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build "$build"
+"$build/tio-gui"
 ```
 
 Build the packaged application:
 
 ```sh
-nix build
-./result/bin/tio-gui
+package="$(python3 packaging/build-paths.py --purpose dist)/nix-result"
+mkdir -p "$(dirname "$package")"
+nix build --out-link "$package"
+"$package/bin/tio-gui"
 ```
 
 The project version is maintained in `VERSION`. Check an installed build with
 `tio-gui --version`.
 
+Updated 2026-10-13: `packaging/build-paths.py` uses the shared mygit resolver when
+available and a user-cache path otherwise. Build/package/test outputs must remain
+outside source repositories. `TIO_BUILD_TASK` selects a run; `--platform` selects
+its target. Acceptance tests use its work/cache/tests/logs directories; Windows
+font downloads use `TIO_NATIVE_FONT_CACHE` or the resolved Windows cache. Package
+and dependency-fetch commands reject source-local output arguments. Existing
+`.cache` contents may contain retained evidence and are not removed by these
+commands. Use the workspace's configured native build host for each platform.
+
 Translatable strings live in `po/tio-gui.pot`. After adding or changing a string, run
-`cmake --build build --target update-pot` and merge the result into each catalogue in `po/`.
+`cmake --build "$build" --target update-pot` and merge the result into each catalogue in `po/`.
 
 The [0.4.3 release](https://github.com/keithxc/tio-gui/releases/tag/v0.4.3)
 provides x86-64 Linux AppImage, DEB, RPM, Arch `.pkg.tar.zst`, portable tarball
@@ -192,9 +204,10 @@ PCRE2, libsoup 3, JSON-GLib and `tio` 3.9. File transfer uses lrzsz; analysis pl
 require bubblewrap, QuickJS and Lua 5.4. BLE requires the system BlueZ service. Then run:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/tio-gui
+build="$(python3 packaging/build-paths.py --purpose work)/cmake"
+cmake -S . -B "$build" -DCMAKE_BUILD_TYPE=Release
+cmake --build "$build"
+"$build/tio-gui"
 ```
 
 ## Architecture
@@ -304,7 +317,7 @@ nix develop --command python3 tests/headless.py sh tests/acceptance.sh
 The acceptance runner uses private PTYs, localhost services, a private display,
 a fake BlueZ service and a separate vcan network namespace. It does not connect
 to attached boards. A real BlueZ **read-only** check can additionally be run with
-`TIO_TEST_BLUEZ_SYSTEM=1 .cache/build/ble-test` inside the development shell.
+`TIO_TEST_BLUEZ_SYSTEM=1 "$build/ble-test"` inside the development shell.
 
 ## Semantic highlighting
 
@@ -360,3 +373,31 @@ The highlight view marks all matches and displays current/total, refreshing for
 new output without moving your reading position. Search pauses following; use
 Back to bottom to resume. Ordinary terminal mode uses VTE's native search and
 reports whether a match was found.
+
+### Guarded local output (2026-11-18)
+
+Use `python3 packaging/build-native.py --test` for native CMake/CTest work. It
+sets the build tree to `work/cmake.noindex`, actual compiler caches and temporary
+directories, and an explicit CTest log. `--build` accepts an existing resolved
+root without adding a second project/checkout layout. On mm4 explicit output
+arguments also pass the shared disk guard; a missing resolver, wrong disk or low
+reserve fails before creating output or starting tools. Other hosts retain their
+local cache/temp behavior. Build and package Linux/Windows x86_64 artifacts on pk4.
+
+`package-macos.py` requires the input build tree to have a `.noindex` ancestor;
+its fresh app stage also has that suffix. Python acceptance entrypoints initialize
+the guarded temporary/cache environment; screenshot and test-root overrides are
+validated before use. `TIO_BUILD_TASK` selects the run.
+
+These guarantees apply to these wrappers. Direct CMake/CTest/Swift commands,
+IDE/GUI builds and manually launched applications need separate output/cache
+arguments; environment variables alone do not intercept them. Nix store outputs
+and managed runtime/dependency installation paths retain their existing ownership.
+No existing build trees or caches are moved or deleted.
+
+Socket-sensitive Python tests on mm4 use a short validated temporary root at
+`<resolved-shared-root>/tio/<checkout-run-user-hash>`, not the long platform
+cache path. The hash separates the physical checkout, run/cache and user; each
+fixture retains its own tempfile suffix. The same exact-output disk guard runs
+before mkdir. A root too long for Darwin Unix sockets fails without `/tmp`
+fallback. Other hosts retain their previous temporary-directory behavior.

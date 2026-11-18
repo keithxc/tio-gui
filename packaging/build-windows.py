@@ -13,11 +13,19 @@ import subprocess
 import struct
 import sys
 import urllib.request
+import importlib.util
 
 repo = Path(__file__).resolve().parents[1]
+sys.dont_write_bytecode = True
+path_spec = importlib.util.spec_from_file_location("tio_paths", repo / "packaging/build-paths.py")
+path_api = importlib.util.module_from_spec(path_spec)
+path_spec.loader.exec_module(path_api)
+if sys.platform == 'darwin':
+    raise SystemExit('Run Windows/Linux x86_64 builds on pk4; no macOS cross-build')
 sysroot = Path(sys.argv[1]).resolve()
-build = Path(sys.argv[2]).resolve()
-output = Path(sys.argv[3]).resolve()
+build = path_api.validate(Path(sys.argv[2]))
+output = path_api.validate(Path(sys.argv[3]))
+path_api.environment()
 build.mkdir(parents=True, exist_ok=True)
 output.mkdir(parents=True, exist_ok=True)
 prefix = sysroot / "mingw64"
@@ -89,7 +97,7 @@ for relative in ["share/glib-2.0/schemas", "share/icons/Adwaita", "share/icons/h
 subprocess.run(["glib-compile-schemas", str(stage / "share/glib-2.0/schemas")], check=True)
 shutil.copytree(build / "locale", stage / "share/locale", dirs_exist_ok=True)
 # Pin the fallback font and its license; keep cached downloads across builds.
-font_cache = repo / ".cache/native-font"
+font_cache = path_api.validate(Path(os.environ.get("TIO_NATIVE_FONT_CACHE", str(path_api.paths('windows-x86_64')['cache'] / 'native-font'))))
 font_cache.mkdir(parents=True, exist_ok=True)
 font_base = "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/"
 font_assets = [

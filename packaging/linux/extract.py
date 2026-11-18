@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Extract a type-2 SquashFS AppImage without the host's binfmt handler."""
+import sys as _host_sys
+if _host_sys.platform == 'darwin':
+    raise SystemExit('Run Linux x86_64 packaging on pk4.')
 from pathlib import Path
 import subprocess
 import sys

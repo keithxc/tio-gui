@@ -4,6 +4,9 @@
 Run through tests/headless.py. The caller supplies a task-owned work root and
 command, and can additionally isolate networking and development libraries.
 """
+import sys as _build_sys
+_build_sys.dont_write_bytecode = True
+from build_environment import setup as _setup_build_environment
 import argparse
 import os
 from pathlib import Path
@@ -22,7 +25,10 @@ parser.add_argument('--debugger', action='store_true')
 parser.add_argument('command', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 command = args.command[1:] if args.command[:1] == ['--'] else args.command
-root = args.work_root.resolve()
+from build_environment import api
+root = api.validate(args.work_root)
+if args.screenshot: args.screenshot = api.validate(args.screenshot)
+_setup_build_environment()
 root.mkdir(parents=True, exist_ok=True)
 if command[0].endswith('.AppImage'):
     # NixOS's kernel binfmt registration also affects containers. Exercise
